@@ -1,0 +1,38 @@
+{
+  "plesql.execute_query": {
+    "documentation": {
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/master/plesql-query-api.html",
+      "description": "Executes a PL/ESQL query"
+    },
+    "stability": "stable",
+    "visibility": "public",
+    "headers": {
+      "accept": ["application/json"],
+      "content_type": ["application/json"]
+    },
+    "url": {
+      "paths": [
+        {
+          "path": "/_query/plesql",
+          "methods": ["POST"]
+        }
+      ]
+    },
+    "params": {
+      "format": {
+        "type": "string",
+        "description": "Short version of the Accept header, e.g., json, yaml"
+      }
+    },
+    "body": {
+      "description": "The PL/ESQL query to execute",
+      "required": true,
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The PL/ESQL query"
+        }
+      }
+    }
+  }
+}
