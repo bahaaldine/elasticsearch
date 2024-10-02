@@ -26,7 +26,17 @@
     },
     "body": {
       "description": "The PL/ESQL query to execute",
+<<<<<<< HEAD
       "required": true
+=======
+      "required": true,
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The PL/ESQL query"
+        }
+      }
+>>>>>>> 4cbb0dc9ef20d9f044496ab16f46ba70ef7ba04b
     }
   }
 }
