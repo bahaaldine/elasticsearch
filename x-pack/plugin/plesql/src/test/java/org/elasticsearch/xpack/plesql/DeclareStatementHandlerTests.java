@@ -10,6 +10,7 @@ package org.elasticsearch.xpack.plesql;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.elasticsearch.xpack.plesql.handlers.DeclareStatementHandler;
+import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -37,6 +38,10 @@ public class DeclareStatementHandlerTests {
         PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(query));
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
+
+        parser.removeErrorListeners();  // Remove existing error listeners
+        parser.addErrorListener(new PlEsqlErrorListener());  // Add your custom error listener
+
         return parser.declare_statement();
     }
 
