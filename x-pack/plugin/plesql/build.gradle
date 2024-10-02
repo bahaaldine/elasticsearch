@@ -15,14 +15,14 @@ apply plugin: 'elasticsearch.string-templates'
 apply plugin: 'elasticsearch.publish'
 
 esplugin {
-  name 'x-pack-pl'
+  name 'x-pack-plesql'
   description 'A plugin to handle PL|ES|QL queries'
-  classname 'org.elasticsearch.xpack.pl.plugin.PlPlugin'
+  classname 'org.elasticsearch.xpack.plesql.plugin.PlPlugin'
   extendedPlugins = ['x-pack-core']
 }
 
 base {
-  archivesName = 'x-pack-pl'
+  archivesName = 'x-pack-plesql'
 }
 
 dependencies {
@@ -42,8 +42,8 @@ dependencies {
   // Other dependencies
 }
 
-String grammarPath = 'src/main/java/org/elasticsearch/xpack/pl/parser'
-String outputPath = 'src/main/java/org/elasticsearch/xpack/pl/parser'
+String grammarPath = 'src/main/java/org/elasticsearch/xpack/plesql/parser'
+String outputPath = 'src/main/java/org/elasticsearch/xpack/plesql/parser'
 
 tasks.register("cleanGenerated", Delete) {
   delete fileTree(grammarPath) {
@@ -63,7 +63,7 @@ tasks.register("regenGrammar", JavaExec) {
   systemProperty 'user.country', 'US'
   systemProperty 'user.variant', ''
   args '-Werror',
-    '-package', 'org.elasticsearch.xpack.pl.parser',
+    '-package', 'org.elasticsearch.xpack.plesql.parser',
     '-listener',
     '-visitor',
     '-o', outputPath,
