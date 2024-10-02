@@ -33,8 +33,6 @@ public class DeclareStatementHandler {
             String varName = varCtx.ID().getText();
             String varType = varCtx.datatype().getText();
 
-            System.out.println( "VAR TYPE:" + varType);
-
             // Check if the data type is unsupported
             if (isSupportedDataType(varType) == false) {
                 throw new RuntimeException("Unsupported data type: " + varType);
