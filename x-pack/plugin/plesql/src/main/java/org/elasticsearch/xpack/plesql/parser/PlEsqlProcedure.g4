@@ -164,6 +164,7 @@ expression
     | expression op=DIVIDE expression
     | expression op=PLUS expression
     | expression op=MINUS expression
+    | expression comparison_operator expression  // Added support for comparisons in expressions
     | LPAREN expression RPAREN
     | INT
     | FLOAT

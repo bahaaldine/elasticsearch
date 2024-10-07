@@ -27,7 +27,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     private FunctionDefinitionHandler functionDefHandler;
 
     @SuppressWarnings("this-escape")
-    public ProcedureExecutor() {
+    public ProcedureExecutor(ExecutionContext context) {
+        this.context = context;
         this.assignmentHandler = new AssignmentStatementHandler(context);
         this.declareHandler = new DeclareStatementHandler(context);
         this.ifHandler = new IfStatementHandler(context, this);
@@ -37,8 +38,9 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
 
     @Override
     public Object visitProcedure(PlEsqlProcedureParser.ProcedureContext ctx) {
+        // Create a new scope for the procedure block
         for (PlEsqlProcedureParser.StatementContext stmtCtx : ctx.statement()) {
-            visit(stmtCtx);
+            visit(stmtCtx);  // Process each statement
         }
         return null;
     }

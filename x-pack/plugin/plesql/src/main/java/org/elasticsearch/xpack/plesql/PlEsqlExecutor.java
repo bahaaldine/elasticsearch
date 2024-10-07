@@ -12,6 +12,7 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
+import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 
 public class PlEsqlExecutor {
     public String executeProcedure(String procedureText) {
@@ -28,7 +29,8 @@ public class PlEsqlExecutor {
         PlEsqlProcedureParser.ProcedureContext context = parser.procedure();
 
         // Create and use the visitor to execute the procedure
-        ProcedureExecutor executor = new ProcedureExecutor();
+        ExecutionContext executionContext = new ExecutionContext();
+        ProcedureExecutor executor = new ProcedureExecutor(executionContext);
         executor.visit(context);
 
         return "Procedure executed successlfully";

@@ -28,7 +28,7 @@ public class ExecutionContext {
         if (variable == null) {
             throw new RuntimeException("Variable '" + name + "' is not declared.");
         }
-        // Optionally, perform type checking here
+        // TODO: perform type checking here
         variable.setValue(value);
     }
 
@@ -39,6 +39,10 @@ public class ExecutionContext {
             throw new RuntimeException("Variable '" + name + "' is not declared.");
         }
         return variable.getValue();
+    }
+
+    public void printAllVariables() {
+        System.out.println("Current variables in the context: " + variables);
     }
 
     // Define a function

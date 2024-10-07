@@ -46,7 +46,7 @@ public class IfStatementHandler {
         }
 
         // ELSE clause handler
-        if (!conditionMatched && ctx.ELSE() != null) {
+        if (conditionMatched == false && ctx.ELSE() != null) {
             while (currentStatementIndex < totalStatements) {
                 executor.visit(ctx.statement(currentStatementIndex));
                 currentStatementIndex++;
