@@ -30,7 +30,6 @@ public class IfStatementHandlerTests {
     public void setup() {
         context = new ExecutionContext();  // Real ExecutionContext
         executor = new ProcedureExecutor(context);  // Use real ProcedureExecutor
-        handler = new IfStatementHandler(context, executor);  // Real handler
     }
 
     // Helper method to parse a BEGIN ... END block

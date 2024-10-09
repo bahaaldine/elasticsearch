@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 3. Collects response headers from sub tasks, specifically warnings emitted during compute
  * 4. Collects failures and returns the most appropriate exception to the caller.
  */
-final class ComputeListener implements Releasable {
-    private static final Logger LOGGER = LogManager.getLogger(ComputeService.class);
+final class ComputeListener impleprivate static final Logger LOGGER = LogManager.getLogger(ComputeService.class);ments Releasable {
+
 
     private final RefCountingListener refs;
     private final FailureCollector failureCollector = new FailureCollector();

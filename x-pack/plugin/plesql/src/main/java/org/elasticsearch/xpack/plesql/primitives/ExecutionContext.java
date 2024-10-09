@@ -26,7 +26,7 @@ public class ExecutionContext {
     public void setVariable(String name, Object value) {
         Variable variable = variables.get(name);
         if (variable == null) {
-            throw new RuntimeException("Variable '" + name + "' is not declared.");
+            throw new RuntimeException("In Set Variable --- Variable '" + name + "' is not declared.");
         }
         // TODO: perform type checking here
         variable.setValue(value);

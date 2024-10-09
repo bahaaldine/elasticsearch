@@ -26,19 +26,46 @@ public class LoopStatementHandler {
             Object startValue = evaluateExpression(ctx.expression(0));
             Object endValue = evaluateExpression(ctx.expression(1));
 
-            if ( (startValue instanceof Number) == false || (endValue instanceof Number) == false) {
+            if (!(startValue instanceof Number) || !(endValue instanceof Number)) {
                 throw new RuntimeException("FOR loop bounds must be numeric.");
             }
 
-            int start = ((Number) startValue).intValue();
-            int end = ((Number) endValue).intValue();
+            int start = (Integer) startValue;
+            int end = (Integer) endValue;
 
+            if (start <= end) {
+                // Ascending order
+                for (int i = start; i <= end; i++) {
+                    context.setVariable(varName, i);
+                    for (PlEsqlProcedureParser.StatementContext stmtCtx : ctx.statement()) {
+                        executor.visit(stmtCtx);
+                    }
+                }
+            } else {
+                // Descending order
+                for (int i = start; i >= end; i--) {
+                    context.setVariable(varName, i);
+                    for (PlEsqlProcedureParser.StatementContext stmtCtx : ctx.statement()) {
+                        executor.visit(stmtCtx);
+                    }
+                }
+            }
+
+            // Declare the loop variable if not already declared
+            if (context.getVariables().containsKey(varName) == false) {
+                context.declareVariable(varName, "INT");
+            }
+            // Execute the loop, ensuring the loop variable type remains INT
             for (int i = start; i <= end; i++) {
-                context.setVariable(varName, i);
+                context.setVariable(varName, i);  // Set 'i' as an integer
+
                 for (PlEsqlProcedureParser.StatementContext stmtCtx : ctx.statement()) {
                     executor.visit(stmtCtx);
                 }
             }
+
+            // Remove the loop variable after the loop finishes
+            //context.getVariables().remove(varName);
         } else if (ctx.WHILE() != null) {
             // Handle WHILE loop
             while (evaluateCondition(ctx.condition())) {
@@ -59,7 +86,7 @@ public class LoopStatementHandler {
             case "==":
                 return left.equals(right);
             case "!=":
-                return left.equals(right) == false;
+                return !left.equals(right);
             case "<":
                 return compareValues(left, right) < 0;
             case ">":
@@ -94,19 +121,24 @@ public class LoopStatementHandler {
             String str = ctx.STRING().getText();
             return str.substring(1, str.length() - 1);
         } else if (ctx.ID() != null && ctx.getChildCount() == 1) {
+            // Just return the value as is
             return context.getVariable(ctx.ID().getText());
         } else if (ctx.op != null) {
             Object left = evaluateExpression(ctx.expression(0));
             Object right = evaluateExpression(ctx.expression(1));
+
             switch (ctx.op.getType()) {
                 case PlEsqlProcedureParser.PLUS:
-                    return addValues(left, right);
+                    return ((Number) left).doubleValue() + ((Number) right).doubleValue();
                 case PlEsqlProcedureParser.MINUS:
-                    return subtractValues(left, right);
+                    return ((Number) left).doubleValue() - ((Number) right).doubleValue();
                 case PlEsqlProcedureParser.MULTIPLY:
-                    return multiplyValues(left, right);
+                    return ((Number) left).doubleValue() * ((Number) right).doubleValue();
                 case PlEsqlProcedureParser.DIVIDE:
-                    return divideValues(left, right);
+                    if (((Number) right).doubleValue() == 0) {
+                        throw new ArithmeticException("Division by zero");
+                    }
+                    return ((Number) left).doubleValue() / ((Number) right).doubleValue();
                 default:
                     throw new RuntimeException("Unknown operator: " + ctx.op.getText());
             }
@@ -119,8 +151,7 @@ public class LoopStatementHandler {
         }
     }
 
-    // arithmetic operations helper
-    // TODO: since it's the same than in the IF statement handler, maybe refactor this?
+    // Arithmetic operations helper methods
     private Object addValues(Object left, Object right) {
         if (left instanceof Number && right instanceof Number) {
             if (left instanceof Double || right instanceof Double) {

@@ -29,7 +29,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     @SuppressWarnings("this-escape")
     public ProcedureExecutor(ExecutionContext context) {
         this.context = context;
-        this.assignmentHandler = new AssignmentStatementHandler(context);
+        this.assignmentHandler = new AssignmentStatementHandler(context, this);
         this.declareHandler = new DeclareStatementHandler(context);
         this.ifHandler = new IfStatementHandler(context, this);
         this.loopHandler = new LoopStatementHandler(context, this);

@@ -23,13 +23,15 @@ import static org.junit.Assert.assertEquals;
 public class AssignmentStatementHandlerTests {
 
     private ExecutionContext context;
+    private ProcedureExecutor executor;
     private AssignmentStatementHandler assignmentHandler;
     private DeclareStatementHandler declareHandler;
+
 
     @Before
     public void setup() {
         context = new ExecutionContext(); // Assuming you have a real implementation of ExecutionContext
-        assignmentHandler = new AssignmentStatementHandler(context);
+        assignmentHandler = new AssignmentStatementHandler(context, executor);
         declareHandler = new DeclareStatementHandler(context);
     }
 

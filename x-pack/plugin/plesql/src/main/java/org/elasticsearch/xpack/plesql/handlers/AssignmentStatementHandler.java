@@ -6,14 +6,17 @@
  */
 package org.elasticsearch.xpack.plesql.handlers;
 
+import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 
 public class AssignmentStatementHandler {
     private ExecutionContext context;
+    private ProcedureExecutor executor;
 
-    public AssignmentStatementHandler(ExecutionContext context) {
+    public AssignmentStatementHandler(ExecutionContext context, ProcedureExecutor executor) {
         this.context = context;
+        this.executor = executor;
     }
 
     public void handle(PlEsqlProcedureParser.Assignment_statementContext ctx) {
@@ -28,30 +31,63 @@ public class AssignmentStatementHandler {
         } else if (ctx.FLOAT() != null) {
             return Double.parseDouble(ctx.FLOAT().getText());
         } else if (ctx.STRING() != null) {
-            // Remove surrounding quotes
-            return ctx.STRING().getText().substring(1, ctx.STRING().getText().length() - 1);
+            String str = ctx.STRING().getText();
+            return str.substring(1, str.length() - 1);
         } else if (ctx.ID() != null && ctx.getChildCount() == 1) {
             return context.getVariable(ctx.ID().getText());
         } else if (ctx.op != null) {
             Object left = evaluateExpression(ctx.expression(0));
             Object right = evaluateExpression(ctx.expression(1));
-            switch (ctx.op.getType()) {
-                case PlEsqlProcedureParser.PLUS:
-                    return ((Number) left).doubleValue() + ((Number) right).doubleValue();
-                case PlEsqlProcedureParser.MINUS:
-                    return ((Number) left).doubleValue() - ((Number) right).doubleValue();
-                case PlEsqlProcedureParser.MULTIPLY:
-                    return ((Number) left).doubleValue() * ((Number) right).doubleValue();
-                case PlEsqlProcedureParser.DIVIDE:
-                    return ((Number) left).doubleValue() / ((Number) right).doubleValue();
-                default:
-                    throw new RuntimeException("Unknown operator: " + ctx.op.getText());
+
+            // Handle arithmetic based on operand types
+            if (left instanceof Integer && right instanceof Integer) {
+                return handleIntegerArithmetic((Integer) left, (Integer) right, ctx.op.getType());
+            } else {
+                return handleFloatingPointArithmetic(((Number) left).doubleValue(), ((Number) right).doubleValue(), ctx.op.getType());
             }
         } else if (ctx.function_call() != null) {
-            // TODO: Handle function calls if necessary
-            return null; // Placeholder
+            return executor.visitFunction_call(ctx.function_call());
+        } else if (ctx.LPAREN() != null && ctx.RPAREN() != null) {
+            return evaluateExpression(ctx.expression(0));
         } else {
             throw new RuntimeException("Unsupported expression: " + ctx.getText());
+        }
+    }
+
+    // Helper methods to handle different arithmetic types
+    private Object handleIntegerArithmetic(int left, int right, int operator) {
+        switch (operator) {
+            case PlEsqlProcedureParser.PLUS:
+                return left + right;
+            case PlEsqlProcedureParser.MINUS:
+                return left - right;
+            case PlEsqlProcedureParser.MULTIPLY:
+                return left * right;
+            case PlEsqlProcedureParser.DIVIDE:
+                if (right == 0) {
+                    throw new ArithmeticException("Division by zero");
+                }
+                return left / right;  // This will return an integer result
+            default:
+                throw new RuntimeException("Unknown operator for integers: " + operator);
+        }
+    }
+
+    private Object handleFloatingPointArithmetic(double left, double right, int operator) {
+        switch (operator) {
+            case PlEsqlProcedureParser.PLUS:
+                return left + right;
+            case PlEsqlProcedureParser.MINUS:
+                return left - right;
+            case PlEsqlProcedureParser.MULTIPLY:
+                return left * right;
+            case PlEsqlProcedureParser.DIVIDE:
+                if (right == 0) {
+                    throw new ArithmeticException("Division by zero");
+                }
+                return left / right;
+            default:
+                throw new RuntimeException("Unknown operator for floating point: " + operator);
         }
     }
 }
