@@ -50,11 +50,11 @@ public class TryCatchStatementHandler {
             int stmtTokenIndex = stmtCtx.getStart().getTokenIndex();
 
             if (stmtTokenIndex > tryStartIndex && stmtTokenIndex < catchStartIndex && stmtTokenIndex < finallyStartIndex
-                    && stmtTokenIndex < endTryIndex) {
+                && stmtTokenIndex < endTryIndex) {
                 // Statement belongs to TRY block
                 tryStatements.add(stmtCtx);
             } else if (catchToken != null && stmtTokenIndex > catchStartIndex && stmtTokenIndex < finallyStartIndex
-                    && stmtTokenIndex < endTryIndex) {
+                && stmtTokenIndex < endTryIndex) {
                 // Statement belongs to CATCH block
                 catchStatements.add(stmtCtx);
             } else if (finallyToken != null && stmtTokenIndex > finallyStartIndex && stmtTokenIndex < endTryIndex) {
@@ -69,7 +69,7 @@ public class TryCatchStatementHandler {
                 executor.visit(stmtCtx);
             }
         } catch (Exception e) {
-            // If exception occurs and CATCH block is present
+            // If an exception occurs and a CATCH block is present
             if (catchToken != null) {
                 for (PlEsqlProcedureParser.StatementContext stmtCtx : catchStatements) {
                     executor.visit(stmtCtx);
@@ -79,7 +79,7 @@ public class TryCatchStatementHandler {
                 throw e;
             }
         } finally {
-            // If FINALLY block is present
+            // Execute statements in FINALLY block if present
             if (finallyToken != null) {
                 for (PlEsqlProcedureParser.StatementContext stmtCtx : finallyStatements) {
                     executor.visit(stmtCtx);

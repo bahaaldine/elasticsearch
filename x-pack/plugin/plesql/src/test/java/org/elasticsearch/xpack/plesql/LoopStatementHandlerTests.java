@@ -26,7 +26,7 @@ public class LoopStatementHandlerTests {
     @Before
     public void setup() {
         context = new ExecutionContext();  // Real ExecutionContext
-        executor = new ProcedureExecutor(context);  // Use real ProcedureExecutor
+        executor = new ProcedureExecutor(context, null);  // Use real ProcedureExecutor
     }
 
     // Helper method to parse a BEGIN ... END block
