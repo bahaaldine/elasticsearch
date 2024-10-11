@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class ExecutionContext {
-    private Map<String, Variable> variables = new HashMap<>();
+    private Map<String, VariableDefinition> variables = new HashMap<>();
     private Map<String, FunctionDefinition> functions = new HashMap<>();
 
     // Declare a variable with a type
@@ -19,12 +19,12 @@ public class ExecutionContext {
         if (variables.containsKey(name)) {
             throw new RuntimeException("Variable '" + name + "' is already declared.");
         }
-        variables.put(name, new Variable(name, type, null));
+        variables.put(name, new VariableDefinition(name, type, null));
     }
 
     // Set or update the value of a variable
     public void setVariable(String name, Object value) {
-        Variable variable = variables.get(name);
+        VariableDefinition variable = variables.get(name);
         if (variable == null) {
             throw new RuntimeException("In Set Variable --- Variable '" + name + "' is not declared.");
         }
@@ -34,7 +34,7 @@ public class ExecutionContext {
 
     // Get the value of a variable
     public Object getVariable(String name) {
-        Variable variable = variables.get(name);
+        VariableDefinition variable = variables.get(name);
         if (variable == null) {
             throw new RuntimeException("Variable '" + name + "' is not declared.");
         }
@@ -68,7 +68,7 @@ public class ExecutionContext {
     }
 
     // Get the variables map
-    public Map<String, Variable> getVariables() {
+    public Map<String, VariableDefinition> getVariables() {
         return variables;
     }
 

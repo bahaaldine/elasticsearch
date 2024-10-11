@@ -11,6 +11,7 @@ import org.elasticsearch.xpack.plesql.handlers.DeclareStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
 import org.elasticsearch.xpack.plesql.handlers.IfStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.LoopStatementHandler;
+import org.elasticsearch.xpack.plesql.handlers.ThrowStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.TryCatchStatementHandler;
 import org.elasticsearch.xpack.plesql.interfaces.ExceptionListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureBaseVisitor;
@@ -28,6 +29,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     private LoopStatementHandler loopHandler;
     private FunctionDefinitionHandler functionDefHandler;
     private TryCatchStatementHandler tryCatchHandler;
+    private ThrowStatementHandler throwHandler;
 
     @SuppressWarnings("this-escape")
     public ProcedureExecutor(ExecutionContext context, ExceptionListener listener) {
@@ -38,6 +40,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         this.loopHandler = new LoopStatementHandler(context, this);
         this.functionDefHandler = new FunctionDefinitionHandler(context);
         this.tryCatchHandler = new TryCatchStatementHandler(context, this);
+        this.throwHandler = new ThrowStatementHandler(context, this);
     }
 
     @Override
@@ -83,6 +86,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     public Object visitTry_catch_statement(PlEsqlProcedureParser.Try_catch_statementContext ctx) {
         // Use the tryCatchHandler to handle the try-catch block
         tryCatchHandler.handle(ctx);
+        return null;
+    }
+
+    @Override
+    public Object visitThrow_statement(PlEsqlProcedureParser.Throw_statementContext ctx) {
+        // Use the throwHandler to handle the THROW statement
+        throwHandler.handle(ctx);
         return null;
     }
 

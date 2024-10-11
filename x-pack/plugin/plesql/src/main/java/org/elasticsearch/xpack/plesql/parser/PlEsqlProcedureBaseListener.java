@@ -143,6 +143,18 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterThrow_statement(PlEsqlProcedureParser.Throw_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitThrow_statement(PlEsqlProcedureParser.Throw_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterFunction_definition(PlEsqlProcedureParser.Function_definitionContext ctx) { }
 	/**
 	 * {@inheritDoc}

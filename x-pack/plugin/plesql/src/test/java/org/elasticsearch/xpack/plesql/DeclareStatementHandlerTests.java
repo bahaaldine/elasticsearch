@@ -14,7 +14,7 @@ import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.primitives.Variable;
+import org.elasticsearch.xpack.plesql.primitives.VariableDefinition;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -52,7 +52,7 @@ public class DeclareStatementHandlerTests {
         handler.handle(declareContext);
 
         assertTrue(context.getVariableNames().contains("user_id"));
-        Variable userId = context.getVariables().get("user_id");
+        VariableDefinition userId = context.getVariables().get("user_id");
         assertEquals("INT", userId.getType());
         assertNull(userId.getValue());
     }
@@ -64,7 +64,7 @@ public class DeclareStatementHandlerTests {
         handler.handle(declareContext);
 
         assertTrue(context.getVariableNames().contains("user_id"));
-        Variable userId = context.getVariables().get("user_id");
+        VariableDefinition userId = context.getVariables().get("user_id");
         assertEquals("INT", userId.getType());
         assertEquals(100, userId.getValue());
     }
@@ -78,8 +78,8 @@ public class DeclareStatementHandlerTests {
         assertTrue(context.getVariableNames().contains("user_id"));
         assertTrue(context.getVariableNames().contains("total"));
 
-        Variable userId = context.getVariables().get("user_id");
-        Variable total = context.getVariables().get("total");
+        VariableDefinition userId = context.getVariables().get("user_id");
+        VariableDefinition total = context.getVariables().get("total");
 
         assertEquals("INT", userId.getType());
         assertNull(userId.getValue());

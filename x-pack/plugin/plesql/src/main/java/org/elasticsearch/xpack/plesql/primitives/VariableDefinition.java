@@ -7,12 +7,12 @@
 
 package org.elasticsearch.xpack.plesql.primitives;
 
-public class Variable {
+public class VariableDefinition {
     private String name;
     private String type;
     private Object value;
 
-    public Variable(String name, String type, Object value) {
+    public VariableDefinition(String name, String type, Object value) {
         this.name = name;
         this.type = type.toUpperCase();
         this.value = value;

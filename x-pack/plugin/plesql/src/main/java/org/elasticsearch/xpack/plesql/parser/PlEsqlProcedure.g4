@@ -19,6 +19,7 @@ ENDLOOP: 'END LOOP';
 TRY: 'TRY';
 CATCH: 'CATCH';
 FINALLY: 'FINALLY';
+THROW: 'THROW';
 ENDTRY: 'END TRY';
 FUNCTION: 'FUNCTION';
 END_FUNCTION: 'END FUNCTION';
@@ -74,7 +75,8 @@ procedure
     ;
 
 statement
-    : execute_statement
+    : throw_statement
+    | execute_statement
     | declare_statement
     | assignment_statement
     | if_statement
@@ -116,6 +118,10 @@ loop_statement
 
 try_catch_statement
     : TRY statement+ (CATCH statement+)? (FINALLY statement+)? ENDTRY
+    ;
+
+throw_statement
+    : THROW STRING SEMICOLON
     ;
 
 function_definition

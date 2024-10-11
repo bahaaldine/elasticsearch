@@ -51,19 +51,6 @@ public class LoopStatementHandler {
                 }
             }
 
-            // Declare the loop variable if not already declared
-            if (context.getVariables().containsKey(varName) == false) {
-                context.declareVariable(varName, "INT");
-            }
-            // Execute the loop, ensuring the loop variable type remains INT
-            for (int i = start; i <= end; i++) {
-                context.setVariable(varName, i);  // Set 'i' as an integer
-
-                for (PlEsqlProcedureParser.StatementContext stmtCtx : ctx.statement()) {
-                    executor.visit(stmtCtx);
-                }
-            }
-
             // Remove the loop variable after the loop finishes
             //context.getVariables().remove(varName);
         } else if (ctx.WHILE() != null) {
