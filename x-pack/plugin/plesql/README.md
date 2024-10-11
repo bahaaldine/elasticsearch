@@ -1,5 +1,5 @@
 
-# PL|ES|QL Comprehensive Documentation
+# Getting started with PL|ES|QL
 
 ## Overview
 
