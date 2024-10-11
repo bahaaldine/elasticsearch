@@ -1,150 +1,282 @@
 
-# PL|ES|QL Documentation
+# PL|ES|QL Comprehensive Documentation
 
-## What is PL|ES|QL?
+## Overview
 
-PL|ES|QL (Procedural Language for ESQL) is an extension of ESQL (Elasticsearch Query Language) that introduces procedural language constructs. This enables users to write scripts that combine control flow structures like loops, conditionals, and error handling, along with ESQL queries to perform complex data processing tasks. PL|ES|QL aims to enhance the capabilities of ESQL, providing a robust environment for building reusable scripts and automating data operations.
+PL|ES|QL is an extension of ESQL that allows users to define procedures combining ESQL queries and procedural logic. It provides a procedural language for Elasticsearch Query Language (ESQL), adding support for structured programming constructs such as variable declarations, conditionals, loops, error handling, and more.
 
-## Supported Features
+The goal of PL|ES|QL is to allow developers to create complex workflows that include ESQL queries and handle various conditions using familiar programming constructs.
 
-PL|ES|QL supports various procedural language features, including:
+## Supported Handlers
 
-- **Variable Declarations**: Allows declaring and initializing variables.
-- **Assignment Statements**: Enables setting variable values.
-- **Conditional Statements**: Supports IF-ELSEIF-ELSE blocks for conditional execution.
-- **Looping Constructs**: FOR and WHILE loops for iteration.
-- **Error Handling**: TRY-CATCH-FINALLY blocks for managing exceptions.
-- **Function Definitions**: Supports creating reusable functions.
-- **Integration with ESQL Queries**: Allows executing ESQL queries as part of the procedure.
+The following handlers are currently supported in PL|ES|QL:
 
-## Language Elements
+1. **Variable Declaration (`DECLARE`)**
+2. **Assignment (`SET`)**
+3. **Conditional Statements (`IF`, `ELSE`, `ELSEIF`)**
+4. **Loops (`FOR`, `WHILE`)**
+5. **Try-Catch Statements (`TRY`, `CATCH`, `FINALLY`)**
+6. **Throw Statement (`THROW`)**
+7. **Function Definition and Invocation (`FUNCTION`, `CALL`)**
 
-### Variable Declarations
+---
 
-Variables can be declared with types such as `INT`, `FLOAT`, `STRING`, and `DATE`. For example:
+## 1. Variable Declaration (`DECLARE`)
 
-```plaintext
-DECLARE myVar INT;
-DECLARE anotherVar FLOAT = 3.14;
+### Description
+
+The `DECLARE` statement is used to declare variables in the procedure. Variables can be of different types: `INT`, `FLOAT`, `STRING`, and `DATE`.
+
+### Syntax
+
+```sql
+DECLARE variable_name TYPE [= initial_value];
 ```
 
-### Assignment Statements
+### Example
 
-Values can be assigned to variables using the `SET` keyword:
-
-```plaintext
-SET myVar = 10;
-SET anotherVar = myVar + 5.5;
+```sql
+BEGIN
+    DECLARE x INT = 5, y FLOAT = 10.0;
+    -- Multiple declarations in one statement
+    DECLARE name STRING;
+END
 ```
 
-### Conditional Statements
+### Notes
 
-PL|ES|QL supports conditional statements using `IF`, `ELSEIF`, and `ELSE`:
+- Variables must be declared before being used in the procedure.
+- Initialization is optional. If not provided, the variable's initial value will be `null`.
 
-```plaintext
-IF myVar > 0 THEN
-    SET anotherVar = 20;
-ELSEIF myVar < 0 THEN
-    SET anotherVar = -20;
+---
+
+## 2. Assignment (`SET`)
+
+### Description
+
+The `SET` statement assigns a value to a declared variable.
+
+### Syntax
+
+```sql
+SET variable_name = expression;
+```
+
+### Example
+
+```sql
+BEGIN
+    DECLARE x INT, y FLOAT;
+    SET x = 10;
+    SET y = x + 5.5;
+END
+```
+
+### Notes
+
+- The expression can involve arithmetic operations or reference other variables.
+
+---
+
+## 3. Conditional Statements (`IF`, `ELSE`, `ELSEIF`)
+
+### Description
+
+Conditional statements allow you to execute code blocks based on certain conditions.
+
+### Syntax
+
+```sql
+IF condition THEN
+    -- Statements
+ELSEIF condition THEN
+    -- Statements
 ELSE
-    SET anotherVar = 0;
+    -- Statements
 END IF
 ```
 
-### Looping Constructs
+### Example
 
-#### FOR Loop
-
-Iterates over a range of values:
-
-```plaintext
-FOR i IN 1..10 LOOP
-    SET myVar = myVar + i;
-END LOOP
-```
-
-#### WHILE Loop
-
-Executes as long as a condition is true:
-
-```plaintext
-WHILE myVar < 100 LOOP
-    SET myVar = myVar * 2;
-END LOOP
-```
-
-### Error Handling
-
-PL|ES|QL provides error handling using `TRY`, `CATCH`, and `FINALLY` blocks:
-
-```plaintext
-TRY
-    SET myVar = 10 / 0;  // This will cause an exception
-CATCH
-    SET myVar = -1;  // Handle the error
-FINALLY
-    SET anotherVar = 100;  // Always execute this
-END TRY
-```
-
-### Function Definitions
-
-Functions can be defined and invoked within a procedure:
-
-```plaintext
-FUNCTION addNumbers(a INT, b INT)
-    DECLARE result INT;
-    SET result = a + b;
-    RETURN result;
-END FUNCTION
-```
-
-### ESQL Integration
-
-PL|ES|QL supports executing ESQL queries inside procedures:
-
-```plaintext
-EXECUTE (ROW a = 1, b = 2 | EVAL sum = a + b);
-```
-
-## Examples
-
-### Example 1: Basic Procedure
-
-```plaintext
+```sql
 BEGIN
-    DECLARE myVar INT = 0;
+    DECLARE x INT = 10;
+    IF x > 5 THEN
+        SET x = x + 1;
+    ELSEIF x = 5 THEN
+        SET x = 0;
+    ELSE
+        SET x = -1;
+    END IF
+END
+```
+
+### Notes
+
+- Multiple `ELSEIF` branches can be used.
+- The `ELSE` block is optional.
+
+---
+
+## 4. Loops (`FOR`, `WHILE`)
+
+### Description
+
+Loops allow for repeated execution of a code block.
+
+### Syntax
+
+#### `FOR` Loop
+
+```sql
+FOR variable_name IN start_value..end_value LOOP
+    -- Statements
+END LOOP
+```
+
+#### `WHILE` Loop
+
+```sql
+WHILE condition LOOP
+    -- Statements
+END LOOP
+```
+
+### Example
+
+#### `FOR` Loop
+
+```sql
+BEGIN
+    DECLARE i INT, sum INT = 0;
     FOR i IN 1..5 LOOP
-        SET myVar = myVar + i;
+        SET sum = sum + i;
     END LOOP
 END
 ```
 
-### Example 2: Using IF and TRY-CATCH
+#### `WHILE` Loop
 
-```plaintext
+```sql
 BEGIN
-    DECLARE myVar INT = 10;
+    DECLARE counter INT = 1;
+    WHILE counter < 10 LOOP
+        SET counter = counter + 1;
+    END LOOP
+END
+```
+
+### Notes
+
+- `FOR` loops can run in ascending or descending order.
+- `WHILE` loops continue until the condition is false.
+
+---
+
+## 5. Try-Catch Statements (`TRY`, `CATCH`, `FINALLY`)
+
+### Description
+
+`TRY-CATCH` statements allow error handling within a procedure.
+
+### Syntax
+
+```sql
+TRY
+    -- Statements that may throw an exception
+CATCH
+    -- Statements to handle the exception
+FINALLY
+    -- Optional statements to execute regardless of whether an error occurred
+END TRY
+```
+
+### Example
+
+```sql
+BEGIN
+    DECLARE x INT = 1;
     TRY
-        IF myVar = 10 THEN
-            SET myVar = myVar / 0;  // Will cause an error
-        END IF
+        SET x = x / 0; -- This will trigger a division by zero error
     CATCH
-        SET myVar = -1;  // Handle division by zero
-    FINALLY
-        SET anotherVar = 100;  // Always execute
+        SET x = 0; -- Error handling code
     END TRY
 END
 ```
 
-### Example 3: Combining PL|ES|QL with ESQL Queries
+### Notes
 
-```plaintext
+- The `FINALLY` block is optional and is always executed.
+- Nested `TRY` blocks are supported.
+
+---
+
+## 6. Throw Statement (`THROW`)
+
+### Description
+
+The `THROW` statement allows you to manually raise an exception.
+
+### Syntax
+
+```sql
+THROW 'error_message';
+```
+
+### Example
+
+```sql
 BEGIN
-    EXECUTE (ROW a = [1, 2, 3] | MV_EXPAND a | SORT a);
+    DECLARE x INT = 5;
+    IF x < 10 THEN
+        THROW 'Value is too low';
+    END IF
 END
 ```
 
-## Conclusion
+### Notes
 
-PL|ES|QL extends ESQL by introducing procedural language constructs, enabling more complex data manipulation workflows. It provides features like loops, conditionals, error handling, and function definitions, allowing users to automate data processing tasks and create more reusable scripts.
+- The exception message is a string and should be enclosed in single quotes.
+
+---
+
+## 7. Function Definition and Invocation (`FUNCTION`, `CALL`)
+
+### Description
+
+Functions allow for defining reusable code blocks.
+
+### Syntax
+
+#### Define a Function
+
+```sql
+FUNCTION function_name(parameter1 TYPE, parameter2 TYPE)
+    -- Function body
+END FUNCTION
+```
+
+#### Call a Function
+
+```sql
+CALL function_name(argument1, argument2);
+```
+
+### Example
+
+```sql
+BEGIN
+    FUNCTION add(a INT, b INT)
+        DECLARE result INT;
+        SET result = a + b;
+    END FUNCTION;
+
+    DECLARE sum INT;
+    CALL add(5, 10);
+END
+```
+
+### Notes
+
+- Functions can take parameters and use local variables.
+- Recursive calls are supported.
