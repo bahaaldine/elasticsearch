@@ -1,16 +1,19 @@
 grammar PlEsqlProcedure;
 
+// =======================
 // Lexer Rules
+// =======================
 
-BEGIN: 'BEGIN';
+// Keywords
+ELSEIF: 'ELSEIF';
+ELSE: 'ELSE';
+IF: 'IF';
+THEN: 'THEN';
 END: 'END';
+BEGIN: 'BEGIN';
 EXECUTE: 'EXECUTE';
 DECLARE: 'DECLARE';
 SET: 'SET';
-IF: 'IF';
-ELSE: 'ELSE';
-ELSEIF: 'ELSEIF';
-ENDIF: 'END IF';
 FOR: 'FOR';
 IN: 'IN';
 WHILE: 'WHILE';
@@ -22,9 +25,10 @@ FINALLY: 'FINALLY';
 THROW: 'THROW';
 ENDTRY: 'END TRY';
 FUNCTION: 'FUNCTION';
-END_FUNCTION: 'END FUNCTION';
-THEN: 'THEN';
+RETURN: 'RETURN';
+BREAK: 'BREAK';
 
+// Data Types
 INT_TYPE: 'INT';
 FLOAT_TYPE: 'FLOAT';
 STRING_TYPE: 'STRING';
@@ -40,35 +44,40 @@ LESS_THAN: '<';
 NOT_EQUAL: '!=';
 GREATER_EQUAL: '>=';
 LESS_EQUAL: '<=';
-PIPE: '|';
-DOT_DOT: '..';
-DOT: '.';
-ASSIGN: '=';  // You can keep this if you prefer separate tokens for assignment and equality
+OR: 'OR';
+AND: 'AND';
+EQUAL: '=';
 
+// Range Operator
+DOT_DOT: '..';
+
+// Other Symbols
+PIPE: '|';
+DOT: '.';
 LPAREN: '(';
 RPAREN: ')';
 COMMA: ',';
-SEMICOLON: ';';
 COLON: ':';
+SEMICOLON: ';';
 
-ID: [a-zA-Z_][a-zA-Z_0-9]*;
-
-// Place FLOAT before INT
+// Literals
 FLOAT: [0-9]+ '.' [0-9]+;
 INT: [0-9]+;
-
 STRING: '\'' ( ~('\'' | '\\') | '\\' . )* '\'';
 
-// Comments
+// Identifier
+ID: [a-zA-Z_][a-zA-Z_0-9]*;
+
+// Comments and Whitespace
 COMMENT
-    : '--' ~[\r\n]*
-    | '/*' .*? '*/'
+    : ( '--' ~[\r\n]* | '/*' .*? '*/' ) -> skip
     ;
 
-// Whitespace
 WS: [ \t\r\n]+ -> skip;
 
+// =======================
 // Parser Rules
+// =======================
 
 procedure
     : BEGIN statement+ END EOF
@@ -84,11 +93,30 @@ statement
     | try_catch_statement
     | function_definition
     | function_call_statement
-    | SEMICOLON  // Allow empty statements
+    | return_statement
+    | break_statement
+    | expression_statement
+    | SEMICOLON
+    ;
+
+break_statement
+    : BREAK SEMICOLON
+    ;
+
+return_statement
+    : RETURN expression SEMICOLON
+    ;
+
+expression_statement
+    : expression SEMICOLON
     ;
 
 execute_statement
-    : EXECUTE ESQL_QUERY
+    : EXECUTE LPAREN esql_query_content RPAREN SEMICOLON
+    ;
+
+esql_query_content
+    : ( . )*?  // Match any content non-greedily
     ;
 
 declare_statement
@@ -100,16 +128,27 @@ variable_declaration_list
     ;
 
 variable_declaration
-    : ID datatype (ASSIGN expression)?
+    : ID datatype (EQUAL expression)?
     ;
 
 assignment_statement
-    : SET ID ASSIGN expression SEMICOLON
+    : SET ID EQUAL expression SEMICOLON
     ;
 
 if_statement
-    : IF condition THEN statement+ (ELSEIF condition THEN statement+)* (ELSE statement+)? ENDIF
-    ;
+    : IF condition THEN then_block+=statement+
+        (elseif_block)*
+        (ELSE else_block+=statement+)?
+      END IF
+      ;
+
+elseif_block
+    : ELSEIF condition THEN statement+
+      ;
+
+condition
+    : expression
+      ;
 
 loop_statement
     : FOR ID IN expression DOT_DOT expression LOOP statement+ ENDLOOP
@@ -125,7 +164,7 @@ throw_statement
     ;
 
 function_definition
-    : FUNCTION ID LPAREN (parameter_list)? RPAREN statement+ END_FUNCTION
+    : FUNCTION ID LPAREN (parameter_list)? RPAREN BEGIN statement+ END FUNCTION
     ;
 
 function_call_statement
@@ -148,35 +187,46 @@ argument_list
     : expression (COMMA expression)*
     ;
 
-// ESQL_QUERY is now a lexer token
-// esql_query
-//     : LPAREN esql_query_body RPAREN SEMICOLON
-//     ;
-
-// esql_query_body
-//     : (esql_query_clause)+
-//     ;
-
-// esql_query_clause
-//     : (~RPAREN)+
-//     ;
-
-condition
-    : expression comparison_operator expression
+expression
+    : logicalOrExpression
     ;
 
-expression
-    : expression op=MULTIPLY expression
-    | expression op=DIVIDE expression
-    | expression op=PLUS expression
-    | expression op=MINUS expression
-    | expression comparison_operator expression  // Added support for comparisons in expressions
-    | LPAREN expression RPAREN
+logicalOrExpression
+    : logicalAndExpression (OR logicalAndExpression)*
+    ;
+
+logicalAndExpression
+    : equalityExpression (AND equalityExpression)*
+    ;
+
+equalityExpression
+    : relationalExpression ((EQUAL | NOT_EQUAL) relationalExpression)*
+    ;
+
+relationalExpression
+    : additiveExpression ((LESS_THAN | GREATER_THAN | LESS_EQUAL | GREATER_EQUAL) additiveExpression)*
+    ;
+
+additiveExpression
+    : multiplicativeExpression ((PLUS | MINUS) multiplicativeExpression)*
+    ;
+
+multiplicativeExpression
+    : unaryExpr ((MULTIPLY | DIVIDE) unaryExpr)*
+    ;
+
+unaryExpr
+    : '-' unaryExpr
+    | primaryExpression
+    ;
+
+primaryExpression
+    : LPAREN expression RPAREN
+    | function_call
     | INT
     | FLOAT
     | STRING
     | ID
-    | function_call
     ;
 
 datatype
@@ -185,15 +235,3 @@ datatype
     | STRING_TYPE
     | DATE_TYPE
     ;
-
-comparison_operator
-    : ASSIGN
-    | NOT_EQUAL
-    | LESS_THAN
-    | GREATER_THAN
-    | LESS_EQUAL
-    | GREATER_EQUAL
-    ;
-
-// Lexer rule for ESQL_QUERY
-ESQL_QUERY: LPAREN .*? RPAREN SEMICOLON;

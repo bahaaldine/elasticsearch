@@ -27,12 +27,12 @@ public class AssignmentStatementHandlerTests {
     private AssignmentStatementHandler assignmentHandler;
     private DeclareStatementHandler declareHandler;
 
-
     @Before
     public void setup() {
-        context = new ExecutionContext(); // Assuming you have a real implementation of ExecutionContext
-        assignmentHandler = new AssignmentStatementHandler(context, executor);
-        declareHandler = new DeclareStatementHandler(context);
+        context = new ExecutionContext();
+        executor = new ProcedureExecutor(context);
+        assignmentHandler = new AssignmentStatementHandler(executor);
+        declareHandler = new DeclareStatementHandler(executor);
     }
 
     // Helper method to parse a query and return the necessary context

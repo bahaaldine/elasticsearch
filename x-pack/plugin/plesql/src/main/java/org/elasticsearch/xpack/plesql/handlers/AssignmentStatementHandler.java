@@ -1,93 +1,56 @@
 /*
- * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0; you may not use this file except in compliance with the Elastic License
- * 2.0.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.
+ * under one or more contributor license agreements. Licensed under the Elastic
+ * License 2.0; you may not use this file except in compliance with the
+ * Elastic License 2.0.
  */
+
 package org.elasticsearch.xpack.plesql.handlers;
 
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 
+/**
+ * The AssignmentStatementHandler class is responsible for handling assignment statements
+ * within the procedural SQL execution context. It evaluates the expression on the right-hand
+ * side of the assignment and assigns the resulting value to the specified variable.
+ */
 public class AssignmentStatementHandler {
-    private ExecutionContext context;
-    private ProcedureExecutor executor;
+    private final ProcedureExecutor executor;
 
-    public AssignmentStatementHandler(ExecutionContext context, ProcedureExecutor executor) {
-        this.context = context;
+    /**
+     * Constructs an AssignmentStatementHandler with the given ProcedureExecutor.
+     *
+     * @param executor The ProcedureExecutor instance responsible for executing procedures.
+     */
+    public AssignmentStatementHandler(ProcedureExecutor executor) {
         this.executor = executor;
     }
 
+    /**
+     * Handles the assignment statement by evaluating the expression and assigning the value
+     * to the specified variable. It ensures that the variable has been declared and that
+     * the assigned value matches the variable's type.
+     *
+     * @param ctx The Assignment_statementContext representing the assignment statement.
+     */
     public void handle(PlEsqlProcedureParser.Assignment_statementContext ctx) {
+        // Retrieve the variable name from the assignment statement
         String varName = ctx.ID().getText();
-        Object value = evaluateExpression(ctx.expression());
-        context.setVariable(varName, value);
-    }
 
-    private Object evaluateExpression(PlEsqlProcedureParser.ExpressionContext ctx) {
-        if (ctx.INT() != null) {
-            return Integer.parseInt(ctx.INT().getText());
-        } else if (ctx.FLOAT() != null) {
-            return Double.parseDouble(ctx.FLOAT().getText());
-        } else if (ctx.STRING() != null) {
-            String str = ctx.STRING().getText();
-            return str.substring(1, str.length() - 1);
-        } else if (ctx.ID() != null && ctx.getChildCount() == 1) {
-            return context.getVariable(ctx.ID().getText());
-        } else if (ctx.op != null) {
-            Object left = evaluateExpression(ctx.expression(0));
-            Object right = evaluateExpression(ctx.expression(1));
-
-            // Handle arithmetic based on operand types
-            if (left instanceof Integer && right instanceof Integer) {
-                return handleIntegerArithmetic((Integer) left, (Integer) right, ctx.op.getType());
-            } else {
-                return handleFloatingPointArithmetic(((Number) left).doubleValue(), ((Number) right).doubleValue(), ctx.op.getType());
-            }
-        } else if (ctx.function_call() != null) {
-            return executor.visitFunction_call(ctx.function_call());
-        } else if (ctx.LPAREN() != null && ctx.RPAREN() != null) {
-            return evaluateExpression(ctx.expression(0));
-        } else {
-            throw new RuntimeException("Unsupported expression: " + ctx.getText());
+        // Check if the variable has been declared
+        if ( executor.getContext().hasVariable(varName) == false ) {
+            throw new RuntimeException("Variable '" + varName + "' is not declared.");
         }
-    }
 
-    // Helper methods to handle different arithmetic types
-    private Object handleIntegerArithmetic(int left, int right, int operator) {
-        switch (operator) {
-            case PlEsqlProcedureParser.PLUS:
-                return left + right;
-            case PlEsqlProcedureParser.MINUS:
-                return left - right;
-            case PlEsqlProcedureParser.MULTIPLY:
-                return left * right;
-            case PlEsqlProcedureParser.DIVIDE:
-                if (right == 0) {
-                    throw new ArithmeticException("Division by zero");
-                }
-                return left / right;  // This will return an integer result
-            default:
-                throw new RuntimeException("Unknown operator for integers: " + operator);
-        }
-    }
+        // Evaluate the expression on the right-hand side of the assignment
+        Object value = executor.evaluateExpression(ctx.expression());
 
-    private Object handleFloatingPointArithmetic(double left, double right, int operator) {
-        switch (operator) {
-            case PlEsqlProcedureParser.PLUS:
-                return left + right;
-            case PlEsqlProcedureParser.MINUS:
-                return left - right;
-            case PlEsqlProcedureParser.MULTIPLY:
-                return left * right;
-            case PlEsqlProcedureParser.DIVIDE:
-                if (right == 0) {
-                    throw new ArithmeticException("Division by zero");
-                }
-                return left / right;
-            default:
-                throw new RuntimeException("Unknown operator for floating point: " + operator);
+        // Assign the evaluated value to the variable, enforcing type compatibility
+        try {
+            executor.getContext().setVariable(varName, value);
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Error assigning value to variable '" + varName + "': " + e.getMessage(), e);
         }
     }
 }

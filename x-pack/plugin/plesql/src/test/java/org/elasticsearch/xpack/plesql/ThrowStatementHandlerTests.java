@@ -25,7 +25,7 @@ public class ThrowStatementHandlerTests {
     @Before
     public void setup() {
         context = new ExecutionContext();
-        executor = new ProcedureExecutor(context, null);
+        executor = new ProcedureExecutor(context);
     }
 
     // Helper method to parse a BEGIN ... END block

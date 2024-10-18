@@ -47,6 +47,42 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterBreak_statement(PlEsqlProcedureParser.Break_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitBreak_statement(PlEsqlProcedureParser.Break_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterReturn_statement(PlEsqlProcedureParser.Return_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitReturn_statement(PlEsqlProcedureParser.Return_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterExpression_statement(PlEsqlProcedureParser.Expression_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitExpression_statement(PlEsqlProcedureParser.Expression_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterExecute_statement(PlEsqlProcedureParser.Execute_statementContext ctx) { }
 	/**
 	 * {@inheritDoc}
@@ -54,6 +90,18 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitExecute_statement(PlEsqlProcedureParser.Execute_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterEsql_query_content(PlEsqlProcedureParser.Esql_query_contentContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitEsql_query_content(PlEsqlProcedureParser.Esql_query_contentContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -114,6 +162,30 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitIf_statement(PlEsqlProcedureParser.If_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterElseif_block(PlEsqlProcedureParser.Elseif_blockContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitElseif_block(PlEsqlProcedureParser.Elseif_blockContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterCondition(PlEsqlProcedureParser.ConditionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitCondition(PlEsqlProcedureParser.ConditionContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -227,18 +299,6 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void enterCondition(PlEsqlProcedureParser.ConditionContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitCondition(PlEsqlProcedureParser.ConditionContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
 	@Override public void enterExpression(PlEsqlProcedureParser.ExpressionContext ctx) { }
 	/**
 	 * {@inheritDoc}
@@ -251,6 +311,102 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterLogicalOrExpression(PlEsqlProcedureParser.LogicalOrExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitLogicalOrExpression(PlEsqlProcedureParser.LogicalOrExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterLogicalAndExpression(PlEsqlProcedureParser.LogicalAndExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitLogicalAndExpression(PlEsqlProcedureParser.LogicalAndExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterEqualityExpression(PlEsqlProcedureParser.EqualityExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitEqualityExpression(PlEsqlProcedureParser.EqualityExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterRelationalExpression(PlEsqlProcedureParser.RelationalExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitRelationalExpression(PlEsqlProcedureParser.RelationalExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterAdditiveExpression(PlEsqlProcedureParser.AdditiveExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitAdditiveExpression(PlEsqlProcedureParser.AdditiveExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterMultiplicativeExpression(PlEsqlProcedureParser.MultiplicativeExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitMultiplicativeExpression(PlEsqlProcedureParser.MultiplicativeExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterUnaryExpr(PlEsqlProcedureParser.UnaryExprContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitUnaryExpr(PlEsqlProcedureParser.UnaryExprContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterPrimaryExpression(PlEsqlProcedureParser.PrimaryExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitPrimaryExpression(PlEsqlProcedureParser.PrimaryExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterDatatype(PlEsqlProcedureParser.DatatypeContext ctx) { }
 	/**
 	 * {@inheritDoc}
@@ -258,18 +414,6 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitDatatype(PlEsqlProcedureParser.DatatypeContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterComparison_operator(PlEsqlProcedureParser.Comparison_operatorContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitComparison_operator(PlEsqlProcedureParser.Comparison_operatorContext ctx) { }
 
 	/**
 	 * {@inheritDoc}

@@ -29,11 +29,35 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitStatement(PlEsqlProcedureParser.StatementContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#break_statement}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitBreak_statement(PlEsqlProcedureParser.Break_statementContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#return_statement}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitReturn_statement(PlEsqlProcedureParser.Return_statementContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#expression_statement}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitExpression_statement(PlEsqlProcedureParser.Expression_statementContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#execute_statement}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitExecute_statement(PlEsqlProcedureParser.Execute_statementContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#esql_query_content}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitEsql_query_content(PlEsqlProcedureParser.Esql_query_contentContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#declare_statement}.
 	 * @param ctx the parse tree
@@ -64,6 +88,18 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitIf_statement(PlEsqlProcedureParser.If_statementContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#elseif_block}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitElseif_block(PlEsqlProcedureParser.Elseif_blockContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#condition}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitCondition(PlEsqlProcedureParser.ConditionContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#loop_statement}.
 	 * @param ctx the parse tree
@@ -119,27 +155,63 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitArgument_list(PlEsqlProcedureParser.Argument_listContext ctx);
 	/**
-	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#condition}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitCondition(PlEsqlProcedureParser.ConditionContext ctx);
-	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#expression}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitExpression(PlEsqlProcedureParser.ExpressionContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#logicalOrExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitLogicalOrExpression(PlEsqlProcedureParser.LogicalOrExpressionContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#logicalAndExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitLogicalAndExpression(PlEsqlProcedureParser.LogicalAndExpressionContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#equalityExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitEqualityExpression(PlEsqlProcedureParser.EqualityExpressionContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#relationalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitRelationalExpression(PlEsqlProcedureParser.RelationalExpressionContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#additiveExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitAdditiveExpression(PlEsqlProcedureParser.AdditiveExpressionContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#multiplicativeExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMultiplicativeExpression(PlEsqlProcedureParser.MultiplicativeExpressionContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#unaryExpr}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitUnaryExpr(PlEsqlProcedureParser.UnaryExprContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPrimaryExpression(PlEsqlProcedureParser.PrimaryExpressionContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#datatype}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitDatatype(PlEsqlProcedureParser.DatatypeContext ctx);
-	/**
-	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#comparison_operator}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitComparison_operator(PlEsqlProcedureParser.Comparison_operatorContext ctx);
 }

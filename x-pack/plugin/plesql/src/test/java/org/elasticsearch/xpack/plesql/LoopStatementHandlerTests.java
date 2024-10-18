@@ -26,7 +26,7 @@ public class LoopStatementHandlerTests {
     @Before
     public void setup() {
         context = new ExecutionContext();  // Real ExecutionContext
-        executor = new ProcedureExecutor(context, null);  // Use real ProcedureExecutor
+        executor = new ProcedureExecutor(context);  // Use real ProcedureExecutor
     }
 
     // Helper method to parse a BEGIN ... END block
@@ -105,7 +105,7 @@ public class LoopStatementHandlerTests {
     }
 
     // Test 6: Infinite WHILE loop (with break condition)
-    @Test(expected = RuntimeException.class)  // Ensure the loop doesn't run infinitely in tests
+    @Test
     public void testInfiniteWhileLoop() {
         String blockQuery = "BEGIN DECLARE i INT = 1; WHILE 1 = 1 LOOP SET i = i + 1; IF i > 1000 THEN BREAK; END IF; END LOOP END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);

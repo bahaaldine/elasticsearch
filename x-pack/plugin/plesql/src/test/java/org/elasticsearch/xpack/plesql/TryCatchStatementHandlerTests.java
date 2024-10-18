@@ -28,8 +28,8 @@ public class TryCatchStatementHandlerTests {
     @Before
     public void setup() {
         context = new ExecutionContext();
-        executor = new ProcedureExecutor(context, null);
-        handler = new TryCatchStatementHandler(context, executor);
+        executor = new ProcedureExecutor(context);
+        handler = new TryCatchStatementHandler(executor);
     }
 
     // Helper method to parse a TRY-CATCH block

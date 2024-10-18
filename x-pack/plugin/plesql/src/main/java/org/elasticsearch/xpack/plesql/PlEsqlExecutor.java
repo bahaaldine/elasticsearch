@@ -30,7 +30,7 @@ public class PlEsqlExecutor {
 
         // Create and use the visitor to execute the procedure
         ExecutionContext executionContext = new ExecutionContext();
-        ProcedureExecutor executor = new ProcedureExecutor(executionContext, null);
+        ProcedureExecutor executor = new ProcedureExecutor(executionContext);
         executor.visit(context);
 
         return "Procedure executed successlfully";

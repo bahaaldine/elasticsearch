@@ -25,12 +25,14 @@ import static org.junit.Assert.assertTrue;
 
 public class DeclareStatementHandlerTests {
     private ExecutionContext context;
+    private ProcedureExecutor executor;
     private DeclareStatementHandler handler;
 
     @Before
     public void setUp() {
         context = new ExecutionContext();
-        handler = new DeclareStatementHandler(context);
+        executor = new ProcedureExecutor(context);
+        handler = new DeclareStatementHandler(executor);
     }
 
     // Helper method to parse PLESQL queries

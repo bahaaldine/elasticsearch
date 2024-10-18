@@ -34,6 +34,36 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 */
 	void exitStatement(PlEsqlProcedureParser.StatementContext ctx);
 	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#break_statement}.
+	 * @param ctx the parse tree
+	 */
+	void enterBreak_statement(PlEsqlProcedureParser.Break_statementContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#break_statement}.
+	 * @param ctx the parse tree
+	 */
+	void exitBreak_statement(PlEsqlProcedureParser.Break_statementContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#return_statement}.
+	 * @param ctx the parse tree
+	 */
+	void enterReturn_statement(PlEsqlProcedureParser.Return_statementContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#return_statement}.
+	 * @param ctx the parse tree
+	 */
+	void exitReturn_statement(PlEsqlProcedureParser.Return_statementContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#expression_statement}.
+	 * @param ctx the parse tree
+	 */
+	void enterExpression_statement(PlEsqlProcedureParser.Expression_statementContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#expression_statement}.
+	 * @param ctx the parse tree
+	 */
+	void exitExpression_statement(PlEsqlProcedureParser.Expression_statementContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#execute_statement}.
 	 * @param ctx the parse tree
 	 */
@@ -43,6 +73,16 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitExecute_statement(PlEsqlProcedureParser.Execute_statementContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#esql_query_content}.
+	 * @param ctx the parse tree
+	 */
+	void enterEsql_query_content(PlEsqlProcedureParser.Esql_query_contentContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#esql_query_content}.
+	 * @param ctx the parse tree
+	 */
+	void exitEsql_query_content(PlEsqlProcedureParser.Esql_query_contentContext ctx);
 	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#declare_statement}.
 	 * @param ctx the parse tree
@@ -93,6 +133,26 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitIf_statement(PlEsqlProcedureParser.If_statementContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#elseif_block}.
+	 * @param ctx the parse tree
+	 */
+	void enterElseif_block(PlEsqlProcedureParser.Elseif_blockContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#elseif_block}.
+	 * @param ctx the parse tree
+	 */
+	void exitElseif_block(PlEsqlProcedureParser.Elseif_blockContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#condition}.
+	 * @param ctx the parse tree
+	 */
+	void enterCondition(PlEsqlProcedureParser.ConditionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#condition}.
+	 * @param ctx the parse tree
+	 */
+	void exitCondition(PlEsqlProcedureParser.ConditionContext ctx);
 	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#loop_statement}.
 	 * @param ctx the parse tree
@@ -184,16 +244,6 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 */
 	void exitArgument_list(PlEsqlProcedureParser.Argument_listContext ctx);
 	/**
-	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#condition}.
-	 * @param ctx the parse tree
-	 */
-	void enterCondition(PlEsqlProcedureParser.ConditionContext ctx);
-	/**
-	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#condition}.
-	 * @param ctx the parse tree
-	 */
-	void exitCondition(PlEsqlProcedureParser.ConditionContext ctx);
-	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#expression}.
 	 * @param ctx the parse tree
 	 */
@@ -204,6 +254,86 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 */
 	void exitExpression(PlEsqlProcedureParser.ExpressionContext ctx);
 	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#logicalOrExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterLogicalOrExpression(PlEsqlProcedureParser.LogicalOrExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#logicalOrExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitLogicalOrExpression(PlEsqlProcedureParser.LogicalOrExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#logicalAndExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterLogicalAndExpression(PlEsqlProcedureParser.LogicalAndExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#logicalAndExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitLogicalAndExpression(PlEsqlProcedureParser.LogicalAndExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#equalityExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterEqualityExpression(PlEsqlProcedureParser.EqualityExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#equalityExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitEqualityExpression(PlEsqlProcedureParser.EqualityExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#relationalExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterRelationalExpression(PlEsqlProcedureParser.RelationalExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#relationalExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitRelationalExpression(PlEsqlProcedureParser.RelationalExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#additiveExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterAdditiveExpression(PlEsqlProcedureParser.AdditiveExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#additiveExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitAdditiveExpression(PlEsqlProcedureParser.AdditiveExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#multiplicativeExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterMultiplicativeExpression(PlEsqlProcedureParser.MultiplicativeExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#multiplicativeExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitMultiplicativeExpression(PlEsqlProcedureParser.MultiplicativeExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#unaryExpr}.
+	 * @param ctx the parse tree
+	 */
+	void enterUnaryExpr(PlEsqlProcedureParser.UnaryExprContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#unaryExpr}.
+	 * @param ctx the parse tree
+	 */
+	void exitUnaryExpr(PlEsqlProcedureParser.UnaryExprContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterPrimaryExpression(PlEsqlProcedureParser.PrimaryExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitPrimaryExpression(PlEsqlProcedureParser.PrimaryExpressionContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#datatype}.
 	 * @param ctx the parse tree
 	 */
@@ -213,14 +343,4 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitDatatype(PlEsqlProcedureParser.DatatypeContext ctx);
-	/**
-	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#comparison_operator}.
-	 * @param ctx the parse tree
-	 */
-	void enterComparison_operator(PlEsqlProcedureParser.Comparison_operatorContext ctx);
-	/**
-	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#comparison_operator}.
-	 * @param ctx the parse tree
-	 */
-	void exitComparison_operator(PlEsqlProcedureParser.Comparison_operatorContext ctx);
 }

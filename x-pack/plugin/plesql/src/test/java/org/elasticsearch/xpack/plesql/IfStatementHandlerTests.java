@@ -7,12 +7,14 @@
 
 package org.elasticsearch.xpack.plesql;
 import org.antlr.v4.runtime.ANTLRInputStream;
+import org.antlr.v4.runtime.CharStream;
+import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.Token;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.handlers.IfStatementHandler;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -25,19 +27,22 @@ public class IfStatementHandlerTests {
 
     private ExecutionContext context;
     private ProcedureExecutor executor;
+    private PlEsqlProcedureParser parser;
+
 
     @Before
     public void setup() {
         context = new ExecutionContext();  // Real ExecutionContext
-        executor = new ProcedureExecutor(context, null);  // Use real ProcedureExecutor
+        executor = new ProcedureExecutor(context);  // Use real ProcedureExecutor
     }
 
     // Helper method to parse a BEGIN ... END block
-    private PlEsqlProcedureParser.ProcedureContext parseBlock(String query) {
-        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(new ANTLRInputStream(query));
+    private PlEsqlProcedureParser.ProcedureContext parseBlock(String blockQuery) {
+        CharStream input = CharStreams.fromString(blockQuery);
+        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(input);
         CommonTokenStream tokens = new CommonTokenStream(lexer);
-        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
-        return parser.procedure();  // Return the parsed block
+        parser = new PlEsqlProcedureParser(tokens);
+        return parser.procedure();
     }
 
     // Helper method to parse an IF statement
@@ -86,12 +91,33 @@ public class IfStatementHandlerTests {
         assertEquals(20, context.getVariable("myVar"));
     }
 
+    @Test
+    public void testParseIfElseIfElse() {
+        String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 2 THEN SET myVar = 10; " +
+            "ELSEIF 1 = 1 THEN SET myVar = 20; ELSE SET myVar = 30; END IF END";
+
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+
+        // Use a parse tree walker or print the tree for inspection
+        System.out.println(blockContext.toStringTree(parser));
+    }
+
+    private void printTokens(String input) {
+        CharStream charStream = CharStreams.fromString(input);
+        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(charStream);
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        tokens.fill();
+        for (Token token : tokens.getTokens()) {
+            System.out.println(token.getText() + " : " + PlEsqlProcedureLexer.VOCABULARY.getSymbolicName(token.getType()));
+        }
+    }
+
     // Test 4: IF-ELSEIF-ELSE statement
     @Test
     public void testIfElseIfElseStatement() {
-        // Setup an IF-ELSEIF-ELSE statement: IF 1 = 2 THEN SET myVar = 10; ELSEIF 1 = 1 THEN SET myVar = 20; ELSE SET myVar = 30; ENDIF;
+        // Setup an IF-ELSEIF-ELSE statement: IF 1 = 2 THEN SET myVar = 10; ELSEIF 1 = 1 THEN SET myVar = 20; ELSE SET myVar = 30; END IF; END;
         String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 2 THEN SET myVar = 10; " +
-            "ELSEIF 1 = 1 THEN SET myVar = 20; ELSE SET myVar = 30; END IF END";
+            "ELSEIF 1 = 1 THEN SET myVar = 20; ELSE SET myVar = 30; END IF; END;";
 
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -104,7 +130,6 @@ public class IfStatementHandlerTests {
     // Test 5: Arithmetic operations in IF condition
     @Test
     public void testArithmeticInIfCondition() {
-        // Setup an IF statement: IF 5 + 5 = 10 THEN SET myVar = 10; ENDIF;
         String blockQuery = "BEGIN DECLARE myVar INT; IF 5 + 5 = 10 THEN SET myVar = 10; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 

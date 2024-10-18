@@ -1,8 +1,8 @@
 /*
- * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0; you may not use this file except in compliance with the Elastic License
- * 2.0.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V.
+ * under one or more contributor license agreements. Licensed under
+ * the Elastic License 2.0; you may not use this file except in
+ * compliance with the Elastic License 2.0.
  */
 
 package org.elasticsearch.xpack.plesql;
@@ -14,6 +14,8 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
 
 public class IntegrationTests {
 
@@ -23,7 +25,7 @@ public class IntegrationTests {
     @Before
     public void setup() {
         context = new ExecutionContext();
-        executor = new ProcedureExecutor(context, null);  // Use a default exception listener
+        executor = new ProcedureExecutor(context);  // Use a default exception listener
     }
 
     // Helper method to parse a block of PL|ES|QL code
@@ -40,15 +42,15 @@ public class IntegrationTests {
                 SET x = 5;
                 SET y = 10.0;
                 IF x = 5 THEN
-                    SET x = x + 1;
+                    SET x = x * 2;  -- x becomes 10
                 END IF;
                 FOR i IN 1..3 LOOP
-                    SET y = y + i;
+                    SET y = y + i;  -- y accumulates values
                 END LOOP;
                 TRY
-                    SET x = x / 0; -- This should trigger the catch block
+                    SET x = x / (y - 16.0); -- x = 10 / (y - 16.0)
                 CATCH
-                    SET x = 0;
+                    SET x = -1;  -- Set x to -1 in case of exception
                 END TRY;
             END
         """;
@@ -56,13 +58,18 @@ public class IntegrationTests {
 
         executor.visitProcedure(blockContext);
 
-        // Check that 'x' is 0 (set in the CATCH block)
-        assertNotNull("x should be declared.", context.getVariable("x"));
-        assertEquals(0, context.getVariable("x"));
+        // Expected value of y: 10.0 + 1 + 2 + 3 = 16.0
+        // Attempting x = 10 / (16.0 - 16.0) => Division by zero, x should be -1
 
-        // Check that 'y' is 16.0 (10.0 + 1 + 2 + 3)
-        assertNotNull("y should be declared.", context.getVariable("y"));
-        assertEquals(16.0, context.getVariable("y"));
+        // Check that 'x' is -1 (set in the CATCH block)
+        assertNotNull("Variable 'x' should be declared.", context.getVariable("x"));
+        assertTrue("Variable 'x' should be of type Integer.", context.getVariable("x") instanceof Integer);
+        assertEquals("Variable 'x' should be -1 after the TRY-CATCH block.", -1, context.getVariable("x"));
+
+        // Check that 'y' is 16.0
+        assertNotNull("Variable 'y' should be declared.", context.getVariable("y"));
+        assertTrue("Variable 'y' should be of type Double.", context.getVariable("y") instanceof Double);
+        assertEquals("Variable 'y' should be 16.0 after the loop.", 16.0, (Double) context.getVariable("y"), 0.0001);
     }
 
     // Test 2: Nested control flow test
@@ -70,19 +77,19 @@ public class IntegrationTests {
     public void testNestedControlFlow() {
         String blockQuery = """
             BEGIN
-                DECLARE a INT = 1, b INT = 2, c INT = 3;
+                DECLARE a INT = 1, b INT = 2, c INT = 3, i INT;
                 IF a < b THEN
                     FOR i IN 1..3 LOOP
-                        SET a = a + 1;
-                        IF a = 3 THEN
-                            SET b = b + i;
+                        SET a = a + i;
+                        IF a >= 5 THEN
+                            SET b = b * i;
                         END IF;
                     END LOOP;
                 END IF;
                 TRY
-                    SET c = a / (b - 9); -- This should not trigger the catch
+                    SET c = b / (a - 7);
                 CATCH
-                    SET c = 0;
+                    SET c = 100;
                 END TRY;
             END
         """;
@@ -90,17 +97,22 @@ public class IntegrationTests {
 
         executor.visitProcedure(blockContext);
 
-        // Check that 'a' is 4
-        assertNotNull("a should be declared.", context.getVariable("a"));
-        assertEquals(4, context.getVariable("a"));
+        // Expected values:
+        // a: 1 + 1 + 2 + 3 = 7
+        // b: b * i when a >= 5 (b = 2 * 3 = 6)
+        // c: Division by zero occurs (a - 7 = 0), so c = 100
 
-        // Check that 'b' is 5
-        assertNotNull("b should be declared.", context.getVariable("b"));
-        assertEquals(5, context.getVariable("b"));
+        // Check that 'a' is 7
+        assertNotNull("Variable 'a' should be declared.", context.getVariable("a"));
+        assertEquals("Variable 'a' should be 7 after the loop.", 7, context.getVariable("a"));
 
-        // Check that 'c' is 4 (division succeeds)
-        assertNotNull("c should be declared.", context.getVariable("c"));
-        assertEquals(4, context.getVariable("c"));
+        // Check that 'b' is 6
+        assertNotNull("Variable 'b' should be declared.", context.getVariable("b"));
+        assertEquals("Variable 'b' should be 6 after the loop.", 6, context.getVariable("b"));
+
+        // Check that 'c' is 100
+        assertNotNull("Variable 'c' should be declared.", context.getVariable("c"));
+        assertEquals("Variable 'c' should be 100 after the TRY-CATCH block.", 100, context.getVariable("c"));
     }
 
     // Test 3: Function calls within control flow
@@ -108,20 +120,20 @@ public class IntegrationTests {
     public void testFunctionCallsWithinControlFlow() {
         String blockQuery = """
             BEGIN
-                DECLARE result INT;
-                FUNCTION add(a INT, b INT) BEGIN
+                DECLARE result FLOAT, i INT;
+                FUNCTION add(a FLOAT, b INT) BEGIN
                     RETURN a + b;
                 END FUNCTION;
-                SET result = add(1, 2); -- result should be 3
+                SET result = add(1, 2); -- result = 3
                 IF result > 2 THEN
                     FOR i IN 1..2 LOOP
-                        SET result = add(result, i);
+                        SET result = add(result, i); -- result accumulates values
                     END LOOP;
                 END IF;
                 TRY
-                    SET result = add(result, 10) / (result - 20); -- Should trigger the catch
+                    SET result = add(result, 5) / (result - 10); -- result = (11) / (result - 10)
                 CATCH
-                    SET result = -1;
+                    SET result = -100;
                 END TRY;
             END
         """;
@@ -129,9 +141,25 @@ public class IntegrationTests {
 
         executor.visitProcedure(blockContext);
 
-        // Check that 'result' is -1 (set in the CATCH block)
-        assertNotNull("result should be declared.", context.getVariable("result"));
-        assertEquals(-1, context.getVariable("result"));
+        /*
+        Calculations:
+        - result = add(1, 2) => 3
+        - Since result > 2, enter IF
+        - Loop i from 1 to 2:
+          - i=1: result = add(3,1) => 4
+          - i=2: result = add(4,2) => 6
+        - TRY:
+          - result = add(6,5) / (6 - 10) => 11 / (-4) => -2.75
+          - No exception occurs
+        */
+
+        // Check that 'result' is approximately -2.75
+        assertNotNull("Variable 'result' should be declared.", context.getVariable("result"));
+        Object resultValue = context.getVariable("result");
+        assertTrue("Variable 'result' should be a number.", resultValue instanceof Number);
+        double expectedResult = -2.75;
+        double actualResult = ((Number) resultValue).doubleValue();
+        assertEquals("Variable 'result' should be approximately -2.75 after calculations.", expectedResult, actualResult, 0.000001);
     }
 
     // Test 4: Edge cases, including loops with no iterations
@@ -139,18 +167,18 @@ public class IntegrationTests {
     public void testEdgeCases() {
         String blockQuery = """
             BEGIN
-                DECLARE n INT = 10;
+                DECLARE n INT = 10, i INT;
                 FOR i IN 5..3 LOOP -- No iterations should happen
                     SET n = n + 1;
                 END LOOP;
                 TRY
-                    DECLARE x INT;
-                    SET n = n / x; -- This should trigger a CATCH due to uninitialized x
+                    DECLARE x INT = 0;
+                    SET n = n / x; -- Division by zero, should trigger CATCH
                 CATCH
-                    SET n = 0;
+                    SET n = -50;
                 END TRY;
-                IF n = 0 THEN
-                    SET n = 100;
+                IF n = -50 THEN
+                    SET n = n * 2; -- n becomes -100
                 END IF;
             END
         """;
@@ -158,9 +186,9 @@ public class IntegrationTests {
 
         executor.visitProcedure(blockContext);
 
-        // Check that 'n' is 100
-        assertNotNull("n should be declared.", context.getVariable("n"));
-        assertEquals(100, context.getVariable("n"));
+        // Check that 'n' is -100
+        assertNotNull("Variable 'n' should be declared.", context.getVariable("n"));
+        assertEquals("Variable 'n' should be -100 after calculations.", -100, context.getVariable("n"));
     }
 
     // Test 5: Nested Try-Catch statements
@@ -171,7 +199,7 @@ public class IntegrationTests {
                DECLARE v INT = 1;
                TRY
                    TRY
-                       SET v = v / 0; -- This should trigger the inner catch
+                       SET v = v / 0; -- This should trigger the inner CATCH
                    CATCH
                        SET v = 10;
                        THROW 'Manual exception'; -- Simulate throwing another exception
@@ -180,7 +208,9 @@ public class IntegrationTests {
                    SET v = 20;
                END TRY;
                IF v = 20 THEN
-                   SET v = v + 5;
+                   SET v = v + 5; -- v becomes 25
+               ELSE
+                   SET v = v + 100; -- This should not execute
                END IF;
            END
         """;
@@ -189,7 +219,123 @@ public class IntegrationTests {
         executor.visitProcedure(blockContext);
 
         // Check that 'v' is 25
-        assertNotNull("v should be declared.", context.getVariable("v"));
-        assertEquals(25, context.getVariable("v"));
+        assertNotNull("Variable 'v' should be declared.", context.getVariable("v"));
+        assertEquals("Variable 'v' should be 25 after nested TRY-CATCH.", 25, context.getVariable("v"));
+    }
+
+    // Test 6: Recursive Function Calls
+    @Test
+    public void testRecursiveFunctionCalls() {
+        String blockQuery = """
+        BEGIN
+            DECLARE n INT = 5, result INT;
+            FUNCTION factorial(x INT) BEGIN
+                IF x <= 1 THEN
+                    RETURN 1;
+                ELSE
+                    RETURN x * factorial(x - 1);
+                END IF;
+            END FUNCTION;
+            SET result = factorial(n);
+        END
+    """;
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+
+        executor.visitProcedure(blockContext);
+
+        // Expected result: 5! = 120
+
+        // Check that 'result' is 120
+        assertNotNull("Variable 'result' should be declared.", context.getVariable("result"));
+        assertEquals("Variable 'result' should be 120 after factorial calculation.", 120, context.getVariable("result"));
+    }
+
+    // Test 7: Variable Shadowing and Scope
+    @Test
+    public void testVariableShadowing() {
+        String blockQuery = """
+            BEGIN
+                DECLARE x INT = 10;
+                FUNCTION test() BEGIN
+                    DECLARE x INT = 5;
+                    SET x = x + 5; -- x in function scope
+                    RETURN x;
+                END FUNCTION;
+                SET x = test(); -- x in global scope is set to function's return value
+            END
+        """;
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+
+        executor.visitProcedure(blockContext);
+
+        // Expected x: Function returns 10, so global x becomes 10
+
+        // Check that 'x' is 10
+        assertNotNull("Variable 'x' should be declared.", context.getVariable("x"));
+        assertEquals("Variable 'x' should be 10 after function call.", 10, context.getVariable("x"));
+    }
+
+    // Test 8: Loop with Break Statement (assuming language supports BREAK)
+    @Test
+    public void testLoopWithBreak() {
+        String blockQuery = """
+            BEGIN
+                DECLARE sum INT = 0, i INT;
+                FOR i IN 1..10 LOOP
+                    IF i > 5 THEN
+                        BREAK;
+                    END IF;
+                    SET sum = sum + i;
+                END LOOP;
+            END
+        """;
+        // Assuming BREAK is implemented in your language and handlers
+
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+
+        executor.visitProcedure(blockContext);
+
+        // Expected sum: 1 + 2 + 3 + 4 + 5 = 15
+
+        // Check that 'sum' is 15
+        assertNotNull("Variable 'sum' should be declared.", context.getVariable("sum"));
+        assertEquals("Variable 'sum' should be 15 after loop with BREAK.", 15, context.getVariable("sum"));
+    }
+
+    // Test 9: Handling Undefined Variables
+    @Test(expected = RuntimeException.class)
+    public void testUndefinedVariable() {
+        String blockQuery = """
+            BEGIN
+                SET x = 10; -- x is not declared
+            END
+        """;
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+
+        executor.visitProcedure(blockContext);
+
+        // Exception is expected due to undefined variable 'x'
+    }
+
+    // Test 10: Complex Expression Evaluation
+    @Test
+    public void testComplexExpression() {
+        String blockQuery = """
+            BEGIN
+                DECLARE a INT = 5, b INT = 3, c FLOAT;
+                SET c = (a + b) * (a - b) / b; -- c = (5 + 3) * (5 - 3) / 3 = 8 * 2 / 3 = 5.333...
+            END
+        """;
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+
+        executor.visitProcedure(blockContext);
+
+        // Check that 'c' is approximately 5.3333
+        assertNotNull("Variable 'c' should be declared.", context.getVariable("c"));
+        Object cValue = context.getVariable("c");
+        assertTrue("Variable 'c' should be a number.", cValue instanceof Number);
+        double expectedC = (8.0 * 2.0) / 3.0; // 5.3333...
+        double actualC = ((Number) cValue).doubleValue();
+        assertEquals("Variable 'c' should be approximately 5.3333 after calculation.", expectedC, actualC, 0.0001);
     }
 }

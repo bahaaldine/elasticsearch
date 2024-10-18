@@ -9,7 +9,7 @@ package org.elasticsearch.xpack.plesql.interfaces;
 
 public class DefaultExceptionListener implements ExceptionListener {
     @Override
-    public void handleException(Exception e) {
+    public void onException(Exception e) {
         System.out.println("Default handling: " + e.getMessage());
     }
 }
