@@ -74,6 +74,16 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 */
 	void exitExecute_statement(PlEsqlProcedureParser.Execute_statementContext ctx);
 	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#variable_assignment}.
+	 * @param ctx the parse tree
+	 */
+	void enterVariable_assignment(PlEsqlProcedureParser.Variable_assignmentContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#variable_assignment}.
+	 * @param ctx the parse tree
+	 */
+	void exitVariable_assignment(PlEsqlProcedureParser.Variable_assignmentContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#esql_query_content}.
 	 * @param ctx the parse tree
 	 */

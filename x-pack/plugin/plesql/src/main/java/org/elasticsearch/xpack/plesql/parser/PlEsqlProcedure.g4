@@ -63,7 +63,10 @@ SEMICOLON: ';';
 // Literals
 FLOAT: [0-9]+ '.' [0-9]+;
 INT: [0-9]+;
-STRING: '\'' ( ~('\'' | '\\') | '\\' . )* '\'';
+STRING
+    : ('\'' ( ~('\'' | '\\') | '\\' . )* '\''
+    | '"' ( ~('"' | '\\') | '\\' . )* '"')
+    ;
 
 // Identifier
 ID: [a-zA-Z_][a-zA-Z_0-9]*;
@@ -112,7 +115,11 @@ expression_statement
     ;
 
 execute_statement
-    : EXECUTE LPAREN esql_query_content RPAREN SEMICOLON
+    : EXECUTE variable_assignment LPAREN esql_query_content RPAREN SEMICOLON
+    ;
+
+variable_assignment
+    : ID EQUAL
     ;
 
 esql_query_content

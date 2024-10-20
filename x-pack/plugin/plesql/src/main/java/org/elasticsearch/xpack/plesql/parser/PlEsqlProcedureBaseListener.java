@@ -95,6 +95,18 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterVariable_assignment(PlEsqlProcedureParser.Variable_assignmentContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitVariable_assignment(PlEsqlProcedureParser.Variable_assignmentContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterEsql_query_content(PlEsqlProcedureParser.Esql_query_contentContext ctx) { }
 	/**
 	 * {@inheritDoc}

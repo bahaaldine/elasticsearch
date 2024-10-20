@@ -10,12 +10,12 @@ package org.elasticsearch.xpack.plesql;
 import org.elasticsearch.xpack.plesql.exceptions.BreakException;
 import org.elasticsearch.xpack.plesql.handlers.AssignmentStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.DeclareStatementHandler;
+import org.elasticsearch.xpack.plesql.handlers.ExecuteStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
 import org.elasticsearch.xpack.plesql.handlers.IfStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.LoopStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.ThrowStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.TryCatchStatementHandler;
-import org.elasticsearch.xpack.plesql.interfaces.ExceptionListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureBaseVisitor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -40,6 +40,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     private final FunctionDefinitionHandler functionDefHandler;
     private final TryCatchStatementHandler tryCatchHandler;
     private final ThrowStatementHandler throwHandler;
+    private final ExecuteStatementHandler executeHandler;
 
     /**
      * Constructs a ProcedureExecutor with the given execution context and exception listener.
@@ -49,6 +50,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     @SuppressWarnings("this-escape")
     public ProcedureExecutor(ExecutionContext context) {
         this.context = context;
+        this.executeHandler = new ExecuteStatementHandler(this);
         this.assignmentHandler = new AssignmentStatementHandler(this);
         this.declareHandler = new DeclareStatementHandler(this);
         this.ifHandler = new IfStatementHandler(this);
@@ -113,6 +115,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             tryCatchHandler.handle(ctx.try_catch_statement());
         } else if (ctx.throw_statement() != null) {
             throwHandler.handle(ctx.throw_statement());
+        } else if (ctx.execute_statement() != null) {
+            executeHandler.handle(ctx.execute_statement());
         } else if (ctx.return_statement() != null) {
             visitReturn_statement(ctx.return_statement());
         } else if (ctx.break_statement() != null) {
@@ -271,16 +275,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
      */
     @Override
     public Object visitExecute_statement(PlEsqlProcedureParser.Execute_statementContext ctx) {
-        String esqlQuery = ctx.esql_query_content().getText();
-        esqlQuery = esqlQuery.substring(1, esqlQuery.length() - 1); // Remove surrounding parentheses
-
-        // Optionally, replace variable placeholders with actual values
-        esqlQuery = substituteVariables(esqlQuery);
-
-        Object result = executeEsqlQuery(esqlQuery);
-
-        // Store or process the result as needed
-        context.setVariable("result_of_query", result);
+        executeHandler.handle(ctx);
         return null;
     }
 
@@ -309,35 +304,6 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     // =======================
     // Helper Methods
     // =======================
-
-    /**
-     * Substitutes variables in the ES|QL query with their actual values from the context.
-     *
-     * @param esqlQuery The ES|QL query string with potential variable placeholders.
-     * @return The ES|QL query string with variables substituted by their values.
-     */
-    private String substituteVariables(String esqlQuery) {
-        // Simple substitution logic
-        for (String varName : context.getVariableNames()) {
-            Object value = context.getVariable(varName);
-            esqlQuery = esqlQuery.replace(varName, value.toString());
-        }
-        return esqlQuery;
-    }
-
-    /**
-     * Executes the given ES|QL query using Elasticsearch APIs.
-     *
-     * @param esqlQuery The ES|QL query string to execute.
-     * @return The result of the executed query.
-     */
-    private Object executeEsqlQuery(String esqlQuery) {
-        // Implement the logic to execute the ES|QL query using Elasticsearch APIs
-        // For now, we'll just print the query and return a placeholder result
-        System.out.println("Executing ESQL query: " + esqlQuery);
-        // TODO: Integrate with Elasticsearch ESQL execution API
-        return null; // Return actual query result
-    }
 
     /**
      * Evaluates an expression and returns its result.
@@ -492,7 +458,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             String operator = ctx.getChild(2 * i - 1).getText();
             Object next = evaluateMultiplicativeExpression(ctx.multiplicativeExpression(i));
 
-            if (!(result instanceof Number) || !(next instanceof Number)) {
+            if ( (result instanceof Number) == false || (next instanceof Number) == false ) {
                 throw new RuntimeException("Additive operators can only be applied to numbers.");
             }
 
@@ -544,7 +510,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             String operator = ctx.getChild(2 * i - 1).getText();
             Object right = evaluateUnaryExpr(ctx.unaryExpr(i));
 
-            if (!(result instanceof Number) || !(right instanceof Number)) {
+            if ( (result instanceof Number) == false || (right instanceof Number) == false ) {
                 throw new RuntimeException("Multiplicative operators can only be applied to numbers.");
             }
 

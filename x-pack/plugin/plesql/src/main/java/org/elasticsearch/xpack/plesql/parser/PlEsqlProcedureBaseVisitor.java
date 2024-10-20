@@ -66,6 +66,13 @@ public class PlEsqlProcedureBaseVisitor<T> extends AbstractParseTreeVisitor<T> i
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
+	@Override public T visitVariable_assignment(PlEsqlProcedureParser.Variable_assignmentContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
 	@Override public T visitEsql_query_content(PlEsqlProcedureParser.Esql_query_contentContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
