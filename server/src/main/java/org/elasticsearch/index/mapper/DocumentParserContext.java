@@ -12,6 +12,7 @@ package org.elasticsearch.index.mapper;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.time.DateFormatter;
 import org.elasticsearch.core.Tuple;
 import org.elasticsearch.index.IndexMode;
@@ -110,7 +111,8 @@ public abstract class DocumentParserContext {
     private final Set<String> ignoredFields;
     private final List<IgnoredSourceFieldMapper.NameValue> ignoredFieldValues;
     private final List<IgnoredSourceFieldMapper.NameValue> ignoredFieldsMissingValues;
-    private String parentArrayField;
+    private boolean inArrayScopeEnabled;
+    private boolean inArrayScope;
 
     private final Map<String, List<Mapper>> dynamicMappers;
     private final DynamicMapperSize dynamicMappersSize;
@@ -123,7 +125,6 @@ public abstract class DocumentParserContext {
     private Field version;
     private final SeqNoFieldMapper.SequenceIDFields seqID;
     private final Set<String> fieldsAppliedFromTemplates;
-    private final boolean supportsObjectAutoFlattening;
 
     /**
      * Fields that are copied from values of other fields via copy_to.
@@ -143,7 +144,8 @@ public abstract class DocumentParserContext {
         Set<String> ignoreFields,
         List<IgnoredSourceFieldMapper.NameValue> ignoredFieldValues,
         List<IgnoredSourceFieldMapper.NameValue> ignoredFieldsWithNoSource,
-        String parentArrayField,
+        boolean inArrayScopeEnabled,
+        boolean inArrayScope,
         Map<String, List<Mapper>> dynamicMappers,
         Map<String, ObjectMapper> dynamicObjectMappers,
         Map<String, List<RuntimeField>> dynamicRuntimeFields,
@@ -156,8 +158,7 @@ public abstract class DocumentParserContext {
         Set<String> fieldsAppliedFromTemplates,
         Set<String> copyToFields,
         DynamicMapperSize dynamicMapperSize,
-        boolean recordedSource,
-        boolean supportsObjectAutoFlattening
+        boolean recordedSource
     ) {
         this.mappingLookup = mappingLookup;
         this.mappingParserContext = mappingParserContext;
@@ -165,7 +166,8 @@ public abstract class DocumentParserContext {
         this.ignoredFields = ignoreFields;
         this.ignoredFieldValues = ignoredFieldValues;
         this.ignoredFieldsMissingValues = ignoredFieldsWithNoSource;
-        this.parentArrayField = parentArrayField;
+        this.inArrayScopeEnabled = inArrayScopeEnabled;
+        this.inArrayScope = inArrayScope;
         this.dynamicMappers = dynamicMappers;
         this.dynamicObjectMappers = dynamicObjectMappers;
         this.dynamicRuntimeFields = dynamicRuntimeFields;
@@ -179,7 +181,6 @@ public abstract class DocumentParserContext {
         this.copyToFields = copyToFields;
         this.dynamicMappersSize = dynamicMapperSize;
         this.recordedSource = recordedSource;
-        this.supportsObjectAutoFlattening = supportsObjectAutoFlattening;
     }
 
     private DocumentParserContext(ObjectMapper parent, ObjectMapper.Dynamic dynamic, DocumentParserContext in) {
@@ -190,7 +191,8 @@ public abstract class DocumentParserContext {
             in.ignoredFields,
             in.ignoredFieldValues,
             in.ignoredFieldsMissingValues,
-            in.parentArrayField,
+            in.inArrayScopeEnabled,
+            in.inArrayScope,
             in.dynamicMappers,
             in.dynamicObjectMappers,
             in.dynamicRuntimeFields,
@@ -203,41 +205,8 @@ public abstract class DocumentParserContext {
             in.fieldsAppliedFromTemplates,
             in.copyToFields,
             in.dynamicMappersSize,
-            in.recordedSource,
-            in.supportsObjectAutoFlattening
+            in.recordedSource
         );
-    }
-
-    private static boolean checkForAutoFlatteningSupport(MappingLookup mappingLookup, RootObjectMapper rootObjectMapper) {
-        if (rootObjectMapper.subobjects() != ObjectMapper.Subobjects.ENABLED) {
-            return true;
-        }
-        for (ObjectMapper objectMapper : mappingLookup.objectMappers().values()) {
-            if (objectMapper.subobjects() != ObjectMapper.Subobjects.ENABLED) {
-                return true;
-            }
-        }
-        if (rootObjectMapper.dynamicTemplates() != null) {
-            for (DynamicTemplate dynamicTemplate : rootObjectMapper.dynamicTemplates()) {
-                if (findSubobjects(dynamicTemplate.getMapping())) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static boolean findSubobjects(Map<String, Object> mapping) {
-        for (var entry : mapping.entrySet()) {
-            if (entry.getKey().equals("subobjects") && (entry.getValue() instanceof Boolean || entry.getValue() instanceof String)) {
-                return true;
-            }
-            if (entry.getValue() instanceof Map<?, ?> && findSubobjects((Map<String, Object>) entry.getValue())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     protected DocumentParserContext(
@@ -254,7 +223,8 @@ public abstract class DocumentParserContext {
             new HashSet<>(),
             new ArrayList<>(),
             new ArrayList<>(),
-            null,
+            mappingParserContext.getIndexSettings().isSyntheticSourceSecondDocParsingPassEnabled(),
+            false,
             new HashMap<>(),
             new HashMap<>(),
             new HashMap<>(),
@@ -267,8 +237,7 @@ public abstract class DocumentParserContext {
             new HashSet<>(),
             new HashSet<>(mappingLookup.fieldTypesLookup().getCopyToDestinationFields()),
             new DynamicMapperSize(),
-            false,
-            checkForAutoFlatteningSupport(mappingLookup, mappingLookup.getMapping().getRoot())
+            false
         );
     }
 
@@ -332,6 +301,12 @@ public abstract class DocumentParserContext {
         }
     }
 
+    final void removeLastIgnoredField(String name) {
+        if (ignoredFieldValues.isEmpty() == false && ignoredFieldValues.getLast().name().equals(name)) {
+            ignoredFieldValues.removeLast();
+        }
+    }
+
     /**
      * Return the collection of values for fields that have been ignored so far.
      */
@@ -360,10 +335,7 @@ public abstract class DocumentParserContext {
     public final DocumentParserContext addIgnoredFieldFromContext(IgnoredSourceFieldMapper.NameValue ignoredFieldWithNoSource)
         throws IOException {
         if (canAddIgnoredField()) {
-            if (parentArrayField != null
-                && parent != null
-                && parentArrayField.equals(parent.fullPath())
-                && parent instanceof NestedObjectMapper == false) {
+            if (inArrayScope) {
                 // The field is an array within an array, store all sub-array elements.
                 ignoredFieldsMissingValues.add(ignoredFieldWithNoSource);
                 return cloneWithRecordedSource();
@@ -379,6 +351,20 @@ public abstract class DocumentParserContext {
     }
 
     /**
+     * Wraps {@link XContentDataHelper#encodeToken}, disabling dot expansion from {@link DotExpandingXContentParser}.
+     * This helps avoid producing duplicate names in the same scope, due to expanding dots to objects.
+     * For instance: { "a.b": "b", "a.c": "c" } => { "a": { "b": "b" }, "a": { "c": "c" } }
+     * This can happen when storing parts of document source that are not indexed (e.g. disabled objects).
+     */
+    BytesRef encodeFlattenedToken() throws IOException {
+        boolean old = path().isWithinLeafObject();
+        path().setWithinLeafObject(true);
+        BytesRef encoded = XContentDataHelper.encodeToken(parser());
+        path().setWithinLeafObject(old);
+        return encoded;
+    }
+
+    /**
      * Return the collection of fields that are missing their source values.
      */
     public final Collection<IgnoredSourceFieldMapper.NameValue> getIgnoredFieldsMissingValues() {
@@ -386,13 +372,17 @@ public abstract class DocumentParserContext {
     }
 
     /**
-     * Clones the current context to mark it as an array. Records the full name of the array field, to check for sub-arrays.
+     * Clones the current context to mark it as an array, if it's not already marked, or restore it if it's within a nested object.
      * Applies to synthetic source only.
      */
-    public final DocumentParserContext cloneForArray(String fullName) throws IOException {
-        if (canAddIgnoredField()) {
+    public final DocumentParserContext maybeCloneForArray(Mapper mapper) throws IOException {
+        if (canAddIgnoredField()
+            && mapper instanceof ObjectMapper
+            && mapper instanceof NestedObjectMapper == false
+            && inArrayScope == false
+            && inArrayScopeEnabled) {
             DocumentParserContext subcontext = switchParser(parser());
-            subcontext.parentArrayField = fullName;
+            subcontext.inArrayScope = true;
             return subcontext;
         }
         return this;
@@ -499,10 +489,6 @@ public abstract class DocumentParserContext {
 
     public Set<String> getCopyToFields() {
         return copyToFields;
-    }
-
-    boolean supportsObjectAutoFlattening() {
-        return supportsObjectAutoFlattening;
     }
 
     /**
@@ -640,25 +626,6 @@ public abstract class DocumentParserContext {
         return dynamicObjectMappers.get(name);
     }
 
-    ObjectMapper findObject(String fullName) {
-        // does the object mapper already exist? if so, use that
-        ObjectMapper objectMapper = mappingLookup().objectMappers().get(fullName);
-        if (objectMapper != null) {
-            return objectMapper;
-        }
-        // has the object mapper been added as a dynamic update already?
-        return getDynamicObjectMapper(fullName);
-    }
-
-    ObjectMapper.Builder findObjectBuilder(String fullName) {
-        // does the object mapper already exist? if so, use that
-        ObjectMapper objectMapper = findObject(fullName);
-        if (objectMapper != null) {
-            return objectMapper.newBuilder(indexSettings().getIndexVersionCreated());
-        }
-        return null;
-    }
-
     /**
      * Add a new runtime field dynamically created while parsing.
      * We use the same set for both new indexed and new runtime fields,
@@ -743,12 +710,18 @@ public abstract class DocumentParserContext {
      * Return a new context that has the provided document as the current document.
      */
     public final DocumentParserContext switchDoc(final LuceneDocument document) {
-        return new Wrapper(this.parent, this) {
+        DocumentParserContext cloned = new Wrapper(this.parent, this) {
             @Override
             public LuceneDocument doc() {
                 return document;
             }
         };
+        // Disable tracking array scopes for ignored source, as it would be added to the parent doc.
+        // Nested documents are added to preserve object structure within arrays of objects, so the use
+        // of ignored source for arrays inside them should be mostly redundant.
+        cloned.inArrayScope = false;
+        cloned.inArrayScopeEnabled = false;
+        return cloned;
     }
 
     /**
@@ -758,7 +731,7 @@ public abstract class DocumentParserContext {
      */
     public final DocumentParserContext createCopyToContext(String copyToField, LuceneDocument doc) throws IOException {
         ContentPath path = new ContentPath();
-        XContentParser parser = DotExpandingXContentParser.expandDots(new CopyToParser(copyToField, parser()), path, this);
+        XContentParser parser = DotExpandingXContentParser.expandDots(new CopyToParser(copyToField, parser()), path);
         return new Wrapper(root(), this) {
             @Override
             public ContentPath path() {
