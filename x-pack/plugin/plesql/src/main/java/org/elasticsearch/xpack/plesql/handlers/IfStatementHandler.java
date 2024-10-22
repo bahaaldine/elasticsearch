@@ -7,7 +7,9 @@
 package org.elasticsearch.xpack.plesql.handlers;
 
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.exceptions.BreakException;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
+import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 
 import java.util.List;
 
@@ -37,31 +39,35 @@ public class IfStatementHandler {
         PlEsqlProcedureParser.ConditionContext mainCondition = ctx.condition();
         boolean conditionResult = executor.evaluateCondition(mainCondition);
 
-        if (conditionResult) {
-            // Execute the THEN block
-            List<PlEsqlProcedureParser.StatementContext> thenStatements = ctx.then_block;
-            executeStatements(thenStatements);
-            return;
-        }
-
-        // Iterate through ELSEIF conditions
-        List<PlEsqlProcedureParser.Elseif_blockContext> elseifBlocks = ctx.elseif_block();
-        for (PlEsqlProcedureParser.Elseif_blockContext elseifBlock : elseifBlocks) {
-            PlEsqlProcedureParser.ConditionContext elseifCondition = elseifBlock.condition();
-            boolean elseifResult = executor.evaluateCondition(elseifCondition);
-            if (elseifResult) {
-                // Execute the corresponding ELSEIF THEN block
-                List<PlEsqlProcedureParser.StatementContext> elseifStatements = elseifBlock.statement();
-                executeStatements(elseifStatements);
+        try {
+            if (conditionResult) {
+                // Execute the THEN block
+                List<PlEsqlProcedureParser.StatementContext> thenStatements = ctx.then_block;
+                executeStatements(thenStatements);
                 return;
             }
-        }
 
-        // Check for ELSE block
-        if (ctx.else_block != null && ctx.else_block.isEmpty() == false) {
-            // Execute the ELSE block
-            List<PlEsqlProcedureParser.StatementContext> elseStatements = ctx.else_block;
-            executeStatements(elseStatements);
+            // Iterate through ELSEIF conditions
+            List<PlEsqlProcedureParser.Elseif_blockContext> elseifBlocks = ctx.elseif_block();
+            for (PlEsqlProcedureParser.Elseif_blockContext elseifBlock : elseifBlocks) {
+                PlEsqlProcedureParser.ConditionContext elseifCondition = elseifBlock.condition();
+                boolean elseifResult = executor.evaluateCondition(elseifCondition);
+                if (elseifResult) {
+                    // Execute the corresponding ELSEIF THEN block
+                    List<PlEsqlProcedureParser.StatementContext> elseifStatements = elseifBlock.statement();
+                    executeStatements(elseifStatements);
+                    return;
+                }
+            }
+
+            // Check for ELSE block
+            if (ctx.else_block != null && ctx.else_block.isEmpty() == false) {
+                // Execute the ELSE block
+                List<PlEsqlProcedureParser.StatementContext> elseStatements = ctx.else_block;
+                executeStatements(elseStatements);
+            }
+        } catch ( ReturnValue rv ) {
+            throw new ReturnValue(rv.getValue());
         }
     }
 

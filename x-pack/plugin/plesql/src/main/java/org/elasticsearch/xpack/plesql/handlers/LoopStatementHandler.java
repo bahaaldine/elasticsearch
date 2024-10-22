@@ -11,6 +11,7 @@ import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.exceptions.BreakException;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 
 public class LoopStatementHandler {
     private ProcedureExecutor executor;
@@ -19,55 +20,68 @@ public class LoopStatementHandler {
         this.executor = executor;
     }
 
-    public void handle(PlEsqlProcedureParser.Loop_statementContext ctx) {
-        if (ctx.FOR() != null) {
-            // Handle FOR loop
-            String loopVarName = ctx.ID().getText();
-            Object startObj = executor.evaluateExpression(ctx.expression(0));
-            Object endObj = executor.evaluateExpression(ctx.expression(1));
+    /**
+     * Handles the loop statement by parsing determining whether it's a while or for loop, the start and end of the loop for the latter,
+     *
+     * @param ctx The Loop_statementContext representing the loop statement.
+     */
+    public Object handle(PlEsqlProcedureParser.Loop_statementContext ctx) {
+        try {
+            if (ctx.FOR() != null) {
+                // Handle FOR loop
+                String loopVarName = ctx.ID().getText();
+                Object startObj = executor.evaluateExpression(ctx.expression(0));
+                Object endObj = executor.evaluateExpression(ctx.expression(1));
 
-            if ( (startObj instanceof Integer) == false || (endObj instanceof Integer) == false ) {
-                throw new RuntimeException("Loop range must be integer values.");
-            }
+                if ((startObj instanceof Integer) == false || (endObj instanceof Integer) == false) {
+                    throw new RuntimeException("Loop range must be integer values.");
+                }
 
-            int start = (Integer) startObj;
-            int end = (Integer) endObj;
+                int start = (Integer) startObj;
+                int end = (Integer) endObj;
 
-            ExecutionContext currentContext = executor.getContext();
-            boolean isAlreadyDeclared = currentContext.getVariables().containsKey(loopVarName);
+                ExecutionContext currentContext = executor.getContext();
+                boolean isAlreadyDeclared = currentContext.getVariables().containsKey(loopVarName);
 
-            if ( isAlreadyDeclared == false ) {
-                currentContext.declareVariable(loopVarName, "INT");
-            }
+                if (isAlreadyDeclared == false) {
+                    currentContext.declareVariable(loopVarName, "INT");
+                }
 
-            try {
                 if (start <= end) {
                     for (int i = start; i <= end; i++) {
-                        executor.getContext().setVariable(loopVarName, i);
-                        executeLoopBody(ctx, currentContext);
+                        try {
+                            executor.getContext().setVariable(loopVarName, i);
+                            executeLoopBody(ctx, currentContext);
+                        } catch ( BreakException br ) {
+                            break;
+                        }
                     }
                 } else {
                     for (int i = start; i >= end; i--) {
-                        executor.getContext().setVariable(loopVarName, i);
-                        executeLoopBody(ctx, currentContext);
+                        try {
+                            executor.getContext().setVariable(loopVarName, i);
+                            executeLoopBody(ctx, currentContext);
+                        } catch ( BreakException br ) {
+                            break;
+                        }
                     }
                 }
-            } catch (BreakException e) {
-                // Exit the loop gracefully
-            } catch (Exception e) {
-                throw new RuntimeException("Error during loop execution: " + e.getMessage(), e);
-            }
-
-        } else if (ctx.WHILE() != null) {
-            // Handle WHILE loop
-            while (executor.evaluateCondition(ctx.condition())) {
-                try {
-                    executeLoopBody(ctx, executor.getContext());
-                } catch (BreakException e) {
-                    break; // Exit the loop when BREAK is encountered
+            } else if (ctx.WHILE() != null) {
+                // Handle WHILE loop
+                while (executor.evaluateCondition(ctx.condition())) {
+                    try {
+                        executeLoopBody(ctx, executor.getContext());
+                    } catch (BreakException e) {
+                        break; // Exit the loop when BREAK is encountered
+                    }
                 }
             }
+        } catch ( ReturnValue rv) {
+            throw new ReturnValue(rv.getValue());
+        } catch (Exception e) {
+            throw new RuntimeException("Error during loop execution: " + e.getMessage(), e);
         }
+        return null;
     }
 
     private void executeLoopBody(PlEsqlProcedureParser.Loop_statementContext ctx, ExecutionContext context) {

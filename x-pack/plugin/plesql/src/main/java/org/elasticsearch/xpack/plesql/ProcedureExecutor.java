@@ -86,9 +86,16 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
      */
     @Override
     public Object visitProcedure(PlEsqlProcedureParser.ProcedureContext ctx) {
-        // Execute each statement in the procedure
-        for (PlEsqlProcedureParser.StatementContext stmtCtx : ctx.statement()) {
-            visit(stmtCtx);  // Process each statement
+        try {
+            // Execute each statement in the procedure
+            for (PlEsqlProcedureParser.StatementContext stmtCtx : ctx.statement()) {
+                Object result = visit(stmtCtx);  // Process each statement
+                if (result instanceof ReturnValue) {
+                    return ((ReturnValue) result).getValue();  // Return the value if RETURN is hit
+                }
+            }
+        } catch (ReturnValue rv) {
+            return rv.getValue();
         }
         return null;
     }
@@ -108,7 +115,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         } else if (ctx.if_statement() != null) {
             ifHandler.handle(ctx.if_statement());
         } else if (ctx.loop_statement() != null) {
-            loopHandler.handle(ctx.loop_statement());
+            return loopHandler.handle(ctx.loop_statement());
         } else if (ctx.function_definition() != null) {
             functionDefHandler.handle(ctx.function_definition());
         } else if (ctx.try_catch_statement() != null) {

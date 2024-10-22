@@ -20,7 +20,6 @@ public class ReturnValue extends RuntimeException {
      * @param value The value to be returned by the function.
      */
     public ReturnValue(Object value) {
-        super("Function return value");
         this.value = value;
     }
 
