@@ -6,6 +6,7 @@
  */
 package org.elasticsearch.xpack.plesql.handlers;
 
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 
@@ -28,7 +29,7 @@ public class DeclareStatementHandler {
         }
     }
 
-    public void handle(PlEsqlProcedureParser.Declare_statementContext ctx) {
+    public void handleAsync(PlEsqlProcedureParser.Declare_statementContext ctx, ActionListener<Object> listener) {
         for (PlEsqlProcedureParser.Variable_declarationContext varCtx : ctx.variable_declaration_list().variable_declaration()) {
             String varName = varCtx.ID().getText();
             String varType = varCtx.datatype().getText();
@@ -38,14 +39,22 @@ public class DeclareStatementHandler {
                 throw new RuntimeException("Unsupported data type: " + varType);
             }
 
-            Object initialValue = null;
             if (varCtx.expression() != null) {
-                initialValue = executor.evaluateExpression(varCtx.expression());
-            }
+                // Initialize variable with the expression's value
+                executor.evaluateExpressionAsync(varCtx.expression(), new ActionListener<Object>() {
+                    @Override
+                    public void onResponse(Object value) {
+                        executor.getContext().setVariable(varName, value);
+                        listener.onResponse(value);
+                    }
 
-            executor.getContext().declareVariable(varName, varType);
-            if (initialValue != null) {
-                executor.getContext().setVariable(varName, initialValue);
+                    @Override
+                    public void onFailure(Exception e) {
+                        listener.onFailure(e);
+                    }
+                });
+            } else {
+                listener.onResponse(null); // Variable declared without initialization
             }
         }
     }

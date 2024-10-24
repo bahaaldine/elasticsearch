@@ -8,6 +8,7 @@ package org.elasticsearch.xpack.plesql.handlers;
 
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 
@@ -15,14 +16,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The TryCatchHandler class is responsible for handling TRY-CATCH-FINALLY statements within the procedural SQL execution context.
- * It executes the TRY block, catches exceptions in the CATCH block, and executes the FINALLY block if present.
+ * The TryCatchStatementHandler class is responsible for handling TRY-CATCH-FINALLY statements asynchronously.
  */
 public class TryCatchStatementHandler {
     private final ProcedureExecutor executor;
 
     /**
-     * Constructs a TryCatchHandler with the given ProcedureExecutor.
+     * Constructs a TryCatchStatementHandler with the given ProcedureExecutor.
      *
      * @param executor The ProcedureExecutor instance responsible for executing procedures.
      */
@@ -31,16 +31,80 @@ public class TryCatchStatementHandler {
     }
 
     /**
-     * Handles the TRY-CATCH-FINALLY statement by executing the TRY block,
-     * catching exceptions in the CATCH block, and executing the FINALLY block if present.
+     * Handles the TRY-CATCH-FINALLY statement asynchronously.
      *
-     * @param ctx The Try_catch_statementContext representing the TRY-CATCH-FINALLY statement.
+     * @param ctx      The Try_catch_statementContext representing the TRY-CATCH-FINALLY statement.
+     * @param listener The ActionListener to handle asynchronous callbacks.
      */
-    public void handle(PlEsqlProcedureParser.Try_catch_statementContext ctx) {
+    public void handleAsync(PlEsqlProcedureParser.Try_catch_statementContext ctx, ActionListener<Object> listener) {
+        // Partition the statements into TRY, CATCH, and FINALLY blocks
         List<PlEsqlProcedureParser.StatementContext> tryStatements = new ArrayList<>();
         List<PlEsqlProcedureParser.StatementContext> catchStatements = new ArrayList<>();
         List<PlEsqlProcedureParser.StatementContext> finallyStatements = new ArrayList<>();
 
+        partitionStatements(ctx, tryStatements, catchStatements, finallyStatements);
+
+        // Execute TRY block asynchronously
+        executeStatementsAsync(tryStatements, 0, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                // TRY block completed successfully
+                executeFinallyBlock(finallyStatements, listener);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                // Exception occurred in TRY block
+                if ( catchStatements.isEmpty() == false ) {
+                    // Execute CATCH block
+                    executeStatementsAsync(catchStatements, 0, new ActionListener<Object>() {
+                        @Override
+                        public void onResponse(Object unused) {
+                            // CATCH block completed
+                            executeFinallyBlock(finallyStatements, listener);
+                        }
+
+                        @Override
+                        public void onFailure(Exception ex) {
+                            // Exception in CATCH block
+                            executeFinallyBlock(finallyStatements, new ActionListener<Object>() {
+                                @Override
+                                public void onResponse(Object unused) {
+                                    listener.onFailure(ex);
+                                }
+
+                                @Override
+                                public void onFailure(Exception exc) {
+                                    listener.onFailure(exc);
+                                }
+                            });
+                        }
+                    });
+                } else {
+                    // No CATCH block; execute FINALLY and rethrow exception
+                    executeFinallyBlock(finallyStatements, new ActionListener<Object>() {
+                        @Override
+                        public void onResponse(Object aVoid) {
+                            listener.onFailure(e);
+                        }
+
+                        @Override
+                        public void onFailure(Exception ex) {
+                            listener.onFailure(ex);
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    /**
+     * Partitions the statements into TRY, CATCH, and FINALLY blocks.
+     */
+    private void partitionStatements(PlEsqlProcedureParser.Try_catch_statementContext ctx,
+                                     List<PlEsqlProcedureParser.StatementContext> tryStatements,
+                                     List<PlEsqlProcedureParser.StatementContext> catchStatements,
+                                     List<PlEsqlProcedureParser.StatementContext> finallyStatements) {
         // Flags to track the current block
         boolean inTry = false;
         boolean inCatch = false;
@@ -91,37 +155,52 @@ public class TryCatchStatementHandler {
                 }
             }
         }
-
-        try {
-            // Execute TRY block
-            executeStatements(tryStatements);
-        } catch (RuntimeException e) { // Catch broader exceptions
-            // Log the exception for debugging
-            System.out.println("Exception caught in TRY block: " + e.getMessage());
-
-            // Execute CATCH block if present
-            if ( catchStatements.isEmpty() == false ) {
-                executeStatements(catchStatements);
-            } else {
-                // Rethrow if no CATCH block to handle the exception
-                throw e;
-            }
-        } finally {
-            // Execute FINALLY block if present
-            if ( finallyStatements.isEmpty() == false ) {
-                executeStatements(finallyStatements);
-            }
-        }
     }
 
     /**
-     * Executes a list of statements by visiting each statement context.
-     *
-     * @param stmtCtxList The list of StatementContext representing the statements to execute.
+     * Executes a list of statements asynchronously.
      */
-    private void executeStatements(List<PlEsqlProcedureParser.StatementContext> stmtCtxList) {
-        for (PlEsqlProcedureParser.StatementContext stmtCtx : stmtCtxList) {
-            executor.visit(stmtCtx);
+    private void executeStatementsAsync(List<PlEsqlProcedureParser.StatementContext> stmtCtxList, int index,
+                                        ActionListener<Object> listener) {
+        if (index >= stmtCtxList.size()) {
+            listener.onResponse(null); // All statements executed
+            return;
+        }
+
+        PlEsqlProcedureParser.StatementContext stmtCtx = stmtCtxList.get(index);
+        // Visit the statement asynchronously
+        executor.visitStatementAsync(stmtCtx, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                // Proceed to the next statement
+                executeStatementsAsync(stmtCtxList, index + 1, listener);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
+    }
+
+    /**
+     * Executes the FINALLY block asynchronously.
+     */
+    private void executeFinallyBlock(List<PlEsqlProcedureParser.StatementContext> finallyStatements, ActionListener<Object> listener) {
+        if ( finallyStatements.isEmpty() == false ) {
+            executeStatementsAsync(finallyStatements, 0, new ActionListener<Object>() {
+                @Override
+                public void onResponse(Object unused) {
+                    listener.onResponse(null);
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    listener.onFailure(e);
+                }
+            });
+        } else {
+            listener.onResponse(null); // No FINALLY block
         }
     }
 }

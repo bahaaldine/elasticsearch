@@ -7,6 +7,7 @@
 
 package org.elasticsearch.xpack.plesql.handlers;
 
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 
@@ -34,23 +35,37 @@ public class AssignmentStatementHandler {
      *
      * @param ctx The Assignment_statementContext representing the assignment statement.
      */
-    public void handle(PlEsqlProcedureParser.Assignment_statementContext ctx) {
+    public void handleAsync(PlEsqlProcedureParser.Assignment_statementContext ctx, ActionListener<Object> listener) {
         // Retrieve the variable name from the assignment statement
         String varName = ctx.ID().getText();
+        PlEsqlProcedureParser.ExpressionContext expression = ctx.expression();
+
 
         // Check if the variable has been declared
         if ( executor.getContext().hasVariable(varName) == false ) {
             throw new RuntimeException("Variable '" + varName + "' is not declared.");
         }
 
-        // Evaluate the expression on the right-hand side of the assignment
-        Object value = executor.evaluateExpression(ctx.expression());
+        // Evaluate the expression asynchronously
+        executor.evaluateExpressionAsync(expression, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object value) {
+                // Coerce the value to the variable's type
+                Object coercedValue = coerceType(value, varName);
+                executor.getContext().setVariable(varName, coercedValue);
+                listener.onResponse(null);
+            }
 
-        // Assign the evaluated value to the variable, enforcing type compatibility
-        try {
-            executor.getContext().setVariable(varName, value);
-        } catch (RuntimeException e) {
-            throw new RuntimeException("Error assigning value to variable '" + varName + "': " + e.getMessage(), e);
-        }
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
+    }
+
+    private Object coerceType(Object value, String variableName) {
+        // Implement type coercion logic if necessary
+        // For simplicity, we assume the value is already of the correct type
+        return value;
     }
 }

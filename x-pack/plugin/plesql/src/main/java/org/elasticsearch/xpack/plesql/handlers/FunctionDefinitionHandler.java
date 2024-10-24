@@ -1,15 +1,9 @@
-/*
- * Copyright Elasticsearch B.
- * under one or more contributor license agreements. Licensed under the Elastic
- * License 2.0; you may not use this file except in compliance with the Elastic
- * License 2.0.
- */
-
 package org.elasticsearch.xpack.plesql.handlers;
 
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
+import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 
@@ -34,111 +28,85 @@ public class FunctionDefinitionHandler {
     }
 
     /**
-     * Handles the function definition statement by parsing the function name, parameters, and body,
-     * then registering the function in the execution context.
+     * Handles the function definition statement asynchronously.
      *
-     * @param ctx The Function_definitionContext representing the function definition statement.
+     * @param ctx      The Function_definitionContext representing the function definition statement.
+     * @param listener The ActionListener to handle asynchronous callbacks.
      */
-    public void handle(PlEsqlProcedureParser.Function_definitionContext ctx) {
-        // Retrieve the function name
-        String functionName = ctx.ID().getText();
+    public void handleAsync(PlEsqlProcedureParser.Function_definitionContext ctx, ActionListener<Object> listener) {
+        try {
+            // Retrieve the function name
+            String functionName = ctx.ID().getText();
 
-        // Check if the function is already defined
-        if (executor.getContext().hasFunction(functionName)) {
-            throw new RuntimeException("Function '" + functionName + "' is already defined.");
-        }
-
-        // Parse parameters if any
-        List<String> parameterNames = new ArrayList<>();
-        List<String> parameterTypes = new ArrayList<>();
-        if (ctx.parameter_list() != null) {
-            for (PlEsqlProcedureParser.ParameterContext paramCtx : ctx.parameter_list().parameter()) {
-                String paramName = paramCtx.ID().getText();
-                String paramType = paramCtx.datatype().getText().toUpperCase();
-
-                // Validate parameter data type
-                if ( isSupportedDataType(paramType) == false) {
-                    throw new RuntimeException("Unsupported data type '" + paramType + "' for parameter '"
-                        + paramName + "' in function '" + functionName + "'.");
-                }
-
-                // Check for duplicate parameter names
-                if (parameterNames.contains(paramName)) {
-                    throw new RuntimeException("Duplicate parameter name '" + paramName + "' in function '" + functionName + "'.");
-                }
-
-                parameterNames.add(paramName);
-                parameterTypes.add(paramType);
+            // Check if the function is already defined
+            if (executor.getContext().hasFunction(functionName)) {
+                listener.onFailure(new RuntimeException("Function '" + functionName + "' is already defined."));
+                return;
             }
-        }
 
-        // Parse the function body
-        List<PlEsqlProcedureParser.StatementContext> functionBody = extractFunctionBody(ctx);
+            // Parse parameters if any
+            List<String> parameterNames = new ArrayList<>();
+            List<String> parameterTypes = new ArrayList<>();
+            if (ctx.parameter_list() != null) {
+                for (PlEsqlProcedureParser.ParameterContext paramCtx : ctx.parameter_list().parameter()) {
+                    String paramName = paramCtx.ID().getText();
+                    String paramType = paramCtx.datatype().getText().toUpperCase();
 
-        // Create a FunctionDefinition object
-        FunctionDefinition functionDefinition = new FunctionDefinition(functionName, parameterNames, parameterTypes, functionBody);
+                    // Validate parameter data type
+                    if ( isSupportedDataType(paramType) == false ) {
+                        listener.onFailure(new RuntimeException("Unsupported data type '" + paramType + "' for parameter '"
+                            + paramName + "' in function '" + functionName + "'."));
+                        return;
+                    }
 
-        // Register the function in the execution context
-        executor.getContext().declareFunction(functionName, functionDefinition);
+                    // Check for duplicate parameter names
+                    if (parameterNames.contains(paramName)) {
+                        listener.onFailure(new RuntimeException("Duplicate parameter name '"
+                            + paramName + "' in function '" + functionName + "'."));
+                        return;
+                    }
 
-    }
+                    parameterNames.add(paramName);
+                    parameterTypes.add(paramType);
+                }
+            }
 
-    /**
-     * Extracts the list of statements constituting the function body from the Function_definitionContext.
-     *
-     * @param ctx The Function_definitionContext.
-     * @return A list of StatementContext representing the function body.
-     */
-    private List<PlEsqlProcedureParser.StatementContext> extractFunctionBody(PlEsqlProcedureParser.Function_definitionContext ctx) {
-        // In your grammar, the function body is directly defined as a series of statements between BEGIN and END FUNCTION
-        // Therefore, you can directly retrieve the list of statements using ctx.statement()
+            // Parse the function body
+            List<PlEsqlProcedureParser.StatementContext> functionBody = extractFunctionBody(ctx);
 
-        List<PlEsqlProcedureParser.StatementContext> functionBody = ctx.statement();
-        if (functionBody == null || functionBody.isEmpty()) {
-            throw new RuntimeException("Function '" + ctx.ID().getText() + "' does not have a valid body.");
-        }
+            // Create a FunctionDefinition object
+            FunctionDefinition functionDefinition = new FunctionDefinition(functionName, parameterNames, parameterTypes, functionBody);
 
-        return functionBody;
-    }
+            // Register the function in the execution context
+            executor.getContext().declareFunction(functionName, functionDefinition);
 
-    /**
-     * Determines if the provided data type is supported for function parameters and return types.
-     *
-     * @param dataType The data type as a String.
-     * @return true if the data type is supported; false otherwise.
-     */
-    private boolean isSupportedDataType(String dataType) {
-        // Add supported types to this list
-        switch (dataType.toUpperCase()) {
-            case "INT":
-            case "FLOAT":
-            case "STRING":
-            case "DATE":
-                return true;
-            default:
-                return false;  // Unsupported data type
+            listener.onResponse(null); // Function defined successfully
+        } catch (Exception e) {
+            listener.onFailure(e);
         }
     }
 
     /**
-     * Executes the function with the given arguments.
+     * Executes the function with the given arguments asynchronously.
      *
      * @param functionName The name of the function to execute.
      * @param arguments    The list of argument values.
-     * @return The result of the function execution.
+     * @param listener     The ActionListener to handle asynchronous callbacks.
      */
-    public Object executeFunction(String functionName, List<Object> arguments) {
+    public void executeFunctionAsync(String functionName, List<Object> arguments, ActionListener<Object> listener) {
         FunctionDefinition function = executor.getContext().getFunction(functionName);
         if (function == null) {
-            throw new RuntimeException("Function '" + functionName + "' is not defined.");
+            listener.onFailure(new RuntimeException("Function '" + functionName + "' is not defined."));
+            return;
         }
 
         List<String> paramNames = function.getParameters();
         List<String> paramTypes = function.getParameterTypes();
 
         if (paramNames.size() != arguments.size()) {
-            throw new RuntimeException("Function '" + functionName + "' expects " + paramNames.size() + " arguments, but "
-                + arguments.size() + " were provided.");
+            listener.onFailure(new RuntimeException("Function '" + functionName + "' expects " + paramNames.size() + " arguments, but "
+                + arguments.size() + " were provided."));
+            return;
         }
 
         // Create a new ExecutionContext for the function
@@ -152,8 +120,10 @@ public class FunctionDefinitionHandler {
 
             // Validate argument type
             if ( isArgumentTypeCompatible(paramType, argValue) == false ) {
-                throw new RuntimeException("Type mismatch for parameter '" + paramName + "'. Expected '" + paramType + "', but got '"
-                    + argValue.getClass().getSimpleName() + "'.");
+                listener.onFailure(new RuntimeException("Type mismatch for parameter '" + paramName
+                    + "'. Expected '" + paramType + "', but got '"
+                    + (argValue != null ? argValue.getClass().getSimpleName() : "null") + "'."));
+                return;
             }
 
             functionContext.declareVariable(paramName, paramType);
@@ -164,29 +134,59 @@ public class FunctionDefinitionHandler {
         ExecutionContext originalContext = executor.getContext();
         executor.setContext(functionContext);
 
-        try {
-            // Execute the function body
-            for (PlEsqlProcedureParser.StatementContext stmtCtx : function.getBody()) {
-                executor.visitStatement(stmtCtx);
+        // Execute the function body asynchronously
+        executor.executeStatementsAsync(function.getBody(), 0, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                // Function completed without a return statement
+                executor.setContext(originalContext);
+                listener.onFailure(new RuntimeException("Function '" + functionName + "' did not return a value."));
             }
-        } catch (ReturnValue rv) {
-            // Retrieve the return value from the exception
-            return rv.getValue();
-        } finally {
-            // Restore the original context
-            executor.setContext(originalContext);
+
+            @Override
+            public void onFailure(Exception e) {
+                if (e instanceof ReturnValue) {
+                    // Function returned a value
+                    Object returnValue = ((ReturnValue) e).getValue();
+                    executor.setContext(originalContext);
+                    listener.onResponse(returnValue);
+                } else {
+                    executor.setContext(originalContext);
+                    listener.onFailure(e);
+                }
+            }
+        });
+    }
+
+    /**
+     * Extracts the list of statements constituting the function body.
+     */
+    private List<PlEsqlProcedureParser.StatementContext> extractFunctionBody(PlEsqlProcedureParser.Function_definitionContext ctx) {
+        List<PlEsqlProcedureParser.StatementContext> functionBody = ctx.statement();
+        if (functionBody == null || functionBody.isEmpty()) {
+            throw new RuntimeException("Function '" + ctx.ID().getText() + "' does not have a valid body.");
         }
 
-        // If no RETURN statement was encountered, return null or throw an error
-        throw new RuntimeException("Function '" + functionName + "' did not return a value.");
+        return functionBody;
+    }
+
+    /**
+     * Determines if the provided data type is supported.
+     */
+    private boolean isSupportedDataType(String dataType) {
+        switch (dataType.toUpperCase()) {
+            case "INT":
+            case "FLOAT":
+            case "STRING":
+            case "DATE":
+                return true;
+            default:
+                return false;  // Unsupported data type
+        }
     }
 
     /**
      * Validates if the argument value is compatible with the expected data type.
-     *
-     * @param dataType The expected data type as a String.
-     * @param value    The argument value.
-     * @return true if compatible; false otherwise.
      */
     private boolean isArgumentTypeCompatible(String dataType, Object value) {
         if (value == null) {
