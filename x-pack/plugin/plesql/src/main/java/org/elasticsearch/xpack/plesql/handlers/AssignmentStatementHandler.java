@@ -40,9 +40,8 @@ public class AssignmentStatementHandler {
         String varName = ctx.ID().getText();
         PlEsqlProcedureParser.ExpressionContext expression = ctx.expression();
 
-
         // Check if the variable has been declared
-        if ( executor.getContext().hasVariable(varName) == false ) {
+        if (executor.getContext().hasVariable(varName) == false) {
             throw new RuntimeException("Variable '" + varName + "' is not declared.");
         }
 
@@ -50,10 +49,14 @@ public class AssignmentStatementHandler {
         executor.evaluateExpressionAsync(expression, new ActionListener<Object>() {
             @Override
             public void onResponse(Object value) {
-                // Coerce the value to the variable's type
-                Object coercedValue = coerceType(value, varName);
-                executor.getContext().setVariable(varName, coercedValue);
-                listener.onResponse(null);
+                try {
+                    // Coerce the value to the variable's type
+                    Object coercedValue = coerceType(value, varName);
+                    executor.getContext().setVariable(varName, coercedValue);
+                    listener.onResponse(null);
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                }
             }
 
             @Override

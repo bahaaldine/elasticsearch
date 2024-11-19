@@ -51,6 +51,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
      * @param context    The execution context containing variables, functions, etc.
      * @param threadPool The thread pool for executing asynchronous tasks.
      */
+    @SuppressWarnings("this-escape")
     public ProcedureExecutor(ExecutionContext context, ThreadPool threadPool) {
         this.context = context;
         this.threadPool = threadPool;
@@ -92,25 +93,35 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     }
 
     /**
-     * Visits the entire procedure and executes each statement asynchronously.
+     * Asynchronously visits the entire procedure and executes each statement.
+     *
+     * @param ctx      The ProcedureContext representing the entire procedure.
+     * @param listener The ActionListener to notify upon completion or failure.
+     */
+    public void visitProcedureAsync(PlEsqlProcedureParser.ProcedureContext ctx, ActionListener<Object> listener) {
+        // Start asynchronous execution
+        executeProcedureAsync(ctx, listener);
+    }
+
+    /**
+     * Synchronously visits the entire procedure.
+     * Since execution is asynchronous, this method returns immediately.
      *
      * @param ctx The ProcedureContext representing the entire procedure.
      * @return null as procedures do not return values directly.
      */
     @Override
     public Object visitProcedure(PlEsqlProcedureParser.ProcedureContext ctx) {
-        // Start asynchronous execution
-        executeProcedureAsync(ctx, new ActionListener<>() {
+        // Optionally start asynchronous execution without external listener
+        visitProcedureAsync(ctx, new ActionListener<>() {
             @Override
             public void onResponse(Object result) {
                 // Execution completed successfully
-                // You can handle the result if needed
             }
 
             @Override
             public void onFailure(Exception e) {
                 // Handle execution error
-                // You can log the error or propagate it
             }
         });
         return null; // Return immediately as execution is asynchronous
@@ -250,9 +261,11 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         List<PlEsqlProcedureParser.LogicalAndExpressionContext> andExprs = ctx.logicalAndExpression();
         if (andExprs.size() == 1) {
             // Only one operand
+            System.out.println("One operand : " + andExprs.get(0).getText());
             evaluateLogicalAndExpressionAsync(andExprs.get(0), listener);
         } else {
             // Evaluate operands one by one
+            System.out.println("More than one operand");
             evaluateLogicalOrOperandsAsync(andExprs, 0, listener);
         }
     }
@@ -270,7 +283,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         evaluateLogicalAndExpressionAsync(operands.get(index), new ActionListener<>() {
             @Override
             public void onResponse(Object result) {
-                if (toBoolean(result)) {
+                boolean booleanResult = toBoolean(result);
+                if (booleanResult) {
                     listener.onResponse(true); // Short-circuit: operand is true
                 } else {
                     // Proceed to the next operand
@@ -312,7 +326,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         evaluateEqualityExpressionAsync(operands.get(index), new ActionListener<>() {
             @Override
             public void onResponse(Object result) {
-                if ( toBoolean(result) == false ) {
+                boolean booleanResult = toBoolean(result);
+                if ( booleanResult == false ) {
                     listener.onResponse(false); // Short-circuit: operand is false
                 } else {
                     // Proceed to the next operand
@@ -330,32 +345,53 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     /**
      * Evaluates an equality expression asynchronously.
      */
-    private void evaluateEqualityExpressionAsync(PlEsqlProcedureParser.EqualityExpressionContext ctx, ActionListener<Object> listener) {
+    /**
+     * Evaluates an equality expression asynchronously.
+     */
+    private void evaluateEqualityExpressionAsync(
+        PlEsqlProcedureParser.EqualityExpressionContext ctx,
+        ActionListener<Object> listener
+    ) {
         if (ctx.relationalExpression().size() == 1) {
             // Only one operand
             evaluateRelationalExpressionAsync(ctx.relationalExpression(0), listener);
         } else {
-            // Evaluate both operands
+            // Evaluate both operands asynchronously
             evaluateRelationalExpressionAsync(ctx.relationalExpression(0), new ActionListener<>() {
                 @Override
                 public void onResponse(Object leftResult) {
+                    System.out.println("Left Expression :  " + leftResult);
                     evaluateRelationalExpressionAsync(ctx.relationalExpression(1), new ActionListener<>() {
                         @Override
                         public void onResponse(Object rightResult) {
                             String operator = ctx.getChild(1).getText();
                             boolean result;
-                            switch (operator) {
-                                case "=":
-                                    result = leftResult.equals(rightResult);
-                                    break;
-                                case "<>":
-                                    result = leftResult.equals(rightResult) == false;
-                                    break;
-                                default:
-                                    listener.onFailure(new RuntimeException("Unknown equality operator: " + operator));
-                                    return;
+
+                            try {
+                                // Normalize both operands to Double
+                                double leftDouble = ((Number) leftResult).doubleValue();
+                                double rightDouble = ((Number) rightResult).doubleValue();
+
+                                switch (operator) {
+                                    case "=":
+                                        result = leftDouble == rightDouble;
+
+                                        System.out.println("Evaluating EqualityExpression: " + leftDouble + " " + operator + " " + rightDouble);
+                                        System.out.println("       Result:  " + result);
+
+                                        break;
+                                    case "<>":
+                                        result = leftDouble != rightDouble;
+                                        break;
+                                    default:
+                                        listener.onFailure(new RuntimeException("Unknown equality operator: " + operator));
+                                        return;
+                                }
+                                System.out.println("       Result:  " + result);
+                                listener.onResponse(result);
+                            } catch (ClassCastException e) {
+                                listener.onFailure(new RuntimeException("Relational operations require numeric operands."));
                             }
-                            listener.onResponse(result);
                         }
 
                         @Override
@@ -439,62 +475,63 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             // Only one operand
             evaluateMultiplicativeExpressionAsync(ctx.multiplicativeExpression(0), listener);
         } else {
-            // Evaluate operands sequentially
-            evaluateAdditiveOperandsAsync(ctx, 0, listener);
+            // Evaluate operands sequentially with accumulated value
+            // Initialize with the first operand
+            evaluateMultiplicativeExpressionAsync(ctx.multiplicativeExpression(0), new ActionListener<>() {
+                @Override
+                public void onResponse(Object initialValue) {
+                    evaluateAdditiveOperandsAsync(ctx, 1, initialValue, listener);
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    listener.onFailure(e);
+                }
+            });
         }
     }
 
     /**
      * Helper method to evaluate additive operands asynchronously.
+     * This method has been corrected to accept four arguments: ctx, index, leftValue, listener.
      */
-    private void evaluateAdditiveOperandsAsync(PlEsqlProcedureParser.AdditiveExpressionContext ctx, int index,
-                                               ActionListener<Object> listener) {
+    private void evaluateAdditiveOperandsAsync(
+        PlEsqlProcedureParser.AdditiveExpressionContext ctx,
+        int index,
+        Object leftValue,
+        ActionListener<Object> listener
+    ) {
         if (index >= ctx.multiplicativeExpression().size()) {
-            listener.onFailure(new RuntimeException("Additive expression evaluation error."));
+            listener.onResponse(leftValue); // All operands evaluated
             return;
         }
 
-        evaluateMultiplicativeExpressionAsync(ctx.multiplicativeExpression(index), new ActionListener<>() {
+        PlEsqlProcedureParser.MultiplicativeExpressionContext currentExpr = ctx.multiplicativeExpression(index);
+        String operator = ctx.getChild(2 * index - 1).getText(); // Correct operator extraction
+
+        evaluateMultiplicativeExpressionAsync(currentExpr, new ActionListener<>() {
             @Override
-            public void onResponse(Object leftResult) {
-                if (index + 1 >= ctx.multiplicativeExpression().size()) {
-                    listener.onResponse(leftResult);
-                    return;
+            public void onResponse(Object rightValue) {
+                try {
+                    double leftDouble = ((Number) leftValue).doubleValue();
+                    double rightDouble = ((Number) rightValue).doubleValue();
+                    double result;
+                    switch (operator) {
+                        case "+":
+                            result = leftDouble + rightDouble;
+                            break;
+                        case "-":
+                            result = leftDouble - rightDouble;
+                            break;
+                        default:
+                            listener.onFailure(new RuntimeException("Unknown additive operator: " + operator));
+                            return;
+                    }
+                    // Continue with the next operand
+                    evaluateAdditiveOperandsAsync(ctx, index + 1, result, listener);
+                } catch (Exception e) {
+                    listener.onFailure(e);
                 }
-
-                String operator = ctx.getChild(2 * index + 1).getText();
-
-                evaluateAdditiveOperandsAsync(ctx, index + 1, new ActionListener<>() {
-                    @Override
-                    public void onResponse(Object rightResult) {
-                        try {
-                            if (leftResult instanceof Number && rightResult instanceof Number) {
-                                Number result;
-                                switch (operator) {
-                                    case "+":
-                                        result = ((Number) leftResult).doubleValue() + ((Number) rightResult).doubleValue();
-                                        break;
-                                    case "-":
-                                        result = ((Number) leftResult).doubleValue() - ((Number) rightResult).doubleValue();
-                                        break;
-                                    default:
-                                        listener.onFailure(new RuntimeException("Unknown additive operator: " + operator));
-                                        return;
-                                }
-                                listener.onResponse(result);
-                            } else {
-                                listener.onFailure(new RuntimeException("Additive operations require numeric operands."));
-                            }
-                        } catch (Exception e) {
-                            listener.onFailure(e);
-                        }
-                    }
-
-                    @Override
-                    public void onFailure(Exception e) {
-                        listener.onFailure(e);
-                    }
-                });
             }
 
             @Override
@@ -513,62 +550,62 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             // Only one operand
             evaluateUnaryExpressionAsync(ctx.unaryExpr(0), listener);
         } else {
-            // Evaluate operands sequentially
-            evaluateMultiplicativeOperandsAsync(ctx, 0, listener);
+            // Evaluate operands sequentially with accumulated value
+            // Initialize with the first operand
+            evaluateUnaryExpressionAsync(ctx.unaryExpr(0), new ActionListener<>() {
+                @Override
+                public void onResponse(Object initialValue) {
+                    evaluateMultiplicativeOperandsAsync(ctx, 1, initialValue, listener);
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    listener.onFailure(e);
+                }
+            });
         }
     }
 
     /**
      * Helper method to evaluate multiplicative operands asynchronously.
      */
-    private void evaluateMultiplicativeOperandsAsync(PlEsqlProcedureParser.MultiplicativeExpressionContext ctx, int index,
+    private void evaluateMultiplicativeOperandsAsync(PlEsqlProcedureParser.MultiplicativeExpressionContext ctx, int index, Object leftValue,
                                                      ActionListener<Object> listener) {
         if (index >= ctx.unaryExpr().size()) {
-            listener.onFailure(new RuntimeException("Multiplicative expression evaluation error."));
+            listener.onResponse(leftValue); // All operands evaluated
             return;
         }
 
-        evaluateUnaryExpressionAsync(ctx.unaryExpr(index), new ActionListener<>() {
+        PlEsqlProcedureParser.UnaryExprContext currentExpr = ctx.unaryExpr(index);
+        String operator = ctx.getChild(2 * index - 1).getText(); // Adjusted to correctly fetch the operator
+
+        evaluateUnaryExpressionAsync(currentExpr, new ActionListener<>() {
             @Override
-            public void onResponse(Object leftResult) {
-                if (index + 1 >= ctx.unaryExpr().size()) {
-                    listener.onResponse(leftResult);
-                    return;
-                }
-
-                String operator = ctx.getChild(2 * index + 1).getText();
-
-                evaluateMultiplicativeOperandsAsync(ctx, index + 1, new ActionListener<>() {
-                    @Override
-                    public void onResponse(Object rightResult) {
-                        try {
-                            if (leftResult instanceof Number && rightResult instanceof Number) {
-                                Number result;
-                                switch (operator) {
-                                    case "*":
-                                        result = ((Number) leftResult).doubleValue() * ((Number) rightResult).doubleValue();
-                                        break;
-                                    case "/":
-                                        result = ((Number) leftResult).doubleValue() / ((Number) rightResult).doubleValue();
-                                        break;
-                                    default:
-                                        listener.onFailure(new RuntimeException("Unknown multiplicative operator: " + operator));
-                                        return;
-                                }
-                                listener.onResponse(result);
-                            } else {
-                                listener.onFailure(new RuntimeException("Multiplicative operations require numeric operands."));
+            public void onResponse(Object rightValue) {
+                try {
+                    double leftDouble = ((Number) leftValue).doubleValue();
+                    double rightDouble = ((Number) rightValue).doubleValue();
+                    double result;
+                    switch (operator) {
+                        case "*":
+                            result = leftDouble * rightDouble;
+                            break;
+                        case "/":
+                            if (rightDouble == 0) {
+                                listener.onFailure(new RuntimeException("Division by zero."));
+                                return;
                             }
-                        } catch (Exception e) {
-                            listener.onFailure(e);
-                        }
+                            result = leftDouble / rightDouble;
+                            break;
+                        default:
+                            listener.onFailure(new RuntimeException("Unknown multiplicative operator: " + operator));
+                            return;
                     }
-
-                    @Override
-                    public void onFailure(Exception e) {
-                        listener.onFailure(e);
-                    }
-                });
+                    // Recursively evaluate the next operand with the new accumulated result
+                    evaluateMultiplicativeOperandsAsync(ctx, index + 1, result, listener);
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                }
             }
 
             @Override
@@ -581,21 +618,34 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     /**
      * Evaluates a unary expression asynchronously.
      */
+    @SuppressWarnings("checkstyle:DescendantToken")
     private void evaluateUnaryExpressionAsync(PlEsqlProcedureParser.UnaryExprContext ctx, ActionListener<Object> listener) {
         if (ctx.primaryExpression() != null) {
             evaluatePrimaryExpressionAsync(ctx.primaryExpression(), listener);
-        } else if (ctx.getChild(0) != null) {
+        } else if (ctx.unaryExpr() != null) {
             // Unary operator
+            String operator = ctx.getChild(0).getText();
             evaluateUnaryExpressionAsync(ctx.unaryExpr(), new ActionListener<>() {
+                @SuppressWarnings("checkstyle:DescendantToken")
                 @Override
                 public void onResponse(Object result) {
                     try {
-                        String operator = ctx.getChild(0).getText();
-                        if (operator.equals("-") && result instanceof Number) {
-                            Number value = (Number) result;
-                            listener.onResponse(-value.doubleValue());
+                        if (operator.equals("-")) {
+                            if (result instanceof Number) {
+                                double value = ((Number) result).doubleValue();
+                                double negatedValue = -value;
+                                listener.onResponse(negatedValue);
+                            } else {
+                                listener.onFailure(new RuntimeException("Unary minus can only be applied to numbers."));
+                            }
                         } else if (operator.equals("NOT")) {
-                            listener.onResponse( toBoolean(result) == false );
+                            if (result instanceof Boolean) {
+                                boolean boolResult = ((Boolean) result).booleanValue();
+                                boolean negatedBool = !boolResult;
+                                listener.onResponse(negatedBool);
+                            } else {
+                                listener.onFailure(new RuntimeException("NOT operator can only be applied to boolean values."));
+                            }
                         } else {
                             listener.onFailure(new RuntimeException("Unknown unary operator: " + operator));
                         }
@@ -609,6 +659,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                     listener.onFailure(e);
                 }
             });
+        } else {
+            listener.onFailure(new RuntimeException("Unsupported unary expression: " + ctx.getText()));
         }
     }
 
@@ -624,15 +676,26 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             visitFunctionCallAsync(ctx.function_call(), listener);
         } else if (ctx.INT() != null) {
             // Integer literal
-            listener.onResponse(Integer.parseInt(ctx.INT().getText()));
+            try {
+                int intValue = Integer.parseInt(ctx.INT().getText());
+                listener.onResponse(intValue);
+            } catch (NumberFormatException e) {
+                listener.onFailure(new RuntimeException("Invalid integer literal: " + ctx.INT().getText()));
+            }
         } else if (ctx.FLOAT() != null) {
             // Float literal
-            listener.onResponse(Double.parseDouble(ctx.FLOAT().getText()));
+            try {
+                double floatValue = Double.parseDouble(ctx.FLOAT().getText());
+                listener.onResponse(floatValue);
+            } catch (NumberFormatException e) {
+                listener.onFailure(new RuntimeException("Invalid float literal: " + ctx.FLOAT().getText()));
+            }
         } else if (ctx.STRING() != null) {
             // String literal
             String text = ctx.STRING().getText();
             // Remove the surrounding single quotes and handle escaped characters
-            listener.onResponse(text.substring(1, text.length() - 1).replace("\\'", "'"));
+            String processedString = text.substring(1, text.length() - 1).replace("\\'", "'");
+            listener.onResponse(processedString);
         } else if (ctx.ID() != null) {
             // Identifier (variable)
             String varName = ctx.ID().getText();
@@ -656,6 +719,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
      */
     public void evaluateConditionAsync(PlEsqlProcedureParser.ConditionContext ctx, ActionListener<Object> listener) {
         if (ctx.expression() != null) {
+            System.out.println("Expression : " + ctx.expression().getText());
             evaluateExpressionAsync(ctx.expression(), new ActionListener<>() {
                 @Override
                 public void onResponse(Object result) {
@@ -691,7 +755,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         FunctionDefinition function = context.getFunction(functionName);
 
         if (function == null) {
-            listener.onFailure(new RuntimeException("Function not defined: " + functionName));
+            // If the function is not defined, treat it as an unsupported expression
+            listener.onFailure(new RuntimeException("Unsupported expression"));
             return;
         }
 
@@ -755,17 +820,6 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     // =======================
     // Helper Methods
     // =======================
-
-    private Object negate(Object operand) {
-        if (operand instanceof Number) {
-            if (operand instanceof Integer) {
-                return -((Integer) operand);
-            } else {
-                return -((Number) operand).doubleValue();
-            }
-        }
-        throw new RuntimeException("Unary minus can only be applied to numbers.");
-    }
 
     /**
      * Converts an Object to a boolean. Throws an exception if the object is not a boolean.

@@ -4,12 +4,12 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-
 package org.elasticsearch.xpack.plesql;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.handlers.AssignmentStatementHandler;
@@ -18,37 +18,32 @@ import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-
-public class AssignmentStatementHandlerTests {
+public class AssignmentStatementHandlerTests extends ESTestCase {
 
     private ExecutionContext context;
     private ProcedureExecutor executor;
+    private ThreadPool threadPool;
     private AssignmentStatementHandler assignmentHandler;
     private DeclareStatementHandler declareHandler;
-    private ThreadPool threadPool;
 
-    @Before
-    public void setup() {
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
         context = new ExecutionContext();
-        // Use TestThreadPool for unit tests
         threadPool = new TestThreadPool("test-thread-pool");
         executor = new ProcedureExecutor(context, threadPool);
         assignmentHandler = new AssignmentStatementHandler(executor);
         declareHandler = new DeclareStatementHandler(executor);
     }
 
-    @After
-    public void tearDown() throws InterruptedException {
-        ThreadPool.terminate(threadPool, 30, TimeUnit.SECONDS);
+    @Override
+    public void tearDown() throws Exception {
+        terminate(threadPool);
+        super.tearDown();
     }
 
     // Helper method to parse a query and return the necessary context
@@ -79,19 +74,17 @@ public class AssignmentStatementHandlerTests {
     @Test
     public void testDeclareAndAssignInteger() throws InterruptedException {
         String declareQuery = "DECLARE myVar INT;";
-        PlEsqlProcedureParser.Declare_statementContext declareContext = parseDeclaration(declareQuery);
+        String assignQuery = "SET myVar = 42;";
 
         CountDownLatch latch = new CountDownLatch(1);
 
-        declareHandler.handleAsync(declareContext, new ActionListener<Object>() {
+        declareHandler.handleAsync(parseDeclaration(declareQuery), new ActionListener<Object>() {
             @Override
             public void onResponse(Object unused) {
-                String assignQuery = "SET myVar = 42;";
-                PlEsqlProcedureParser.Assignment_statementContext assignContext = parseAssignment(assignQuery);
-
-                assignmentHandler.handleAsync(assignContext, new ActionListener<Object>() {
+                assignmentHandler.handleAsync(parseAssignment(assignQuery), new ActionListener<Object>() {
                     @Override
                     public void onResponse(Object unused) {
+                        // Verify that 'myVar' is set to 42
                         assertEquals(42, context.getVariable("myVar"));
                         latch.countDown();
                     }
@@ -114,7 +107,291 @@ public class AssignmentStatementHandlerTests {
         latch.await();
     }
 
-    // ... (other test methods remain the same, except for possible minor adjustments)
+    // Test 2: Declare a variable and assign a simple float value
+    @Test
+    public void testDeclareAndAssignFloat() throws InterruptedException {
+        String declareQuery = "DECLARE myVar FLOAT;";
+        String assignQuery = "SET myVar = 42.5;";
 
-    // Remember to update the other test methods similarly, ensuring they use the CountDownLatch and handle exceptions appropriately
+        CountDownLatch latch = new CountDownLatch(1);
+
+        declareHandler.handleAsync(parseDeclaration(declareQuery), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                assignmentHandler.handleAsync(parseAssignment(assignQuery), new ActionListener<Object>() {
+                    @Override
+                    public void onResponse(Object unused) {
+                        // Verify that 'myVar' is set to 42.5
+                        assertEquals(42.5, context.getVariable("myVar"));
+                        latch.countDown();
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        fail("Assignment failed: " + e.getMessage());
+                        latch.countDown();
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Declaration failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
+    }
+
+    // Test 3: Declare a variable and assign a simple string value
+    @Test
+    public void testDeclareAndAssignString() throws InterruptedException {
+        String declareQuery = "DECLARE myVar STRING;";
+        String assignQuery = "SET myVar = 'hello';";
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        declareHandler.handleAsync(parseDeclaration(declareQuery), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                assignmentHandler.handleAsync(parseAssignment(assignQuery), new ActionListener<Object>() {
+                    @Override
+                    public void onResponse(Object unused) {
+                        // Verify that 'myVar' is set to 'hello'
+                        assertEquals("hello", context.getVariable("myVar"));
+                        latch.countDown();
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        fail("Assignment failed: " + e.getMessage());
+                        latch.countDown();
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Declaration failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
+    }
+
+    // Test 4: Declare a variable and assign the result of an arithmetic operation
+    @Test
+    public void testDeclareAndAssignArithmeticOperation() throws InterruptedException {
+        String declareQuery = "DECLARE myVar FLOAT;";
+        String assignQuery = "SET myVar = 5 + 3;";
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        declareHandler.handleAsync(parseDeclaration(declareQuery), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                assignmentHandler.handleAsync(parseAssignment(assignQuery), new ActionListener<Object>() {
+                    @Override
+                    public void onResponse(Object unused) {
+                        // Verify that 'myVar' is set to 8.0
+                        assertEquals(8.0, context.getVariable("myVar"));
+                        latch.countDown();
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        fail("Assignment failed: " + e.getMessage());
+                        latch.countDown();
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Declaration failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
+    }
+
+    // Test 5: Declare a variable and assign the result of a multiplication operation
+    @Test
+    public void testDeclareAndAssignMultiplication() throws InterruptedException {
+        String declareQuery = "DECLARE myVar FLOAT;";
+        String assignQuery = "SET myVar = 6 * 7;";
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        declareHandler.handleAsync(parseDeclaration(declareQuery), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                assignmentHandler.handleAsync(parseAssignment(assignQuery), new ActionListener<Object>() {
+                    @Override
+                    public void onResponse(Object unused) {
+                        // Verify that 'myVar' is set to 42.0
+                        assertEquals(42.0, context.getVariable("myVar"));
+                        latch.countDown();
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        fail("Assignment failed: " + e.getMessage());
+                        latch.countDown();
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Declaration failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
+    }
+
+    // Test 6: Variable reference assignment (assigning one variable to another)
+    @Test
+    public void testVariableReferenceAssignment() throws InterruptedException {
+        String declareQuery1 = "DECLARE var1 INT;";
+        String declareQuery2 = "DECLARE var2 INT;";
+        String assignQuery1 = "SET var1 = 10;";
+        String assignQuery2 = "SET var2 = var1;";
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        // Declare var1
+        declareHandler.handleAsync(parseDeclaration(declareQuery1), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                // Declare var2
+                declareHandler.handleAsync(parseDeclaration(declareQuery2), new ActionListener<Object>() {
+                    @Override
+                    public void onResponse(Object unused) {
+                        // Assign value to var1
+                        assignmentHandler.handleAsync(parseAssignment(assignQuery1), new ActionListener<Object>() {
+                            @Override
+                            public void onResponse(Object unused) {
+                                // Assign value of var1 to var2
+                                assignmentHandler.handleAsync(parseAssignment(assignQuery2), new ActionListener<Object>() {
+                                    @Override
+                                    public void onResponse(Object unused) {
+                                        // Verify that var2 was assigned the value of var1
+                                        assertEquals(10, context.getVariable("var2"));
+                                        latch.countDown();
+                                    }
+
+                                    @Override
+                                    public void onFailure(Exception e) {
+                                        fail("Assignment of var2 failed: " + e.getMessage());
+                                        latch.countDown();
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onFailure(Exception e) {
+                                fail("Assignment of var1 failed: " + e.getMessage());
+                                latch.countDown();
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        fail("Declaration of var2 failed: " + e.getMessage());
+                        latch.countDown();
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Declaration of var1 failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
+    }
+
+    // Test 8: Type mismatch error (assigning a float to an INT variable)
+    @Test
+    public void testTypeMismatchError() throws InterruptedException {
+        String declareQuery = "DECLARE myVar INT;";
+        String assignQuery = "SET myVar = 42.5;";
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        declareHandler.handleAsync(parseDeclaration(declareQuery), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                assignmentHandler.handleAsync(parseAssignment(assignQuery), new ActionListener<Object>() {
+
+                    @Override
+                    public void onResponse(Object unused) {
+                        fail("Expected a RuntimeException due to type mismatch.");
+                        latch.countDown();
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        assertTrue("Exception message should indicate type mismatch.",
+                            e.getMessage().contains("Type mismatch"));
+                        latch.countDown();
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Declaration failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
+    }
+
+    // Test 9: Assigning result of division
+    @Test
+    public void testDeclareAndAssignDivision() throws InterruptedException {
+        String declareQuery = "DECLARE myVar FLOAT;";
+        String assignQuery = "SET myVar = 42 / 6;";
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        declareHandler.handleAsync(parseDeclaration(declareQuery), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                assignmentHandler.handleAsync(parseAssignment(assignQuery), new ActionListener<Object>() {
+                    @Override
+                    public void onResponse(Object unused) {
+                        // Verify that 'myVar' is set to 7.0
+                        assertEquals(7.0, context.getVariable("myVar"));
+                        latch.countDown();
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        fail("Assignment failed: " + e.getMessage());
+                        latch.countDown();
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Declaration failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
+    }
 }

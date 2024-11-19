@@ -4,36 +4,44 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-
 package org.elasticsearch.xpack.plesql;
-import org.antlr.v4.runtime.ANTLRInputStream;
+
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
-import org.antlr.v4.runtime.Token;
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.test.ESTestCase;
+import org.elasticsearch.threadpool.TestThreadPool;
+import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.junit.Before;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
-
-public class IfStatementHandlerTests {
+public class IfStatementHandlerTests extends ESTestCase {
 
     private ExecutionContext context;
     private ProcedureExecutor executor;
     private PlEsqlProcedureParser parser;
+    private ThreadPool threadPool;
 
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
+        context = new ExecutionContext();
+        threadPool = new TestThreadPool("test-thread-pool");
+        executor = new ProcedureExecutor(context, threadPool);
+    }
 
-    @Before
-    public void setup() {
-        context = new ExecutionContext();  // Real ExecutionContext
-        executor = new ProcedureExecutor(context);  // Use real ProcedureExecutor
+    @Override
+    public void tearDown() throws Exception {
+        terminate(threadPool);
+        super.tearDown();
     }
 
     // Helper method to parse a BEGIN ... END block
@@ -41,127 +49,210 @@ public class IfStatementHandlerTests {
         CharStream input = CharStreams.fromString(blockQuery);
         PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(input);
         CommonTokenStream tokens = new CommonTokenStream(lexer);
-        parser = new PlEsqlProcedureParser(tokens);
-        return parser.procedure();
-    }
-
-    // Helper method to parse an IF statement
-    private PlEsqlProcedureParser.If_statementContext parseIfStatement(String query) {
-        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(new ANTLRInputStream(query));
-        CommonTokenStream tokens = new CommonTokenStream(lexer);
         PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
 
-        parser.removeErrorListeners();  // Remove existing error listeners
-        parser.addErrorListener(new PlEsqlErrorListener());  // Add your custom error listener
+        parser.removeErrorListeners();
+        parser.addErrorListener(new PlEsqlErrorListener());
 
-        return parser.if_statement();
+        return parser.procedure();
     }
 
     // Test 1: Simple IF statement with a true condition
     @Test
-    public void testSimpleIfTrueCondition() {
+    public void testSimpleIfTrueCondition() throws InterruptedException {
         String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 1 THEN SET myVar = 10; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
-        executor.visitProcedure(blockContext);
-        assertNotNull("myVar should be declared.", context.getVariable("myVar"));
-        assertEquals(10, context.getVariable("myVar"));
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                assertNotNull("myVar should be declared.", context.getVariable("myVar"));
+                assertEquals(10, context.getVariable("myVar"));
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
     }
 
     // Test 2: Simple IF statement with a false condition
     @Test
-    public void testSimpleIfFalseCondition() {
-        // Setup an IF statement with a false condition: IF 1 = 2 THEN SET myVar = 10; ENDIF;
+    public void testSimpleIfFalseCondition() throws InterruptedException {
         String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 2 THEN SET myVar = 10; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
-        executor.visitProcedure(blockContext);
 
-        // Check that 'myVar' is not set in the context
-        assertNull(context.getVariable("myVar"));
+        CountDownLatch latch = new CountDownLatch(1);
+
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                // Check that 'myVar' is not set in the context
+                assertNull("myVar should not be set.", context.getVariable("myVar"));
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
     }
 
     // Test 3: IF-ELSE statement with false IF and true ELSE
     @Test
-    public void testIfElseStatement() {
-        // Setup an IF-ELSE statement: IF 1 = 2 THEN SET myVar = 10; ELSE SET myVar = 20; ENDIF;
+    public void testIfElseStatement() throws InterruptedException {
         String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 2 THEN SET myVar = 10; ELSE SET myVar = 20; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
-        executor.visitProcedure(blockContext);
 
-        // Check that 'myVar' is set to 20 (from ELSE branch)
-        assertEquals(20, context.getVariable("myVar"));
-    }
+        CountDownLatch latch = new CountDownLatch(1);
 
-    @Test
-    public void testParseIfElseIfElse() {
-        String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 2 THEN SET myVar = 10; " +
-            "ELSEIF 1 = 1 THEN SET myVar = 20; ELSE SET myVar = 30; END IF END";
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                // Check that 'myVar' is set to 20 (from ELSE branch)
+                assertEquals(20, context.getVariable("myVar"));
+                latch.countDown();
+            }
 
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
 
-        // Use a parse tree walker or print the tree for inspection
-        System.out.println(blockContext.toStringTree(parser));
-    }
-
-    private void printTokens(String input) {
-        CharStream charStream = CharStreams.fromString(input);
-        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(charStream);
-        CommonTokenStream tokens = new CommonTokenStream(lexer);
-        tokens.fill();
-        for (Token token : tokens.getTokens()) {
-            System.out.println(token.getText() + " : " + PlEsqlProcedureLexer.VOCABULARY.getSymbolicName(token.getType()));
-        }
+        latch.await();
     }
 
     // Test 4: IF-ELSEIF-ELSE statement
     @Test
-    public void testIfElseIfElseStatement() {
-        // Setup an IF-ELSEIF-ELSE statement: IF 1 = 2 THEN SET myVar = 10; ELSEIF 1 = 1 THEN SET myVar = 20; ELSE SET myVar = 30; END IF; END;
-        String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 2 THEN SET myVar = 10; " +
-            "ELSEIF 1 = 1 THEN SET myVar = 20; ELSE SET myVar = 30; END IF; END;";
+    public void testIfElseIfElseStatement() throws InterruptedException {
+        String blockQuery =
+            "BEGIN " +
+                "DECLARE myVar INT; " +
+                "IF 1 = 2 THEN " +
+                    "SET myVar = 10; " +
+                "ELSEIF 1 = 1 THEN " +
+                    "SET myVar = 20; " +
+                "ELSE " +
+                    "SET myVar = 30; " +
+                "END IF; " +
+            "END";
 
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
-        executor.visitProcedure(blockContext);
+        CountDownLatch latch = new CountDownLatch(1);
 
-        // Check that 'myVar' is set to 20 (from ELSEIF branch)
-        assertEquals(20, context.getVariable("myVar"));
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                // Check that 'myVar' is set to 20 (from ELSEIF branch)
+                assertEquals(20, context.getVariable("myVar"));
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
     }
 
     // Test 5: Arithmetic operations in IF condition
     @Test
-    public void testArithmeticInIfCondition() {
+    public void testArithmeticInIfCondition() throws Exception {
         String blockQuery = "BEGIN DECLARE myVar INT; IF 5 + 5 = 10 THEN SET myVar = 10; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
-        executor.visitProcedure(blockContext);
+        CompletableFuture<Void> future = new CompletableFuture<>();
 
-        // Check that 'myVar' is set to 10
-        assertEquals(10, context.getVariable("myVar"));
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                try {
+                    Object varValue = context.getVariable("myVar");
+                    System.out.println("Retrieved 'myVar' value: " + varValue);
+                    assertNotNull("Variable 'myVar' should have been set.", varValue);
+                    assertEquals("Variable 'myVar' should be set to 10.", 10, varValue);
+                    future.complete(null);
+                } catch (AssertionError e) {
+                    future.completeExceptionally(e);
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                future.completeExceptionally(new AssertionError("Execution failed: " + e.getMessage()));
+            }
+        });
+
+        // Await the CompletableFuture with a timeout to prevent indefinite blocking
+        future.get(5, TimeUnit.SECONDS);
     }
 
     // Test 6: Nested IF statement
     @Test
-    public void testNestedIfStatement() {
-        // Setup a nested IF statement: IF 1 = 1 THEN IF 2 = 2 THEN SET myVar = 10; ENDIF; ENDIF;
+    public void testNestedIfStatement() throws InterruptedException {
         String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 1 THEN IF 2 = 2 THEN SET myVar = 10; END IF END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
-        executor.visitProcedure(blockContext);
+        CountDownLatch latch = new CountDownLatch(1);
 
-        // Check that 'myVar' is set to 10 in the context
-        assertEquals(10, context.getVariable("myVar"));
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                // Check that 'myVar' is set to 10 in the context
+                assertEquals(10, context.getVariable("myVar"));
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
     }
 
     // Test 7: IF statement with comparison operators
     @Test
-    public void testIfStatementWithComparisonOperators() {
-        // Simplified comparison expression
+    public void testIfStatementWithComparisonOperators() throws InterruptedException {
         String blockQuery = "BEGIN DECLARE myVar INT; IF 5 > 3 THEN SET myVar = 10; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
-        executor.visitProcedure(blockContext);
+        CountDownLatch latch = new CountDownLatch(1);
 
-        // Check that 'myVar' is set to 10 in the context
-        assertEquals(10, context.getVariable("myVar"));
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                // Check that 'myVar' is set to 10 in the context
+                assertEquals(10, context.getVariable("myVar"));
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        latch.await();
     }
 }

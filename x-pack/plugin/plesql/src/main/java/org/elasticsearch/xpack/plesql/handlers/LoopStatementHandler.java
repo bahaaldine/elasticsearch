@@ -144,10 +144,10 @@ public class LoopStatementHandler {
      * Handles a WHILE loop asynchronously.
      */
     private void handleWhileLoopAsync(PlEsqlProcedureParser.Loop_statementContext ctx, ActionListener<Object> listener) {
-        executor.evaluateConditionAsync(ctx.condition(), new ActionListener<Boolean>() {
+        executor.evaluateConditionAsync(ctx.condition(), new ActionListener<Object>() {
             @Override
-            public void onResponse(Boolean conditionResult) {
-                if (conditionResult) {
+            public void onResponse(Object conditionResult) {
+                if (conditionResult instanceof Boolean && (Boolean) conditionResult ) {
                     // Execute the loop body
                     executeStatementsAsync(ctx.statement(), 0, new ActionListener<Object>() {
                         @Override

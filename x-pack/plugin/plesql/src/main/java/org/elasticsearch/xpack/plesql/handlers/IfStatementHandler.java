@@ -39,16 +39,20 @@ public class IfStatementHandler {
      * @param listener The ActionListener to handle asynchronous callbacks.
      */
     public void handleAsync(PlEsqlProcedureParser.If_statementContext ctx, ActionListener<Object> listener) {
+        System.out.println("Handling IF statement. " + ctx.condition().getText() );
         // Start by evaluating the main IF condition asynchronously
-        executor.evaluateConditionAsync(ctx.condition(), new ActionListener<Boolean>() {
+        executor.evaluateConditionAsync(ctx.condition(), new ActionListener<Object>() {
             @Override
-            public void onResponse(Boolean conditionResult) {
-                if (conditionResult) {
+            public void onResponse(Object conditionResult) {
+                System.out.println("Condition result: " + conditionResult);
+                if ( conditionResult instanceof Boolean && (Boolean) conditionResult ) {
                     // Execute the THEN block
                     List<PlEsqlProcedureParser.StatementContext> thenStatements = ctx.then_block;
+                    System.out.println("Condition is true. Executing THEN block.");
                     executeStatementsAsync(thenStatements, 0, listener);
                 } else {
                     // Proceed to ELSEIF blocks
+                    System.out.println("Condition is false. Skipping THEN block.");
                     handleElseIfBlocksAsync(ctx, 0, listener);
                 }
             }
@@ -85,10 +89,10 @@ public class IfStatementHandler {
 
         PlEsqlProcedureParser.Elseif_blockContext elseifBlock = elseifBlocks.get(index);
         // Evaluate the ELSEIF condition asynchronously
-        executor.evaluateConditionAsync(elseifBlock.condition(), new ActionListener<Boolean>() {
+        executor.evaluateConditionAsync(elseifBlock.condition(), new ActionListener<Object>() {
             @Override
-            public void onResponse(Boolean elseifResult) {
-                if (elseifResult) {
+            public void onResponse(Object elseifResult) {
+                if ( elseifResult instanceof Boolean && (Boolean) elseifResult ) {
                     // Execute the corresponding ELSEIF THEN block
                     List<PlEsqlProcedureParser.StatementContext> elseifStatements = elseifBlock.statement();
                     executeStatementsAsync(elseifStatements, 0, listener);

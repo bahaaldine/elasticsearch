@@ -10,6 +10,8 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 
+import java.util.List;
+
 public class DeclareStatementHandler {
     private ProcedureExecutor executor;
 
@@ -30,32 +32,53 @@ public class DeclareStatementHandler {
     }
 
     public void handleAsync(PlEsqlProcedureParser.Declare_statementContext ctx, ActionListener<Object> listener) {
-        for (PlEsqlProcedureParser.Variable_declarationContext varCtx : ctx.variable_declaration_list().variable_declaration()) {
-            String varName = varCtx.ID().getText();
-            String varType = varCtx.datatype().getText();
+        List<PlEsqlProcedureParser.Variable_declarationContext> varDecls = ctx.variable_declaration_list().variable_declaration();
+        processVariableDeclarations(varDecls, 0, listener);
+    }
 
-            // Check if the data type is unsupported
-            if (isSupportedDataType(varType) == false) {
-                throw new RuntimeException("Unsupported data type: " + varType);
-            }
-
-            if (varCtx.expression() != null) {
-                // Initialize variable with the expression's value
-                executor.evaluateExpressionAsync(varCtx.expression(), new ActionListener<Object>() {
-                    @Override
-                    public void onResponse(Object value) {
-                        executor.getContext().setVariable(varName, value);
-                        listener.onResponse(value);
-                    }
-
-                    @Override
-                    public void onFailure(Exception e) {
-                        listener.onFailure(e);
-                    }
-                });
-            } else {
-                listener.onResponse(null); // Variable declared without initialization
-            }
+    private void processVariableDeclarations(List<PlEsqlProcedureParser.Variable_declarationContext> varDecls, int index,
+                                             ActionListener<Object> listener) {
+        if (index >= varDecls.size()) {
+            listener.onResponse(null); // All declarations succeeded
+            return;
         }
+
+        PlEsqlProcedureParser.Variable_declarationContext varCtx = varDecls.get(index);
+        String varName = varCtx.ID().getText();
+        String varType = varCtx.datatype().getText();
+
+        // Check if the data type is unsupported
+        if ( isSupportedDataType(varType) == false ) {
+            listener.onFailure(new RuntimeException("Unsupported data type: " + varType));
+            return;
+        }
+
+        try {
+            executor.getContext().declareVariable(varName, varType);
+        } catch (Exception e) {
+            listener.onFailure(e);
+            return;
+        }
+
+        // Initialize variable with the expression's value
+        executor.evaluateExpressionAsync(varCtx.expression(), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object value) {
+                executor.getContext().setVariable(varName, value);
+                // Proceed to the next variable declaration
+                processVariableDeclarations(varDecls, index + 1, listener);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                if (e.getMessage().equals("Null expression context"))  {
+                    executor.getContext().setVariable(varName, null);
+                    // Proceed to the next variable declaration
+                    processVariableDeclarations(varDecls, index + 1, listener);
+                } else {
+                    listener.onFailure(e);
+                }
+            }
+        });
     }
 }
