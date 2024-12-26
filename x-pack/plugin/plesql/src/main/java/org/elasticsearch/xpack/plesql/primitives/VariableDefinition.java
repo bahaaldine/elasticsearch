@@ -13,7 +13,7 @@ package org.elasticsearch.xpack.plesql.primitives;
  */
 public class VariableDefinition {
     private final String name;
-    private final String type;
+    private final PLESQLDataType type;
     private Object value;
 
     /**
@@ -25,7 +25,11 @@ public class VariableDefinition {
      */
     public VariableDefinition(String name, String type, Object value) {
         this.name = name;
-        this.type = type.toUpperCase();
+        try {
+            this.type = PLESQLDataType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid type provided: " + type, e);
+        }
         this.value = value;
     }
 
@@ -43,7 +47,7 @@ public class VariableDefinition {
      *
      * @return The variable's data type.
      */
-    public String getType() {
+    public PLESQLDataType getType() {
         return type;
     }
 
@@ -66,8 +70,9 @@ public class VariableDefinition {
         if ( isTypeCompatible(value) == false ) {
             throw new RuntimeException("Type mismatch: Expected " + type + " for variable '" + name + "'.");
         }
-        if (type.equals("FLOAT") && value instanceof Integer) {
-            this.value = ((Integer) value).doubleValue(); // Convert INT to DOUBLE
+        if (value instanceof Number) {
+            // If value is a Number (Integer, Float, Double, etc.), convert directly
+            this.value = ((Number) value).doubleValue();
         } else {
             this.value = value;
         }
@@ -85,13 +90,11 @@ public class VariableDefinition {
         }
 
         switch (type) {
-            case "INT":
-                return value instanceof Integer;
-            case "FLOAT":
-                return value instanceof Double || value instanceof Float || value instanceof Integer;
-            case "STRING":
+            case NUMBER:
+                return value instanceof Double || value instanceof Integer;
+            case STRING:
                 return value instanceof String;
-            case "DATE":
+            case DATE:
                 return value instanceof java.util.Date; // Adjust as per your date handling
             default:
                 return false;

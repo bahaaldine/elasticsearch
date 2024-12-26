@@ -151,7 +151,11 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         visitStatementAsync(statement, new ActionListener<>() {
             @Override
             public void onResponse(Object o) {
-                executeStatementsAsync(statements, index + 1, listener);
+                if (o instanceof ReturnValue) {
+                    listener.onResponse(o);
+                } else {
+                    executeStatementsAsync(statements, index + 1, listener);
+                }
             }
 
             @Override
@@ -196,7 +200,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             evaluateExpressionAsync(ctx.expression_statement().expression(), new ActionListener<>() {
                 @Override
                 public void onResponse(Object value) {
-                    listener.onResponse(null);
+                    listener.onResponse(value);
                 }
 
                 @Override
@@ -229,7 +233,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         evaluateExpressionAsync(ctx.expression(), new ActionListener<>() {
             @Override
             public void onResponse(Object value) {
-                listener.onFailure(new ReturnValue(value)); // Signal return value
+                listener.onResponse(new ReturnValue(value)); // Signal return value
             }
 
             @Override
@@ -261,11 +265,9 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         List<PlEsqlProcedureParser.LogicalAndExpressionContext> andExprs = ctx.logicalAndExpression();
         if (andExprs.size() == 1) {
             // Only one operand
-            System.out.println("One operand : " + andExprs.get(0).getText());
             evaluateLogicalAndExpressionAsync(andExprs.get(0), listener);
         } else {
             // Evaluate operands one by one
-            System.out.println("More than one operand");
             evaluateLogicalOrOperandsAsync(andExprs, 0, listener);
         }
     }
@@ -513,6 +515,9 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             @Override
             public void onResponse(Object rightValue) {
                 try {
+
+                    System.out.println("this is the place where integers get converted to float" + leftValue + " +  " + rightValue);
+
                     double leftDouble = ((Number) leftValue).doubleValue();
                     double rightDouble = ((Number) rightValue).doubleValue();
                     double result;
@@ -677,16 +682,14 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         } else if (ctx.INT() != null) {
             // Integer literal
             try {
-                int intValue = Integer.parseInt(ctx.INT().getText());
-                listener.onResponse(intValue);
+                listener.onResponse(Double.valueOf(ctx.INT().getText()));
             } catch (NumberFormatException e) {
                 listener.onFailure(new RuntimeException("Invalid integer literal: " + ctx.INT().getText()));
             }
         } else if (ctx.FLOAT() != null) {
             // Float literal
             try {
-                double floatValue = Double.parseDouble(ctx.FLOAT().getText());
-                listener.onResponse(floatValue);
+                listener.onResponse(Double.valueOf(ctx.FLOAT().getText()));
             } catch (NumberFormatException e) {
                 listener.onFailure(new RuntimeException("Invalid float literal: " + ctx.FLOAT().getText()));
             }

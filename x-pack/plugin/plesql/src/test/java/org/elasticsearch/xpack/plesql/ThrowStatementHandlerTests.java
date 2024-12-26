@@ -113,7 +113,7 @@ public class ThrowStatementHandlerTests {
     public void testThrowInTryCatchBlock() throws InterruptedException {
         String blockQuery = """
                 BEGIN
-                    DECLARE v INT = 1;
+                    DECLARE v NUMBER = 1;
                     TRY
                         THROW 'Exception in TRY block';
                     CATCH
@@ -128,7 +128,7 @@ public class ThrowStatementHandlerTests {
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
             public void onResponse(Object unused) {
-                assertEquals(10, context.getVariable("v"));
+                assertEquals(10.0, context.getVariable("v"));
                 latch.countDown();
             }
 
@@ -147,7 +147,7 @@ public class ThrowStatementHandlerTests {
     public void testNestedTryCatchWithThrow() throws InterruptedException {
         String blockQuery = """
                 BEGIN
-                    DECLARE v INT = 1;
+                    DECLARE v NUMBER = 1;
                     TRY
                         TRY
                             THROW 'Inner exception';
@@ -167,7 +167,7 @@ public class ThrowStatementHandlerTests {
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
             public void onResponse(Object unused) {
-                assertEquals(30, context.getVariable("v"));
+                assertEquals(30.0, context.getVariable("v"));
                 latch.countDown();
             }
 

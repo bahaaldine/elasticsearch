@@ -15,7 +15,7 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.junit.Before;
+import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import org.junit.Test;
 
 import java.util.concurrent.CountDownLatch;
@@ -61,6 +61,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
+                System.out.println("Result : " + result);
                 resultHolder[0] = result;
                 latch.countDown();
             }
@@ -74,8 +75,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
 
         latch.await();
 
-        assertNotNull(resultHolder[0]);
-        assertEquals(100, resultHolder[0]);
+        assertNotNull("Result should not be null", resultHolder[0]);
+        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
+
+        ReturnValue returnValue = (ReturnValue) resultHolder[0];
+        assertEquals("Returned value should be 100", 100.0, returnValue.getValue());
     }
 
     // Test 2: RETURN with a string
@@ -104,8 +108,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
 
         latch.await();
 
-        assertNotNull(resultHolder[0]);
-        assertEquals("Hello, PL|ESQL!", resultHolder[0]);
+        assertNotNull("Result should not be null", resultHolder[0]);
+        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
+
+        ReturnValue returnValue = (ReturnValue) resultHolder[0];
+        assertEquals("Returned value should be 'Hello, PL|ESQL!'", "Hello, PL|ESQL!", returnValue.getValue());
     }
 
     // Test 3: RETURN with arithmetic operation
@@ -134,8 +141,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
 
         latch.await();
 
-        assertNotNull(resultHolder[0]);
-        assertEquals(75, resultHolder[0]);
+        assertNotNull("Result should not be null", resultHolder[0]);
+        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
+
+        ReturnValue returnValue = (ReturnValue) resultHolder[0];
+        assertEquals("Returned value should be 75", 75.0, returnValue.getValue());
     }
 
     // Test 4: RETURN with boolean comparison
@@ -164,8 +174,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
 
         latch.await();
 
-        assertNotNull(resultHolder[0]);
-        assertEquals(true, resultHolder[0]);
+        assertNotNull("Result should not be null", resultHolder[0]);
+        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
+
+        ReturnValue returnValue = (ReturnValue) resultHolder[0];
+        assertEquals("Returned value should be true", true, returnValue.getValue());
     }
 
     // Test 5: RETURN inside IF condition
@@ -201,8 +214,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
 
         latch.await();
 
-        assertNotNull(resultHolder[0]);
-        assertEquals("Condition met", resultHolder[0]);
+        assertNotNull("Result should not be null", resultHolder[0]);
+        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
+
+        ReturnValue returnValue = (ReturnValue) resultHolder[0];
+        assertEquals("Returned value should be 'Condition met'", "Condition met", returnValue.getValue());
     }
 
     // Test 6: RETURN inside a LOOP
@@ -210,7 +226,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     public void testProcedureReturnInsideLoop() throws InterruptedException {
         String blockQuery = """
                 BEGIN
-                    DECLARE i INT;
+                    DECLARE i NUMBER;
                     FOR i IN 1..5 LOOP
                         IF i = 3 THEN
                             RETURN 'Loop exited at 3';
@@ -241,8 +257,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
 
         latch.await();
 
-        assertNotNull(resultHolder[0]);
-        assertEquals("Loop exited at 3", resultHolder[0]);
+        assertNotNull("Result should not be null", resultHolder[0]);
+        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
+
+        ReturnValue returnValue = (ReturnValue) resultHolder[0];
+        assertEquals("Returned value should be 'Loop exited at 3'", "Loop exited at 3", returnValue.getValue());
     }
 
     // Test 7: RETURN with nested functions
@@ -250,7 +269,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     public void testProcedureReturnWithNestedFunctionCall() throws InterruptedException {
         String blockQuery = """
                 BEGIN
-                    FUNCTION add(a INT, b INT) BEGIN
+                    FUNCTION add(a NUMBER, b NUMBER) BEGIN
                         RETURN a + b;
                     END FUNCTION;
                     RETURN add(5, 10);
@@ -278,8 +297,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
 
         latch.await();
 
-        assertNotNull(resultHolder[0]);
-        assertEquals(15, resultHolder[0]);
+        assertNotNull("Result should not be null", resultHolder[0]);
+        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
+
+        ReturnValue returnValue = (ReturnValue) resultHolder[0];
+        assertEquals("Returned value should be 15", 15.0, returnValue.getValue());
     }
 
     // Test 8: RETURN with ESQL query execution
@@ -314,8 +336,13 @@ public class ProcedureReturnStatementTests extends ESTestCase {
 
         latch.await();
 
-        assertNotNull(resultHolder[0]);
-        assertEquals("Mock ESQL result", resultHolder[0]);
+        assertNotNull("Result should not be null", resultHolder[0]);
+        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
+
+        ReturnValue returnValue = (ReturnValue) resultHolder[0];
+        assertTrue("Returned value should contain 'Mock ESQL result'",
+            returnValue.getValue().toString().contains("Mock ESQL result"));
+
     }
 
     // Test 9: RETURN after a TRY-CATCH block
@@ -353,8 +380,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
 
         latch.await();
 
-        assertNotNull(resultHolder[0]);
-        assertEquals("Error handled", resultHolder[0]);
+        assertNotNull("Result should not be null", resultHolder[0]);
+        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
+
+        ReturnValue returnValue = (ReturnValue) resultHolder[0];
+        assertEquals("Returned value should be Error handled", "Error handled", returnValue.getValue());
     }
 
     // Additional Test: Return inside IF block
@@ -362,7 +392,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     public void testReturnInsideIfBlock() throws InterruptedException {
         String blockQuery = """
                 BEGIN
-                    DECLARE myVar INT;
+                    DECLARE myVar NUMBER;
                     IF 1 = 1 THEN
                         RETURN 42;
                     END IF;
@@ -392,8 +422,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
 
         latch.await();
 
-        assertNotNull(resultHolder[0]);
-        assertEquals(42, resultHolder[0]);
+        assertNotNull("Result should not be null", resultHolder[0]);
+        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
+
+        ReturnValue returnValue = (ReturnValue) resultHolder[0];
+        assertEquals("Returned value should be 42", 42.0, returnValue.getValue());
 
         // Verify that 'myVar' was not set to 100
         assertNull("Variable 'myVar' should not be set after RETURN.", context.getVariable("myVar"));

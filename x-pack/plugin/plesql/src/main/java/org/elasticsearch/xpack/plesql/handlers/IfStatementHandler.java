@@ -39,7 +39,7 @@ public class IfStatementHandler {
      * @param listener The ActionListener to handle asynchronous callbacks.
      */
     public void handleAsync(PlEsqlProcedureParser.If_statementContext ctx, ActionListener<Object> listener) {
-        System.out.println("Handling IF statement. " + ctx.condition().getText() );
+        System.out.println(" Handling IF statement. " + ctx.condition().getText() );
         // Start by evaluating the main IF condition asynchronously
         executor.evaluateConditionAsync(ctx.condition(), new ActionListener<Object>() {
             @Override
@@ -127,9 +127,12 @@ public class IfStatementHandler {
         // Visit the statement asynchronously
         executor.visitStatementAsync(stmtCtx, new ActionListener<Object>() {
             @Override
-            public void onResponse(Object unused) {
-                // Proceed to the next statement
-                executeStatementsAsync(stmtCtxList, index + 1, listener);
+            public void onResponse(Object o) {
+                if (o instanceof ReturnValue) {
+                    listener.onResponse(o);
+                } else {
+                    executeStatementsAsync(stmtCtxList, index + 1, listener);
+                }
             }
 
             @Override

@@ -138,9 +138,14 @@ public class FunctionDefinitionHandler {
         executor.executeStatementsAsync(function.getBody(), 0, new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
-                // Function completed without a return statement
-                executor.setContext(originalContext);
-                listener.onFailure(new RuntimeException("Function '" + functionName + "' did not return a value."));
+                if (result instanceof ReturnValue) {
+                    // Function returned a value
+                    Object returnValue = ((ReturnValue) result).getValue();
+                    executor.setContext(originalContext);
+                    listener.onResponse(returnValue);
+                } else {
+                    listener.onFailure(new RuntimeException("Function '" + functionName + "' did not return a value."));
+                }
             }
 
             @Override
@@ -175,8 +180,7 @@ public class FunctionDefinitionHandler {
      */
     private boolean isSupportedDataType(String dataType) {
         switch (dataType.toUpperCase()) {
-            case "INT":
-            case "FLOAT":
+            case "NUMBER":
             case "STRING":
             case "DATE":
                 return true;
@@ -194,10 +198,8 @@ public class FunctionDefinitionHandler {
         }
 
         switch (dataType.toUpperCase()) {
-            case "INT":
-                return value instanceof Integer;
-            case "FLOAT":
-                return value instanceof Float || value instanceof Double || value instanceof Integer;
+            case "NUMBER":
+                return value instanceof Double;
             case "STRING":
                 return value instanceof String;
             case "DATE":

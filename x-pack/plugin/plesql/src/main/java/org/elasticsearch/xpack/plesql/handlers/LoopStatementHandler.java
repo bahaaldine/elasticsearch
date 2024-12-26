@@ -35,16 +35,14 @@ public class LoopStatementHandler {
     public void handleAsync(PlEsqlProcedureParser.Loop_statementContext ctx, ActionListener<Object> listener) {
         try {
             if (ctx.FOR() != null) {
-                // Handle FOR loop asynchronously
                 handleForLoopAsync(ctx, listener);
             } else if (ctx.WHILE() != null) {
-                // Handle WHILE loop asynchronously
                 handleWhileLoopAsync(ctx, listener);
             } else {
                 listener.onResponse(null); // Unsupported loop type
             }
         } catch (Exception e) {
-            listener.onFailure(new RuntimeException("Error during loop execution: " + e.getMessage(), e));
+            listener.onFailure(new RuntimeException("[Loop Statement Handler] Error during loop execution: " + e.getMessage(), e));
         }
     }
 
@@ -61,19 +59,19 @@ public class LoopStatementHandler {
                 executor.evaluateExpressionAsync(ctx.expression(1), new ActionListener<Object>() {
                     @Override
                     public void onResponse(Object endObj) {
-                        if ( (startObj instanceof Integer) == false || (endObj instanceof Integer) == false ) {
+                        if ( (startObj instanceof Number) == false || (endObj instanceof Number) == false ) {
                             listener.onFailure(new RuntimeException("Loop range must be integer values."));
                             return;
                         }
 
-                        int start = (Integer) startObj;
-                        int end = (Integer) endObj;
+                        int start = ((Number) startObj).intValue();
+                        int end = (((Number) endObj).intValue());
 
                         ExecutionContext currentContext = executor.getContext();
                         boolean isAlreadyDeclared = currentContext.getVariables().containsKey(loopVarName);
 
                         if ( isAlreadyDeclared == false ) {
-                            currentContext.declareVariable(loopVarName, "INT");
+                            currentContext.declareVariable(loopVarName, "NUMBER");
                         }
 
                         executeForLoopAsync(loopVarName, start, end, ctx.statement(), listener);
@@ -117,14 +115,18 @@ public class LoopStatementHandler {
             return;
         }
 
-        executor.getContext().setVariable(loopVarName, currentValue);
+        executor.getContext().setVariable(loopVarName, Integer.valueOf(currentValue));
 
         // Execute loop body statements
         executeStatementsAsync(statements, 0, new ActionListener<Object>() {
             @Override
-            public void onResponse(Object unused) {
-                // Proceed to the next iteration
-                executeForLoopIterationAsync(loopVarName, currentValue + step, endValue, step, statements, listener);
+            public void onResponse(Object o) {
+                if (o instanceof ReturnValue) {
+                    listener.onResponse(o);
+                } else {
+                    // Proceed to the next iteration
+                    executeForLoopIterationAsync(loopVarName, currentValue + step, endValue, step, statements, listener);
+                }
             }
 
             @Override
@@ -132,7 +134,7 @@ public class LoopStatementHandler {
                 if (e instanceof BreakException) {
                     listener.onResponse(null); // Break out of the loop
                 } else if (e instanceof ReturnValue) {
-                    listener.onFailure(e); // Propagate return value
+                    listener.onResponse(e); // Propagate return value
                 } else {
                     listener.onFailure(e);
                 }
@@ -144,32 +146,51 @@ public class LoopStatementHandler {
      * Handles a WHILE loop asynchronously.
      */
     private void handleWhileLoopAsync(PlEsqlProcedureParser.Loop_statementContext ctx, ActionListener<Object> listener) {
+        // Start the iteration chain
+        doWhileIteration(ctx, listener);
+    }
+
+    private void doWhileIteration(PlEsqlProcedureParser.Loop_statementContext ctx, ActionListener<Object> listener) {
         executor.evaluateConditionAsync(ctx.condition(), new ActionListener<Object>() {
             @Override
             public void onResponse(Object conditionResult) {
-                if (conditionResult instanceof Boolean && (Boolean) conditionResult ) {
-                    // Execute the loop body
-                    executeStatementsAsync(ctx.statement(), 0, new ActionListener<Object>() {
-                        @Override
-                        public void onResponse(Object unused) {
-                            // Repeat the loop
-                            handleWhileLoopAsync(ctx, listener);
-                        }
-
-                        @Override
-                        public void onFailure(Exception e) {
-                            if (e instanceof BreakException) {
-                                listener.onResponse(null); // Exit the loop
-                            } else if (e instanceof ReturnValue) {
-                                listener.onFailure(e); // Propagate return value
-                            } else {
-                                listener.onFailure(e);
-                            }
-                        }
-                    });
-                } else {
-                    listener.onResponse(null); // Loop condition is false, exit
+                if (!(conditionResult instanceof Boolean)) {
+                    listener.onFailure(new RuntimeException("WHILE condition must be boolean."));
+                    return;
                 }
+                boolean loopShouldContinue = (Boolean) conditionResult;
+
+                if ( loopShouldContinue == false) {
+                    // Condition is false -> loop is done
+                    listener.onResponse(null);
+                    return;
+                }
+
+                // 2) Condition is true -> execute statements in the loop body
+                executeStatementsAsync(ctx.statement(), 0, new ActionListener<Object>() {
+                    @Override
+                    public void onResponse(Object bodyResult) {
+                        // If body returned a ReturnValue or something, propagate it
+                        if (bodyResult instanceof ReturnValue) {
+                            listener.onResponse(bodyResult);
+                            return;
+                        }
+                        // 3) If no ReturnValue, schedule next iteration on the thread pool
+                        executor.getThreadPool().generic().execute(() -> doWhileIteration(ctx, listener));
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        if (e instanceof BreakException) {
+                            // End the loop normally
+                            listener.onResponse(null);
+                        } else if (e instanceof ReturnValue) {
+                            listener.onResponse(e);
+                        } else {
+                            listener.onFailure(e);
+                        }
+                    }
+                });
             }
 
             @Override
@@ -193,9 +214,15 @@ public class LoopStatementHandler {
         // Visit the statement asynchronously
         executor.visitStatementAsync(stmtCtx, new ActionListener<Object>() {
             @Override
-            public void onResponse(Object unused) {
-                // Proceed to the next statement
-                executeStatementsAsync(stmtCtxList, index + 1, listener);
+            public void onResponse(Object result) {
+                if (result instanceof ReturnValue) {
+                    // If a statement returned a value, we must short-circuit
+                    // and pass that ReturnValue back up the call chain
+                    listener.onResponse(result);
+                } else {
+                    // Otherwise, proceed to the next statement
+                    executeStatementsAsync(stmtCtxList, index + 1, listener);
+                }
             }
 
             @Override

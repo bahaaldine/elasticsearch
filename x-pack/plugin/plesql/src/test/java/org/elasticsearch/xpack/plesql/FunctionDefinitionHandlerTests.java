@@ -9,6 +9,7 @@ package org.elasticsearch.xpack.plesql;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
@@ -17,37 +18,31 @@ import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.FunctionDefinition;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-public class FunctionDefinitionHandlerTests {
+public class FunctionDefinitionHandlerTests extends ESTestCase {
 
     private ExecutionContext context;
     private ProcedureExecutor executor;
     private FunctionDefinitionHandler handler;
     private ThreadPool threadPool;
 
-    @Before
-    public void setup() {
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
         context = new ExecutionContext();
         threadPool = new TestThreadPool("test-thread-pool");
         executor = new ProcedureExecutor(context, threadPool);
         handler = new FunctionDefinitionHandler(executor);
     }
 
-    @After
-    public void tearDown() throws InterruptedException {
-        ThreadPool.terminate(threadPool, 30, TimeUnit.SECONDS);
+    @Override
+    public void tearDown() throws Exception {
+        terminate(threadPool);
+        super.tearDown();
     }
 
     // Helper method to parse a function definition and return the necessary context
@@ -106,7 +101,7 @@ public class FunctionDefinitionHandlerTests {
     // Test 2: Define a function with one parameter and test its registration
     @Test
     public void testFunctionDefinitionWithOneParameter() throws InterruptedException {
-        String functionQuery = "FUNCTION add(a INT) BEGIN RETURN a + 5; END FUNCTION;";
+        String functionQuery = "FUNCTION add(a NUMBER) BEGIN RETURN a + 5; END FUNCTION;";
         PlEsqlProcedureParser.Function_definitionContext functionContext = parseFunction(functionQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -136,7 +131,7 @@ public class FunctionDefinitionHandlerTests {
     // Test 3: Define a function with multiple parameters and test its registration
     @Test
     public void testFunctionDefinitionWithMultipleParameters() throws InterruptedException {
-        String functionQuery = "FUNCTION multiply(a INT, b INT, c INT) BEGIN RETURN a * b * c; END FUNCTION;";
+        String functionQuery = "FUNCTION multiply(a NUMBER, b NUMBER, c NUMBER) BEGIN RETURN a * b * c; END FUNCTION;";
         PlEsqlProcedureParser.Function_definitionContext functionContext = parseFunction(functionQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -171,8 +166,8 @@ public class FunctionDefinitionHandlerTests {
     public void testFunctionDefinitionAndCallWithinBlock() throws InterruptedException {
         String blockQuery = """
             BEGIN
-                DECLARE result INT;
-                FUNCTION add(a INT, b INT) BEGIN
+                DECLARE result NUMBER;
+                FUNCTION add(a NUMBER, b NUMBER) BEGIN
                     RETURN a + b;
                 END FUNCTION;
                 SET result = add(3, 4);
@@ -218,8 +213,8 @@ public class FunctionDefinitionHandlerTests {
     public void testFunctionCallWithinLoop() throws InterruptedException {
         String blockQuery = """
             BEGIN
-                DECLARE total INT, i INT;
-                FUNCTION add(a INT, b INT) BEGIN
+                DECLARE total NUMBER, i NUMBER;
+                FUNCTION add(a NUMBER, b NUMBER) BEGIN
                     RETURN a + b;
                 END FUNCTION;
                 SET total = 0;

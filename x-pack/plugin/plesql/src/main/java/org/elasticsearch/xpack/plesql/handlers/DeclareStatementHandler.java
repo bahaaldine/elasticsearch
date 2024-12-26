@@ -9,6 +9,7 @@ package org.elasticsearch.xpack.plesql.handlers;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
+import org.elasticsearch.xpack.plesql.primitives.PLESQLDataType;
 
 import java.util.List;
 
@@ -20,14 +21,18 @@ public class DeclareStatementHandler {
     }
 
     private boolean isSupportedDataType(String varType) {
-        // Add supported types to this list
-        switch (varType.toUpperCase()) {
-            case "INT":
-            case "FLOAT":
-            case "STRING":
-                return true;
-            default:
-                return false;  // Unsupported data type
+        try {
+            PLESQLDataType type = PLESQLDataType.valueOf(varType.toUpperCase());
+            switch (type) {
+                case NUMBER:
+                case STRING:
+                case DATE:
+                    return true;
+                default:
+                    return false;  // Unsupported data type
+            }
+        } catch (IllegalArgumentException e) {
+            return false;  // varType is not a valid enum constant
         }
     }
 

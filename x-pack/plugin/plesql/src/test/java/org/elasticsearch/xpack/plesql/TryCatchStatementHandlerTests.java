@@ -16,16 +16,9 @@ import org.elasticsearch.xpack.plesql.handlers.TryCatchStatementHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
 
 public class TryCatchStatementHandlerTests extends ESTestCase {
 
@@ -59,7 +52,7 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
     // Test 1: Basic Try Block Execution Without Errors
     @Test
     public void testTryBlockExecution() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE j INT; TRY SET j = 10; END TRY END";
+        String blockQuery = "BEGIN DECLARE j NUMBER; TRY SET j = 10; END TRY END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -69,7 +62,7 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
             public void onResponse(Object unused) {
                 // Check that the variable 'j' is set to 10
                 assertNotNull("j should be declared in context.", context.getVariable("j"));
-                assertEquals(10, context.getVariable("j"));
+                assertEquals(10.0, context.getVariable("j"));
                 latch.countDown();
             }
 
@@ -86,7 +79,7 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
     // Test 2: Try-Catch Block Execution With an Error
     @Test
     public void testTryCatchBlockExecution() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE j INT; TRY SET j = 10 / 0; CATCH SET j = 20; END TRY END";
+        String blockQuery = "BEGIN DECLARE j NUMBER; TRY SET j = 10 / 0; CATCH SET j = 20; END TRY END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -97,7 +90,7 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
                 // Check if the CATCH block was executed
                 Object jValue = context.getVariable("j");
                 assertNotNull("Variable 'j' should be declared in the context.", jValue);
-                assertEquals("The value of 'j' should be set to 20 by the CATCH block.", 20, jValue);
+                assertEquals("The value of 'j' should be set to 20 by the CATCH block.", 20.0, jValue);
                 latch.countDown();
             }
 
@@ -114,7 +107,7 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
     // Test 3: Try-Catch-Finally Block Execution With an Error
     @Test
     public void testTryCatchFinallyBlockExecution() throws InterruptedException {
-        String blockQuery = "BEGIN  DECLARE j INT; TRY SET j = 10 / 0; CATCH SET j = 20; FINALLY SET j = 30; END TRY END";
+        String blockQuery = "BEGIN  DECLARE j NUMBER; TRY SET j = 10 / 0; CATCH SET j = 20; FINALLY SET j = 30; END TRY END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -124,7 +117,7 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
             public void onResponse(Object unused) {
                 // Check that the variable 'j' is set to 30 (from the FINALLY block)
                 assertNotNull("j should be declared in context.", context.getVariable("j"));
-                assertEquals(30, context.getVariable("j"));
+                assertEquals(30.0, context.getVariable("j"));
                 latch.countDown();
             }
 
@@ -141,7 +134,7 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
     // Test 4: Try-Finally Block Execution Without Catch Block
     @Test
     public void testTryFinallyBlockExecution() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE j INT; TRY SET j = 10; FINALLY SET j = 20; END TRY END";
+        String blockQuery = "BEGIN DECLARE j NUMBER; TRY SET j = 10; FINALLY SET j = 20; END TRY END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -151,7 +144,7 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
             public void onResponse(Object unused) {
                 // Check that the variable 'j' is set to 20 (from the FINALLY block)
                 assertNotNull("j should be declared in context.", context.getVariable("j"));
-                assertEquals(20, context.getVariable("j"));
+                assertEquals(20.0, context.getVariable("j"));
                 latch.countDown();
             }
 

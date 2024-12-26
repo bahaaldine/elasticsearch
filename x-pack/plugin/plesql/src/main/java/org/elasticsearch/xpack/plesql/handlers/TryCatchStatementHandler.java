@@ -11,6 +11,7 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
+import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,9 +48,26 @@ public class TryCatchStatementHandler {
         // Execute TRY block asynchronously
         executeStatementsAsync(tryStatements, 0, new ActionListener<Object>() {
             @Override
-            public void onResponse(Object unused) {
-                // TRY block completed successfully
-                executeFinallyBlock(finallyStatements, listener);
+            public void onResponse(Object tryResult) {
+                if (tryResult instanceof ReturnValue) {
+                    // means the TRY block returned
+                    // do you want FINALLY to run anyway? If yes, we can do:
+                    executeFinallyBlock(finallyStatements, new ActionListener<>() {
+                        @Override
+                        public void onResponse(Object ignore) {
+                            // after FINALLY, bubble up the ReturnValue
+                            listener.onResponse(tryResult);
+                        }
+                        @Override
+                        public void onFailure(Exception e) {
+                            listener.onFailure(e);
+                        }
+                    });
+                } else {
+                    // no ReturnValue => proceed to FINALLY or next step
+                    executeFinallyBlock(finallyStatements, listener);
+                }
+
             }
 
             @Override
@@ -59,9 +77,22 @@ public class TryCatchStatementHandler {
                     // Execute CATCH block
                     executeStatementsAsync(catchStatements, 0, new ActionListener<Object>() {
                         @Override
-                        public void onResponse(Object unused) {
-                            // CATCH block completed
-                            executeFinallyBlock(finallyStatements, listener);
+                        public void onResponse(Object catchResult) {
+                            if (catchResult instanceof ReturnValue) {
+                                executeFinallyBlock(finallyStatements, new ActionListener<>() {
+                                    @Override
+                                    public void onResponse(Object ignore) {
+                                        listener.onResponse(catchResult);
+                                    }
+                                    @Override
+                                    public void onFailure(Exception ex) {
+                                        listener.onFailure(ex);
+                                    }
+                                });
+                            } else {
+                                // etc
+                                executeFinallyBlock(finallyStatements, listener);
+                            }
                         }
 
                         @Override
@@ -171,9 +202,12 @@ public class TryCatchStatementHandler {
         // Visit the statement asynchronously
         executor.visitStatementAsync(stmtCtx, new ActionListener<Object>() {
             @Override
-            public void onResponse(Object unused) {
-                // Proceed to the next statement
-                executeStatementsAsync(stmtCtxList, index + 1, listener);
+            public void onResponse(Object result) {
+                if  ( result instanceof ReturnValue ) {
+                    listener.onResponse(result);
+                } else {
+                    executeStatementsAsync(stmtCtxList, index + 1, listener);
+                }
             }
 
             @Override

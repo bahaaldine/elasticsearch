@@ -60,7 +60,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 1: Simple IF statement with a true condition
     @Test
     public void testSimpleIfTrueCondition() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 1 THEN SET myVar = 10; END IF END";
+        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 1 = 1 THEN SET myVar = 10; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -69,7 +69,7 @@ public class IfStatementHandlerTests extends ESTestCase {
             @Override
             public void onResponse(Object unused) {
                 assertNotNull("myVar should be declared.", context.getVariable("myVar"));
-                assertEquals(10, context.getVariable("myVar"));
+                assertEquals(10.0, context.getVariable("myVar"));
                 latch.countDown();
             }
 
@@ -86,7 +86,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 2: Simple IF statement with a false condition
     @Test
     public void testSimpleIfFalseCondition() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 2 THEN SET myVar = 10; END IF END";
+        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 1 = 2 THEN SET myVar = 10; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -112,7 +112,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 3: IF-ELSE statement with false IF and true ELSE
     @Test
     public void testIfElseStatement() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 2 THEN SET myVar = 10; ELSE SET myVar = 20; END IF END";
+        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 1 = 2 THEN SET myVar = 10; ELSE SET myVar = 20; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -121,7 +121,7 @@ public class IfStatementHandlerTests extends ESTestCase {
             @Override
             public void onResponse(Object unused) {
                 // Check that 'myVar' is set to 20 (from ELSE branch)
-                assertEquals(20, context.getVariable("myVar"));
+                assertEquals(20.0, context.getVariable("myVar"));
                 latch.countDown();
             }
 
@@ -140,7 +140,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     public void testIfElseIfElseStatement() throws InterruptedException {
         String blockQuery =
             "BEGIN " +
-                "DECLARE myVar INT; " +
+                "DECLARE myVar NUMBER; " +
                 "IF 1 = 2 THEN " +
                     "SET myVar = 10; " +
                 "ELSEIF 1 = 1 THEN " +
@@ -158,7 +158,7 @@ public class IfStatementHandlerTests extends ESTestCase {
             @Override
             public void onResponse(Object unused) {
                 // Check that 'myVar' is set to 20 (from ELSEIF branch)
-                assertEquals(20, context.getVariable("myVar"));
+                assertEquals(20.0, context.getVariable("myVar"));
                 latch.countDown();
             }
 
@@ -175,7 +175,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 5: Arithmetic operations in IF condition
     @Test
     public void testArithmeticInIfCondition() throws Exception {
-        String blockQuery = "BEGIN DECLARE myVar INT; IF 5 + 5 = 10 THEN SET myVar = 10; END IF END";
+        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 5 + 5 = 10 THEN SET myVar = 10; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -187,7 +187,7 @@ public class IfStatementHandlerTests extends ESTestCase {
                     Object varValue = context.getVariable("myVar");
                     System.out.println("Retrieved 'myVar' value: " + varValue);
                     assertNotNull("Variable 'myVar' should have been set.", varValue);
-                    assertEquals("Variable 'myVar' should be set to 10.", 10, varValue);
+                    assertEquals("Variable 'myVar' should be set to 10.", 10.0, varValue);
                     future.complete(null);
                 } catch (AssertionError e) {
                     future.completeExceptionally(e);
@@ -207,7 +207,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 6: Nested IF statement
     @Test
     public void testNestedIfStatement() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE myVar INT; IF 1 = 1 THEN IF 2 = 2 THEN SET myVar = 10; END IF END IF END";
+        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 1 = 1 THEN IF 2 = 2 THEN SET myVar = 10; END IF END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -216,7 +216,7 @@ public class IfStatementHandlerTests extends ESTestCase {
             @Override
             public void onResponse(Object unused) {
                 // Check that 'myVar' is set to 10 in the context
-                assertEquals(10, context.getVariable("myVar"));
+                assertEquals(10.0, context.getVariable("myVar"));
                 latch.countDown();
             }
 
@@ -233,7 +233,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 7: IF statement with comparison operators
     @Test
     public void testIfStatementWithComparisonOperators() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE myVar INT; IF 5 > 3 THEN SET myVar = 10; END IF END";
+        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 5 > 3 THEN SET myVar = 10; END IF END";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -242,7 +242,7 @@ public class IfStatementHandlerTests extends ESTestCase {
             @Override
             public void onResponse(Object unused) {
                 // Check that 'myVar' is set to 10 in the context
-                assertEquals(10, context.getVariable("myVar"));
+                assertEquals(10.0, context.getVariable("myVar"));
                 latch.countDown();
             }
 

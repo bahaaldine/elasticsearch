@@ -73,7 +73,7 @@ public class AssignmentStatementHandlerTests extends ESTestCase {
     // Test 1: Declare a variable and assign a simple integer value
     @Test
     public void testDeclareAndAssignInteger() throws InterruptedException {
-        String declareQuery = "DECLARE myVar INT;";
+        String declareQuery = "DECLARE myVar NUMBER;";
         String assignQuery = "SET myVar = 42;";
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -85,7 +85,7 @@ public class AssignmentStatementHandlerTests extends ESTestCase {
                     @Override
                     public void onResponse(Object unused) {
                         // Verify that 'myVar' is set to 42
-                        assertEquals(42, context.getVariable("myVar"));
+                        assertEquals(42.0, context.getVariable("myVar"));
                         latch.countDown();
                     }
 
@@ -110,7 +110,7 @@ public class AssignmentStatementHandlerTests extends ESTestCase {
     // Test 2: Declare a variable and assign a simple float value
     @Test
     public void testDeclareAndAssignFloat() throws InterruptedException {
-        String declareQuery = "DECLARE myVar FLOAT;";
+        String declareQuery = "DECLARE myVar NUMBER;";
         String assignQuery = "SET myVar = 42.5;";
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -184,7 +184,7 @@ public class AssignmentStatementHandlerTests extends ESTestCase {
     // Test 4: Declare a variable and assign the result of an arithmetic operation
     @Test
     public void testDeclareAndAssignArithmeticOperation() throws InterruptedException {
-        String declareQuery = "DECLARE myVar FLOAT;";
+        String declareQuery = "DECLARE myVar NUMBER;";
         String assignQuery = "SET myVar = 5 + 3;";
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -221,7 +221,7 @@ public class AssignmentStatementHandlerTests extends ESTestCase {
     // Test 5: Declare a variable and assign the result of a multiplication operation
     @Test
     public void testDeclareAndAssignMultiplication() throws InterruptedException {
-        String declareQuery = "DECLARE myVar FLOAT;";
+        String declareQuery = "DECLARE myVar NUMBER;";
         String assignQuery = "SET myVar = 6 * 7;";
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -258,8 +258,8 @@ public class AssignmentStatementHandlerTests extends ESTestCase {
     // Test 6: Variable reference assignment (assigning one variable to another)
     @Test
     public void testVariableReferenceAssignment() throws InterruptedException {
-        String declareQuery1 = "DECLARE var1 INT;";
-        String declareQuery2 = "DECLARE var2 INT;";
+        String declareQuery1 = "DECLARE var1 NUMBER;";
+        String declareQuery2 = "DECLARE var2 NUMBER;";
         String assignQuery1 = "SET var1 = 10;";
         String assignQuery2 = "SET var2 = var1;";
 
@@ -282,7 +282,7 @@ public class AssignmentStatementHandlerTests extends ESTestCase {
                                     @Override
                                     public void onResponse(Object unused) {
                                         // Verify that var2 was assigned the value of var1
-                                        assertEquals(10, context.getVariable("var2"));
+                                        assertEquals(10.0, context.getVariable("var2"));
                                         latch.countDown();
                                     }
 
@@ -320,11 +320,11 @@ public class AssignmentStatementHandlerTests extends ESTestCase {
         latch.await();
     }
 
-    // Test 8: Type mismatch error (assigning a float to an INT variable)
+    // New Test: Type mismatch error (assigning a string to a NUMBER variable)
     @Test
-    public void testTypeMismatchError() throws InterruptedException {
-        String declareQuery = "DECLARE myVar INT;";
-        String assignQuery = "SET myVar = 42.5;";
+    public void testNumberAssignmentTypeMismatch() throws InterruptedException {
+        String declareQuery = "DECLARE myVar NUMBER;";
+        String assignQuery = "SET myVar = 'NotANumber';";
 
         CountDownLatch latch = new CountDownLatch(1);
 
@@ -361,7 +361,7 @@ public class AssignmentStatementHandlerTests extends ESTestCase {
     // Test 9: Assigning result of division
     @Test
     public void testDeclareAndAssignDivision() throws InterruptedException {
-        String declareQuery = "DECLARE myVar FLOAT;";
+        String declareQuery = "DECLARE myVar NUMBER;";
         String assignQuery = "SET myVar = 42 / 6;";
 
         CountDownLatch latch = new CountDownLatch(1);

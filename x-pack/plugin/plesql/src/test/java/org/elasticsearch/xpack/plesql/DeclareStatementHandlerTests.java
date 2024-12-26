@@ -59,7 +59,7 @@ public class DeclareStatementHandlerTests extends ESTestCase {
     // Test 1: Declare an INT variable
     @Test
     public void testDeclareIntVariable() throws InterruptedException {
-        String declareQuery = "DECLARE myIntVar INT;";
+        String declareQuery = "DECLARE myIntVar NUMBER;";
         PlEsqlProcedureParser.Declare_statementContext declareContext = parseDeclaration(declareQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -85,7 +85,7 @@ public class DeclareStatementHandlerTests extends ESTestCase {
     // Test 2: Declare a FLOAT variable
     @Test
     public void testDeclareFloatVariable() throws InterruptedException {
-        String declareQuery = "DECLARE myFloatVar FLOAT;";
+        String declareQuery = "DECLARE myFloatVar NUMBER;";
         PlEsqlProcedureParser.Declare_statementContext declareContext = parseDeclaration(declareQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -137,7 +137,7 @@ public class DeclareStatementHandlerTests extends ESTestCase {
     // Test 4: Declare multiple variables
     @Test
     public void testDeclareMultipleVariables() throws InterruptedException {
-        String declareQuery = "DECLARE var1 INT, var2 FLOAT, var3 STRING;";
+        String declareQuery = "DECLARE var1 NUMBER, var2 NUMBER, var3 STRING;";
         PlEsqlProcedureParser.Declare_statementContext declareContext = parseDeclaration(declareQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -179,7 +179,7 @@ public class DeclareStatementHandlerTests extends ESTestCase {
     // Test 6: Declare a variable that's already declared
     @Test
     public void testDeclareExistingVariable() throws InterruptedException {
-        String declareQuery = "DECLARE myVar INT;";
+        String declareQuery = "DECLARE myVar NUMBER;";
         PlEsqlProcedureParser.Declare_statementContext declareContext = parseDeclaration(declareQuery);
 
         CountDownLatch latch = new CountDownLatch(2);
@@ -225,7 +225,7 @@ public class DeclareStatementHandlerTests extends ESTestCase {
     // Test 7: Declare a variable with an initial value (if supported)
     @Test
     public void testDeclareVariableWithInitialValue() throws InterruptedException {
-        String declareQuery = "DECLARE myVar INT = 10;";
+        String declareQuery = "DECLARE myVar NUMBER = 10;";
         PlEsqlProcedureParser.Declare_statementContext declareContext = parseDeclaration(declareQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -235,7 +235,7 @@ public class DeclareStatementHandlerTests extends ESTestCase {
             public void onResponse(Object unused) {
                 // Check if the variable is declared and initialized
                 assertTrue(context.hasVariable("myVar"));
-                assertEquals(10, context.getVariable("myVar"));
+                assertEquals(10.0, context.getVariable("myVar"));
                 latch.countDown();
             }
 
@@ -252,7 +252,7 @@ public class DeclareStatementHandlerTests extends ESTestCase {
     // Test 8: Declare a variable with invalid syntax
     @Test
     public void testDeclareVariableInvalidSyntax() throws InterruptedException {
-        String declareQuery = "DECLARE INT myVar;";  // Invalid syntax
+        String declareQuery = "DECLARE NUMBER myVar;";  // Invalid syntax
         try {
             PlEsqlProcedureParser.Declare_statementContext declareContext = parseDeclaration(declareQuery);
             fail("Expected a syntax error due to unsupported data type");
