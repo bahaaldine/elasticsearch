@@ -75,6 +75,7 @@ public class ExecutionContext {
      */
     public void setVariable(String name, Object value) {
         VariableDefinition varDef = getVariableDefinition(name);
+
         if (varDef != null) {
             varDef.setValue(value);
         } else {

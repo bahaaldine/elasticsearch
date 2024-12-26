@@ -4,10 +4,8 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-
 package org.elasticsearch.xpack.plesql.plugin;
 
-import org.elasticsearch.xpack.plesql.PlEsqlExecutor;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
@@ -22,17 +20,37 @@ import org.elasticsearch.plugins.ActionPlugin;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.rest.RestController;
 import org.elasticsearch.rest.RestHandler;
+import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.plesql.PlEsqlExecutor;
 import org.elasticsearch.xpack.plesql.actions.PlEsqlAction;
 import org.elasticsearch.xpack.plesql.actions.RestPlEsqlAction;
 import org.elasticsearch.xpack.plesql.actions.TransportPlEsqlAction;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-public class PlPlugin extends Plugin implements ActionPlugin {
+public class PlEsqlPlugin extends Plugin implements ActionPlugin {
+    private ThreadPool threadPool;
+    private PlEsqlExecutor plEsqlExecutor;
 
-    private final PlEsqlExecutor plEsqlExecutor = new PlEsqlExecutor();
+    @Override
+    public Collection<?> createComponents(PluginServices services) {
+        this.threadPool = services.threadPool();
+
+        // Initialize your components here
+        // If PlEsqlExecutor needs the ThreadPool or other services, pass them here
+        plEsqlExecutor = new PlEsqlExecutor(threadPool);
+
+        // Return components if any
+        return Collections.emptyList();
+    }
+
+    public ThreadPool getThreadPool() {
+        return threadPool;
+    }
 
     @Override
     public List<RestHandler> getRestHandlers(

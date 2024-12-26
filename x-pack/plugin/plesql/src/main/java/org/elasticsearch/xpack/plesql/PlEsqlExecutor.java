@@ -9,12 +9,20 @@ package org.elasticsearch.xpack.plesql;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 
 public class PlEsqlExecutor {
+
+    private final ThreadPool threadPool;
+
+    public PlEsqlExecutor(ThreadPool threadPool) {
+        this.threadPool = threadPool;
+    }
+
     public String executeProcedure(String procedureText) {
         // Create lexer and parser
         PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(procedureText));
@@ -30,7 +38,7 @@ public class PlEsqlExecutor {
 
         // Create and use the visitor to execute the procedure
         ExecutionContext executionContext = new ExecutionContext();
-        ProcedureExecutor executor = new ProcedureExecutor(executionContext);
+        ProcedureExecutor executor = new ProcedureExecutor(executionContext, this.threadPool);
         executor.visit(context);
 
         return "Procedure executed successlfully";
