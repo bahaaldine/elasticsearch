@@ -10,6 +10,7 @@ package org.elasticsearch.xpack.plesql.handlers;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
+import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 /**
  * The AssignmentStatementHandler class is responsible for handling assignment statements
@@ -45,8 +46,7 @@ public class AssignmentStatementHandler {
             throw new RuntimeException("Variable '" + varName + "' is not declared.");
         }
 
-        // Evaluate the expression asynchronously
-        executor.evaluateExpressionAsync(expression, new ActionListener<Object>() {
+        ActionListener<Object> assignmentListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object value) {
                 try {
@@ -63,7 +63,12 @@ public class AssignmentStatementHandler {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> assigmentListenerLogger = ActionListenerUtils.withLogging(assignmentListener,
+            "AssignmentHandler: " + varName);
+
+        executor.evaluateExpressionAsync(expression, assigmentListenerLogger);
     }
 
     private Object coerceType(Object value, String variableName) {

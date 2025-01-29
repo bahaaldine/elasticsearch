@@ -38,6 +38,10 @@ dependencies {
 
   api "org.antlr:antlr4-runtime:${versions.antlr4}"
   api project(path: xpackModule('mapper-version'))
+
+  compileOnly project(':x-pack:plugin:esql')
+
+
   compileOnly project(path: xpackModule('core'))
 
   testImplementation project(':test:framework')
@@ -49,7 +53,6 @@ configurations {n
 
 dependencies {
   regenerate "org.antlr:antlr4:${versions.antlr4}"
-  // Other dependencies
 }
 
 String grammarPath = 'src/main/java/org/elasticsearch/xpack/plesql/parser'

@@ -74,10 +74,10 @@ ID: [a-zA-Z_][a-zA-Z_0-9]*;
 
 // Comments and Whitespace
 COMMENT
-    : ( '--' ~[\r\n]* | '/*' .*? '*/' ) -> skip
+    : ( '--' ~[\r\n]* | '/*' .*? '*/' ) -> channel(HIDDEN)
     ;
 
-WS: [ \t\r\n]+ -> skip;
+WS : [ \t\r\n]+ -> channel(HIDDEN);
 
 // =======================
 // Parser Rules

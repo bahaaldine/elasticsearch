@@ -12,6 +12,7 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
+import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,7 +47,8 @@ public class TryCatchStatementHandler {
         partitionStatements(ctx, tryStatements, catchStatements, finallyStatements);
 
         // Execute TRY block asynchronously
-        executeStatementsAsync(tryStatements, 0, new ActionListener<Object>() {
+
+        ActionListener<Object> tryCatchListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object tryResult) {
                 if (tryResult instanceof ReturnValue) {
@@ -126,7 +128,12 @@ public class TryCatchStatementHandler {
                     });
                 }
             }
-        });
+        };
+
+        ActionListener<Object> tryCatchLogger = ActionListenerUtils.withLogging(tryCatchListener,
+            "Try-Catch:" + tryStatements );
+
+        executeStatementsAsync(tryStatements, 0, tryCatchListener);
     }
 
     /**
@@ -199,8 +206,8 @@ public class TryCatchStatementHandler {
         }
 
         PlEsqlProcedureParser.StatementContext stmtCtx = stmtCtxList.get(index);
-        // Visit the statement asynchronously
-        executor.visitStatementAsync(stmtCtx, new ActionListener<Object>() {
+
+        ActionListener<Object> executeTryCatchStatementListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
                 if  ( result instanceof ReturnValue ) {
@@ -214,7 +221,13 @@ public class TryCatchStatementHandler {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> executeTryCatchStatementLogger = ActionListenerUtils.withLogging(executeTryCatchStatementListener,
+            "Execute-Try-Catch-Statement: " + stmtCtx.getText());
+
+        // Visit the statement asynchronously
+        executor.visitStatementAsync(stmtCtx, executeTryCatchStatementLogger);
     }
 
     /**
@@ -222,7 +235,8 @@ public class TryCatchStatementHandler {
      */
     private void executeFinallyBlock(List<PlEsqlProcedureParser.StatementContext> finallyStatements, ActionListener<Object> listener) {
         if ( finallyStatements.isEmpty() == false ) {
-            executeStatementsAsync(finallyStatements, 0, new ActionListener<Object>() {
+
+            ActionListener<Object> executeFinallyBlockStatementListener = new ActionListener<Object>() {
                 @Override
                 public void onResponse(Object unused) {
                     listener.onResponse(null);
@@ -232,7 +246,12 @@ public class TryCatchStatementHandler {
                 public void onFailure(Exception e) {
                     listener.onFailure(e);
                 }
-            });
+            };
+
+            ActionListener<Object> executeFinallyBlockStatementLogger = ActionListenerUtils.withLogging(executeFinallyBlockStatementListener,
+                "Execute-Finally-Block: " + finallyStatements);
+
+            executeStatementsAsync(finallyStatements, 0, executeFinallyBlockStatementLogger);
         } else {
             listener.onResponse(null); // No FINALLY block
         }

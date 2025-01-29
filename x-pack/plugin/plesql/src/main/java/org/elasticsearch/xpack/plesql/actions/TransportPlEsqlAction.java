@@ -12,13 +12,19 @@ import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.HandledTransportAction;
 import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.injection.guice.Inject;
+import org.elasticsearch.logging.LogManager;
+import org.elasticsearch.logging.Logger;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.transport.TransportService;
 import org.elasticsearch.xpack.plesql.PlEsqlExecutor;
+import org.elasticsearch.xpack.plesql.handlers.ExecuteStatementHandler;
+import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 
 
 public class TransportPlEsqlAction extends HandledTransportAction<PlEsqlQueryRequest, PlEsqlQueryResponse> {
+
+    private static final Logger LOGGER = LogManager.getLogger(TransportPlEsqlAction.class);
 
     private final PlEsqlExecutor plEsqlExecutor;
 
@@ -30,8 +36,26 @@ public class TransportPlEsqlAction extends HandledTransportAction<PlEsqlQueryReq
 
     @Override
     protected void doExecute(Task task, PlEsqlQueryRequest request, ActionListener<PlEsqlQueryResponse> listener) {
-        String result = plEsqlExecutor.executeProcedure(request.getQuery());
-        PlEsqlQueryResponse response = new PlEsqlQueryResponse(result, RestStatus.OK);
-        listener.onResponse(response);
+        plEsqlExecutor.executeProcedure(request.getQuery(), new ActionListener<>() {
+            @Override
+            public void onResponse(Object result) {
+
+                LOGGER.debug("Return value from the Transport PLESQL action");
+
+                Object finalValue = result;
+                if (result instanceof ReturnValue) {
+                    finalValue = ((ReturnValue) result).getValue();
+                }
+
+                // Build response with local constructor (no IO thrown)
+                PlEsqlQueryResponse response = new PlEsqlQueryResponse(finalValue.toString(), RestStatus.OK);
+                listener.onResponse(response);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
     }
 }

@@ -16,19 +16,8 @@ import org.elasticsearch.rest.RestStatus;
 import java.io.IOException;
 
 public class PlEsqlQueryResponse extends ActionResponse {
-
     private String result;
     private RestStatus status;
-
-    public PlEsqlQueryResponse() {
-        this.result = "";
-        this.status = RestStatus.OK;  // Default values
-    }
-
-    public PlEsqlQueryResponse(String result, RestStatus status) {
-        this.result = result;
-        this.status = status;
-    }
 
     public PlEsqlQueryResponse(StreamInput in) throws IOException {
         super(in);
@@ -36,11 +25,16 @@ public class PlEsqlQueryResponse extends ActionResponse {
         this.status = RestStatus.readFrom(in);
     }
 
+    public PlEsqlQueryResponse(String result, RestStatus status) {
+        this.result = result;
+        this.status = status;
+    }
+
     public String getResult() {
         return result;
     }
 
-    public RestStatus status() {
+    public RestStatus getStatus() {
         return status;
     }
 

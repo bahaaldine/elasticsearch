@@ -6,9 +6,13 @@
  */
 package org.elasticsearch.xpack.plesql;
 
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.CommonTokenStream;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.junit.After;
@@ -33,7 +37,11 @@ public class IntegrationTests {
     public void setup() {
         context = new ExecutionContext();
         threadPool = new TestThreadPool("test-thread-pool");
-        executor = new ProcedureExecutor(context, threadPool);
+        Client mockClient = null; // or mock(Client.class);
+        PlEsqlProcedureLexer lexer =
+            new PlEsqlProcedureLexer(CharStreams.fromString("")); // empty source
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        executor = new ProcedureExecutor(context, threadPool, mockClient, tokens);
     }
 
     @After

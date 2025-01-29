@@ -7,8 +7,12 @@
 
 package org.elasticsearch.xpack.plesql;
 
+import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.core.watcher.actions.Action;
 import org.elasticsearch.xpack.plesql.exceptions.BreakException;
 import org.elasticsearch.xpack.plesql.handlers.AssignmentStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.DeclareStatementHandler;
@@ -23,6 +27,7 @@ import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
+import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +49,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     private final TryCatchStatementHandler tryCatchHandler;
     private final ThrowStatementHandler throwHandler;
     private final ExecuteStatementHandler executeHandler;
+    private final CommonTokenStream tokenStream;
 
     /**
      * Constructs a ProcedureExecutor with the given execution context and thread pool.
@@ -52,10 +58,11 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
      * @param threadPool The thread pool for executing asynchronous tasks.
      */
     @SuppressWarnings("this-escape")
-    public ProcedureExecutor(ExecutionContext context, ThreadPool threadPool) {
+    public ProcedureExecutor(ExecutionContext context, ThreadPool threadPool
+        , Client client, CommonTokenStream tokenStream) {
         this.context = context;
         this.threadPool = threadPool;
-        this.executeHandler = new ExecuteStatementHandler(this);
+        this.executeHandler = new ExecuteStatementHandler(this, client);
         this.assignmentHandler = new AssignmentStatementHandler(this);
         this.declareHandler = new DeclareStatementHandler(this);
         this.ifHandler = new IfStatementHandler(this);
@@ -63,6 +70,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         this.functionDefHandler = new FunctionDefinitionHandler(this);
         this.tryCatchHandler = new TryCatchStatementHandler(this);
         this.throwHandler = new ThrowStatementHandler(this);
+        this.tokenStream = tokenStream;
     }
 
     /**
@@ -81,6 +89,14 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
      */
     public ExecutionContext getContext() {
         return context;
+    }
+    /**
+     * Retrieves the raw text from the context
+     *
+     * @return The raw text from the context
+     */
+    public String getRawText(ParserRuleContext ctx) {
+        return tokenStream.getText(ctx);
     }
 
     /**
@@ -112,8 +128,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
      */
     @Override
     public Object visitProcedure(PlEsqlProcedureParser.ProcedureContext ctx) {
-        // Optionally start asynchronous execution without external listener
-        visitProcedureAsync(ctx, new ActionListener<>() {
+
+        ActionListener<Object> visitProcedureListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
                 // Execution completed successfully
@@ -123,7 +139,12 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             public void onFailure(Exception e) {
                 // Handle execution error
             }
-        });
+        };
+
+        ActionListener<Object> visitProcedureLogger = ActionListenerUtils.withLogging(visitProcedureListener,
+            "Visit-Procedure: " + ctx.getText());
+
+        visitProcedureAsync(ctx, visitProcedureLogger);
         return null; // Return immediately as execution is asynchronous
     }
 
@@ -147,8 +168,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
 
         PlEsqlProcedureParser.StatementContext statement = statements.get(index);
 
-        // Visit the statement asynchronously
-        visitStatementAsync(statement, new ActionListener<>() {
+        ActionListener<Object> procedureExecutorExecuteStatementListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object o) {
                 if (o instanceof ReturnValue) {
@@ -167,7 +187,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                     listener.onFailure(e);
                 }
             }
-        });
+        };
+
+        ActionListener<Object> procedureExecutorExecuteStatementLogger =
+            ActionListenerUtils.withLogging(procedureExecutorExecuteStatementListener,
+            "WhileLoop-body");
+
+        visitStatementAsync(statement, procedureExecutorExecuteStatementLogger);
     }
 
     /**
@@ -197,7 +223,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             listener.onFailure(new BreakException("Break encountered"));
         } else if (ctx.expression_statement() != null) {
             // Evaluate the expression asynchronously but ignore the result
-            evaluateExpressionAsync(ctx.expression_statement().expression(), new ActionListener<>() {
+            ActionListener<Object> expressionEvalListener = new ActionListener<Object>() {
                 @Override
                 public void onResponse(Object value) {
                     listener.onResponse(value);
@@ -207,10 +233,15 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                 public void onFailure(Exception e) {
                     listener.onFailure(e);
                 }
-            });
+            };
+
+            ActionListener<Object> expressionEvalLogger = ActionListenerUtils.withLogging(expressionEvalListener,
+                "Expression-Eval:" + ctx.expression_statement().expression());
+
+            evaluateExpressionAsync(ctx.expression_statement().expression(), expressionEvalLogger);
         } else if (ctx.function_call_statement() != null) {
             // Handle function call statements
-            visitFunctionCallAsync(ctx.function_call_statement().function_call(), new ActionListener<>() {
+            ActionListener<Object> functionCallListener= new ActionListener<Object>() {
                 @Override
                 public void onResponse(Object result) {
                     listener.onResponse(null); // Function call completed
@@ -220,7 +251,12 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                 public void onFailure(Exception e) {
                     listener.onFailure(e);
                 }
-            });
+            };
+
+            ActionListener<Object> functionCallLogger = ActionListenerUtils.withLogging(functionCallListener,
+                "Function-Call: " + ctx.function_call_statement().function_call());
+
+            visitFunctionCallAsync(ctx.function_call_statement().function_call(), functionCallLogger);
         } else {
             listener.onResponse(null);
         }
@@ -230,7 +266,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
      * Handles return statements asynchronously.
      */
     private void visitReturn_statementAsync(PlEsqlProcedureParser.Return_statementContext ctx, ActionListener<Object> listener) {
-        evaluateExpressionAsync(ctx.expression(), new ActionListener<>() {
+        ActionListener<Object> visitReturnStatementListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object value) {
                 listener.onResponse(new ReturnValue(value)); // Signal return value
@@ -240,7 +276,12 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> visitReturnStatementLogger = ActionListenerUtils.withLogging(visitReturnStatementListener,
+            "Visit-Return-Statement: " + ctx.expression());
+
+        evaluateExpressionAsync(ctx.expression(), visitReturnStatementLogger );
     }
 
     // =======================
@@ -282,7 +323,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             return;
         }
 
-        evaluateLogicalAndExpressionAsync(operands.get(index), new ActionListener<>() {
+        ActionListener<Object> evaluateLogicalOrOperandsAsyncListener = new ActionListener<>() {
             @Override
             public void onResponse(Object result) {
                 boolean booleanResult = toBoolean(result);
@@ -298,7 +339,12 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> evaluateLogicalOrOperandsAsyncLogger = ActionListenerUtils.withLogging(evaluateLogicalOrOperandsAsyncListener,
+            "Evaluate-Logical-Or-Operands: " + operands.get(index));
+
+        evaluateLogicalAndExpressionAsync(operands.get(index), evaluateLogicalOrOperandsAsyncLogger);
     }
 
     /**
@@ -325,7 +371,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             return;
         }
 
-        evaluateEqualityExpressionAsync(operands.get(index), new ActionListener<>() {
+        ActionListener<Object> evaluateLogicalAndOperandsAsyncListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
                 boolean booleanResult = toBoolean(result);
@@ -341,7 +387,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> evaluateLogicalAndOperandsAsyncLogger =
+            ActionListenerUtils.withLogging(evaluateLogicalAndOperandsAsyncListener,
+            "Evaluate-Logical-And-Operands: " + operands.get(index));
+
+        evaluateEqualityExpressionAsync(operands.get(index), evaluateLogicalAndOperandsAsyncLogger);
     }
 
     /**
@@ -359,11 +411,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             evaluateRelationalExpressionAsync(ctx.relationalExpression(0), listener);
         } else {
             // Evaluate both operands asynchronously
-            evaluateRelationalExpressionAsync(ctx.relationalExpression(0), new ActionListener<>() {
+
+            ActionListener<Object> evaluateLeftOperandListener = new ActionListener<Object>() {
                 @Override
                 public void onResponse(Object leftResult) {
                     System.out.println("Left Expression :  " + leftResult);
-                    evaluateRelationalExpressionAsync(ctx.relationalExpression(1), new ActionListener<>() {
+
+                    ActionListener<Object> evaluateRightOperandListener = new ActionListener<Object>() {
                         @Override
                         public void onResponse(Object rightResult) {
                             String operator = ctx.getChild(1).getText();
@@ -378,7 +432,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                                     case "=":
                                         result = leftDouble == rightDouble;
 
-                                        System.out.println("Evaluating EqualityExpression: " + leftDouble + " " + operator + " " + rightDouble);
+                                        System.out.println("Evaluating EqualityExpression: " + leftDouble + " " + operator + " "
+                                            + rightDouble);
                                         System.out.println("       Result:  " + result);
 
                                         break;
@@ -400,14 +455,25 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                         public void onFailure(Exception e) {
                             listener.onFailure(e);
                         }
-                    });
+                    };
+
+                    ActionListener<Object> evaluateRightOperandLogger =
+                        ActionListenerUtils.withLogging(evaluateRightOperandListener,
+                            "Evaluate-Logical-And-Operands: " + ctx.relationalExpression(1));
+
+                    evaluateRelationalExpressionAsync(ctx.relationalExpression(1), evaluateRightOperandLogger);
                 }
 
                 @Override
                 public void onFailure(Exception e) {
                     listener.onFailure(e);
                 }
-            });
+            };
+
+            ActionListener<Object> evaluateLeftOperandLgogger =
+                ActionListenerUtils.withLogging(evaluateLeftOperandListener,
+                    "Evaluate-Left-Operand: " + ctx.relationalExpression(0));
+            evaluateRelationalExpressionAsync(ctx.relationalExpression(0), evaluateLeftOperandLgogger);
         }
     }
 
@@ -420,10 +486,12 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             evaluateAdditiveExpressionAsync(ctx.additiveExpression(0), listener);
         } else {
             // Evaluate both operands
-            evaluateAdditiveExpressionAsync(ctx.additiveExpression(0), new ActionListener<>() {
+
+            ActionListener<Object> evaluateLeftOperandListener = new ActionListener<>() {
                 @Override
                 public void onResponse(Object leftResult) {
-                    evaluateAdditiveExpressionAsync(ctx.additiveExpression(1), new ActionListener<>() {
+
+                    ActionListener<Object> evaluateRightOperandListener = new ActionListener<>() {
                         @Override
                         public void onResponse(Object rightResult) {
                             String operator = ctx.getChild(1).getText();
@@ -458,14 +526,24 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                         public void onFailure(Exception e) {
                             listener.onFailure(e);
                         }
-                    });
+                    };
+
+                    ActionListener<Object> evaluateRightOperandLogger =
+                        ActionListenerUtils.withLogging(evaluateRightOperandListener,
+                            "Evaluate-Additive-Expression-Right-Operand: " + ctx.additiveExpression(1));
+                    evaluateAdditiveExpressionAsync(ctx.additiveExpression(1), evaluateRightOperandLogger);
                 }
 
                 @Override
                 public void onFailure(Exception e) {
                     listener.onFailure(e);
                 }
-            });
+            };
+
+            ActionListener<Object> evaluateLeftOperandLogger =
+                ActionListenerUtils.withLogging(evaluateLeftOperandListener,
+                    "Evaluate-Additive-Expression-Left-Operand: " + ctx.additiveExpression(0));
+            evaluateAdditiveExpressionAsync(ctx.additiveExpression(0), evaluateLeftOperandLogger);
         }
     }
 
@@ -479,7 +557,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         } else {
             // Evaluate operands sequentially with accumulated value
             // Initialize with the first operand
-            evaluateMultiplicativeExpressionAsync(ctx.multiplicativeExpression(0), new ActionListener<>() {
+            ActionListener<Object> evaluateOperandListener = new ActionListener<>() {
                 @Override
                 public void onResponse(Object initialValue) {
                     evaluateAdditiveOperandsAsync(ctx, 1, initialValue, listener);
@@ -489,7 +567,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                 public void onFailure(Exception e) {
                     listener.onFailure(e);
                 }
-            });
+            };
+
+            ActionListener<Object> evaluateOperandLogger =
+                ActionListenerUtils.withLogging(evaluateOperandListener,
+                    "Evaluate-Additive-Expression: " + ctx.multiplicativeExpression(0));
+
+            evaluateMultiplicativeExpressionAsync(ctx.multiplicativeExpression(0), evaluateOperandLogger);
         }
     }
 
@@ -511,7 +595,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         PlEsqlProcedureParser.MultiplicativeExpressionContext currentExpr = ctx.multiplicativeExpression(index);
         String operator = ctx.getChild(2 * index - 1).getText(); // Correct operator extraction
 
-        evaluateMultiplicativeExpressionAsync(currentExpr, new ActionListener<>() {
+        ActionListener<Object> evaluateAdditiveOperand = new ActionListener<>() {
             @Override
             public void onResponse(Object rightValue) {
                 try {
@@ -543,7 +627,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> evaluateOperandLogger =
+            ActionListenerUtils.withLogging(evaluateAdditiveOperand,
+                "Evaluate-Additive-Operands: " + ctx.multiplicativeExpression(0));
+
+        evaluateMultiplicativeExpressionAsync(currentExpr, evaluateOperandLogger);
     }
 
     /**
@@ -557,7 +647,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         } else {
             // Evaluate operands sequentially with accumulated value
             // Initialize with the first operand
-            evaluateUnaryExpressionAsync(ctx.unaryExpr(0), new ActionListener<>() {
+
+            ActionListener<Object> evalMultiplicativeExpressionListener = new ActionListener<>() {
                 @Override
                 public void onResponse(Object initialValue) {
                     evaluateMultiplicativeOperandsAsync(ctx, 1, initialValue, listener);
@@ -567,7 +658,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                 public void onFailure(Exception e) {
                     listener.onFailure(e);
                 }
-            });
+            };
+
+            ActionListener<Object> evalMultiplicativeExpressionLogger =
+                ActionListenerUtils.withLogging(evalMultiplicativeExpressionListener,
+                    "Evaluate-Multiplicative-Expression: " + ctx.unaryExpr(0));
+
+            evaluateUnaryExpressionAsync(ctx.unaryExpr(0), evalMultiplicativeExpressionLogger);
         }
     }
 
@@ -584,7 +681,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         PlEsqlProcedureParser.UnaryExprContext currentExpr = ctx.unaryExpr(index);
         String operator = ctx.getChild(2 * index - 1).getText(); // Adjusted to correctly fetch the operator
 
-        evaluateUnaryExpressionAsync(currentExpr, new ActionListener<>() {
+        ActionListener<Object> evalMultiplicativeRightOperandListener = new ActionListener<>() {
             @Override
             public void onResponse(Object rightValue) {
                 try {
@@ -617,7 +714,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> evalMultiplicativeRightOperandLogger =
+            ActionListenerUtils.withLogging(evalMultiplicativeRightOperandListener,
+                "Evaluate-Multiplicative-Right-Operand: " + currentExpr);
+
+        evaluateUnaryExpressionAsync(currentExpr, evalMultiplicativeRightOperandLogger);
     }
 
     /**
@@ -630,7 +733,9 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         } else if (ctx.unaryExpr() != null) {
             // Unary operator
             String operator = ctx.getChild(0).getText();
-            evaluateUnaryExpressionAsync(ctx.unaryExpr(), new ActionListener<>() {
+
+
+            ActionListener<Object> evalUnaryExpressionListener = new ActionListener<>() {
                 @SuppressWarnings("checkstyle:DescendantToken")
                 @Override
                 public void onResponse(Object result) {
@@ -663,7 +768,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                 public void onFailure(Exception e) {
                     listener.onFailure(e);
                 }
-            });
+            };
+
+            ActionListener<Object> evalUnaryExpressionLogger =
+                ActionListenerUtils.withLogging(evalUnaryExpressionListener,
+                    "Evaluate-Unary-Expression: " + ctx.unaryExpr());
+
+            evaluateUnaryExpressionAsync(ctx.unaryExpr(), evalUnaryExpressionLogger);
         } else {
             listener.onFailure(new RuntimeException("Unsupported unary expression: " + ctx.getText()));
         }
@@ -723,7 +834,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     public void evaluateConditionAsync(PlEsqlProcedureParser.ConditionContext ctx, ActionListener<Object> listener) {
         if (ctx.expression() != null) {
             System.out.println("Expression : " + ctx.expression().getText());
-            evaluateExpressionAsync(ctx.expression(), new ActionListener<>() {
+
+            ActionListener<Object> evalConditionListener = new ActionListener<>() {
                 @Override
                 public void onResponse(Object result) {
                     if (result instanceof Boolean) {
@@ -737,7 +849,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                 public void onFailure(Exception e) {
                     listener.onFailure(e);
                 }
-            });
+            };
+
+            ActionListener<Object> evalConditionLogger =
+                ActionListenerUtils.withLogging(evalConditionListener,
+                    "Evaluate-Condition: " + ctx.expression());
+
+            evaluateExpressionAsync(ctx.expression(), evalConditionLogger);
         } else {
             listener.onFailure(new RuntimeException("Unsupported condition: " + ctx.getText()));
         }
@@ -767,7 +885,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         List<PlEsqlProcedureParser.ExpressionContext> argContexts =
             ctx.argument_list() != null ? ctx.argument_list().expression() : new ArrayList<>();
 
-        evaluateArgumentsAsync(argContexts, new ActionListener<>() {
+        ActionListener<List<Object>> visitFunctionCallListener = new ActionListener<>() {
             @Override
             public void onResponse(List<Object> argValues) {
                 // Execute the function asynchronously
@@ -788,7 +906,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<List<Object>> visitFunctionCallLogger =
+            ActionListenerUtils.withLogging(visitFunctionCallListener,
+                "Visit-Function-Call: " + argContexts);
+
+        evaluateArgumentsAsync(argContexts, visitFunctionCallLogger);
     }
 
     /**
@@ -806,7 +930,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             return;
         }
 
-        evaluateExpressionAsync(argContexts.get(index), new ActionListener<>() {
+        ActionListener<Object> evalArgumentListener = new ActionListener<>() {
             @Override
             public void onResponse(Object value) {
                 argValues.add(value);
@@ -817,7 +941,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> evalArgumentLogger =
+            ActionListenerUtils.withLogging(evalArgumentListener,
+                "Eval-Argument: " + argContexts.get(index));
+
+        evaluateExpressionAsync(argContexts.get(index), evalArgumentLogger);
     }
 
     // =======================

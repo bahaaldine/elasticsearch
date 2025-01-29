@@ -13,6 +13,7 @@ import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.exceptions.BreakException;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
+import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.List;
 
@@ -40,8 +41,8 @@ public class IfStatementHandler {
      */
     public void handleAsync(PlEsqlProcedureParser.If_statementContext ctx, ActionListener<Object> listener) {
         System.out.println(" Handling IF statement. " + ctx.condition().getText() );
-        // Start by evaluating the main IF condition asynchronously
-        executor.evaluateConditionAsync(ctx.condition(), new ActionListener<Object>() {
+
+        ActionListener<Object> ifStatementListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object conditionResult) {
                 System.out.println("Condition result: " + conditionResult);
@@ -61,7 +62,13 @@ public class IfStatementHandler {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> ifStatementLogger = ActionListenerUtils.withLogging(ifStatementListener,
+            "If-Statement " + ctx.condition() );
+
+        // Start by evaluating the main IF condition asynchronously
+        executor.evaluateConditionAsync(ctx.condition(), ifStatementLogger);
     }
 
     /**
@@ -88,8 +95,8 @@ public class IfStatementHandler {
         }
 
         PlEsqlProcedureParser.Elseif_blockContext elseifBlock = elseifBlocks.get(index);
-        // Evaluate the ELSEIF condition asynchronously
-        executor.evaluateConditionAsync(elseifBlock.condition(), new ActionListener<Object>() {
+
+        ActionListener<Object> elseIfStatementListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object elseifResult) {
                 if ( elseifResult instanceof Boolean && (Boolean) elseifResult ) {
@@ -106,7 +113,13 @@ public class IfStatementHandler {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> elseIfStatementLogger = ActionListenerUtils.withLogging(elseIfStatementListener,
+            "Else-If-Statement: " + elseifBlock.condition());
+
+        // Evaluate the ELSEIF condition asynchronously
+        executor.evaluateConditionAsync(elseifBlock.condition(), elseIfStatementLogger);
     }
 
     /**
@@ -124,8 +137,8 @@ public class IfStatementHandler {
         }
 
         PlEsqlProcedureParser.StatementContext stmtCtx = stmtCtxList.get(index);
-        // Visit the statement asynchronously
-        executor.visitStatementAsync(stmtCtx, new ActionListener<Object>() {
+
+        ActionListener<Object> ifConditionStatementExecutionListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object o) {
                 if (o instanceof ReturnValue) {
@@ -147,6 +160,12 @@ public class IfStatementHandler {
                     listener.onFailure(e);
                 }
             }
-        });
+        };
+
+        ActionListener<Object> ifConditionStatementExecutionLogger = ActionListenerUtils.withLogging(ifConditionStatementExecutionListener,
+            "If-Condition-Statement-Execution: " + stmtCtx.getText() );
+
+        // Visit the statement asynchronously
+        executor.visitStatementAsync(stmtCtx, ifConditionStatementExecutionLogger);
     }
 }

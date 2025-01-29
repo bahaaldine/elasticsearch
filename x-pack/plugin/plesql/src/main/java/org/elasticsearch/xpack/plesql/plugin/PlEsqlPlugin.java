@@ -8,6 +8,7 @@ package org.elasticsearch.xpack.plesql.plugin;
 
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionResponse;
+import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
@@ -16,6 +17,8 @@ import org.elasticsearch.common.settings.IndexScopedSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.settings.SettingsFilter;
 import org.elasticsearch.features.NodeFeature;
+import org.elasticsearch.logging.LogManager;
+import org.elasticsearch.logging.Logger;
 import org.elasticsearch.plugins.ActionPlugin;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.rest.RestController;
@@ -36,13 +39,16 @@ public class PlEsqlPlugin extends Plugin implements ActionPlugin {
     private ThreadPool threadPool;
     private PlEsqlExecutor plEsqlExecutor;
 
+    private static final Logger LOGGER = LogManager.getLogger(PlEsqlPlugin.class);
+
     @Override
     public Collection<?> createComponents(PluginServices services) {
         this.threadPool = services.threadPool();
+        Client client = services.client();
 
         // Initialize your components here
         // If PlEsqlExecutor needs the ThreadPool or other services, pass them here
-        plEsqlExecutor = new PlEsqlExecutor(threadPool);
+        plEsqlExecutor = new PlEsqlExecutor(threadPool, client);
 
         // Return components if any
         return Collections.emptyList();

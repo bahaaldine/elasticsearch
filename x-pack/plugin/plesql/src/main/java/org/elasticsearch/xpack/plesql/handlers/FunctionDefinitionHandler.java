@@ -6,6 +6,7 @@ import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
+import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -134,8 +135,7 @@ public class FunctionDefinitionHandler {
         ExecutionContext originalContext = executor.getContext();
         executor.setContext(functionContext);
 
-        // Execute the function body asynchronously
-        executor.executeStatementsAsync(function.getBody(), 0, new ActionListener<Object>() {
+        ActionListener<Object> functionBodyListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
                 if (result instanceof ReturnValue) {
@@ -160,7 +160,13 @@ public class FunctionDefinitionHandler {
                     listener.onFailure(e);
                 }
             }
-        });
+        };
+
+        ActionListener<Object> functionBodyLogger = ActionListenerUtils.withLogging(functionBodyListener,
+            "Function-Body: " + function.getBody() );
+
+        // Execute the function body asynchronously
+        executor.executeStatementsAsync(function.getBody(), 0, functionBodyLogger);
     }
 
     /**

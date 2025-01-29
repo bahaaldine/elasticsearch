@@ -9,38 +9,82 @@ package org.elasticsearch.xpack.plesql;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.client.internal.Client;
+import org.elasticsearch.injection.guice.Inject;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
+/**
+ * Provides synchronous and asynchronous methods for executing PL|ESQL procedures.
+ */
 public class PlEsqlExecutor {
 
     private final ThreadPool threadPool;
+    private final Client client;
 
-    public PlEsqlExecutor(ThreadPool threadPool) {
+    @Inject
+    public PlEsqlExecutor(ThreadPool threadPool, Client client) {
         this.threadPool = threadPool;
+        this.client = client;
     }
 
-    public String executeProcedure(String procedureText) {
-        // Create lexer and parser
-        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(procedureText));
-        CommonTokenStream tokens = new CommonTokenStream(lexer);
-        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
+    /**
+     * Asynchronous procedure execution.
+     * Provides the "result" string to the listener once done.
+     */
+    public void executeProcedure(String procedureText, ActionListener<Object> listener) {
+        threadPool.generic().execute(() -> {
+            try {
+                // 1) Parse input
+                PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(procedureText));
+                CommonTokenStream tokens = new CommonTokenStream(lexer);
+                PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
 
-        // Add error listeners if needed
-        parser.removeErrorListeners();
-        parser.addErrorListener(new PlEsqlErrorListener());
+                parser.removeErrorListeners();
+                parser.addErrorListener(new PlEsqlErrorListener());
 
-        // Parse the procedure
-        PlEsqlProcedureParser.ProcedureContext context = parser.procedure();
+                PlEsqlProcedureParser.ProcedureContext ctx = parser.procedure();
 
-        // Create and use the visitor to execute the procedure
-        ExecutionContext executionContext = new ExecutionContext();
-        ProcedureExecutor executor = new ProcedureExecutor(executionContext, this.threadPool);
-        executor.visit(context);
+                // 2) Build executor
+                ExecutionContext executionContext = new ExecutionContext();
+                ProcedureExecutor procedureExecutor = new ProcedureExecutor(executionContext, threadPool, client, tokens);
 
-        return "Procedure executed successlfully";
+                ActionListener<Object> executeProcedureListener = new ActionListener<Object>() {
+                    @Override
+                    public void onResponse(Object result) {
+                        // Possibly the result can be a string or some other object
+                        if (result == null) {
+                            // You might interpret that as "no RETURN found" or "ok"
+                            listener.onResponse("Procedure executed. (no return?)");
+                        } else if (result instanceof String s) {
+                            listener.onResponse(s);
+                        } else {
+                            // Fallback
+                            listener.onResponse(String.valueOf(result));
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        listener.onResponse(e);
+                    }
+                };
+
+                ActionListener<Object> loggingListener =
+                    ActionListenerUtils.withLogging(executeProcedureListener, "ExecutePLESQLProcedure-" + procedureText);
+
+                // 3) Visit the parse tree asynchronously
+                procedureExecutor.visitProcedureAsync(ctx, loggingListener);
+
+            } catch (Exception parseOrInitError) {
+                // If an exception is thrown during parse or init
+                listener.onFailure(parseOrInitError);
+            }
+        });
     }
 }

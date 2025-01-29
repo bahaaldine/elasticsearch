@@ -10,6 +10,7 @@ import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -35,7 +36,11 @@ public class IfStatementHandlerTests extends ESTestCase {
         super.setUp();
         context = new ExecutionContext();
         threadPool = new TestThreadPool("test-thread-pool");
-        executor = new ProcedureExecutor(context, threadPool);
+        Client mockClient = null; // or mock(Client.class);
+        PlEsqlProcedureLexer lexer =
+            new PlEsqlProcedureLexer(CharStreams.fromString("")); // empty source
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        executor = new ProcedureExecutor(context, threadPool, mockClient, tokens);
     }
 
     @Override

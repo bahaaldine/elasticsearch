@@ -84,6 +84,7 @@ if [ -f "${ES_CONFIG_FILE}" ]; then
   echo "xpack.security.transport.ssl.enabled: false" >> "${ES_CONFIG_FILE}"
   echo "xpack.security.http.ssl.enabled: false" >> "${ES_CONFIG_FILE}"
   echo "xpack.security.enabled: false" >> "${ES_CONFIG_FILE}"
+  echo "xpack.ml.enabled: false" >> "${ES_CONFIG_FILE}"
 else
   echo "Error: elasticsearch.yml file not found!"
   cleanup

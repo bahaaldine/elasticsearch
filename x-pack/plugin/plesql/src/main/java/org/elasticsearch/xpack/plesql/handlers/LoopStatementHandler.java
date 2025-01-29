@@ -12,6 +12,7 @@ import org.elasticsearch.xpack.plesql.exceptions.BreakException;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
+import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.List;
 
@@ -52,8 +53,7 @@ public class LoopStatementHandler {
     private void handleForLoopAsync(PlEsqlProcedureParser.Loop_statementContext ctx, ActionListener<Object> listener) {
         String loopVarName = ctx.ID().getText();
 
-        // Evaluate start and end expressions asynchronously
-        executor.evaluateExpressionAsync(ctx.expression(0), new ActionListener<Object>() {
+        ActionListener<Object> forLoopListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object startObj) {
                 executor.evaluateExpressionAsync(ctx.expression(1), new ActionListener<Object>() {
@@ -88,7 +88,13 @@ public class LoopStatementHandler {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> forLoopLogger = ActionListenerUtils.withLogging(forLoopListener,
+            "For-Loop:" + ctx.getText() );
+
+        // Evaluate start and end expressions asynchronously
+        executor.evaluateExpressionAsync(ctx.expression(0), forLoopLogger);
     }
 
     /**
@@ -117,8 +123,7 @@ public class LoopStatementHandler {
 
         executor.getContext().setVariable(loopVarName, Integer.valueOf(currentValue));
 
-        // Execute loop body statements
-        executeStatementsAsync(statements, 0, new ActionListener<Object>() {
+        ActionListener<Object> executeForLoopIterationListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object o) {
                 if (o instanceof ReturnValue) {
@@ -139,7 +144,13 @@ public class LoopStatementHandler {
                     listener.onFailure(e);
                 }
             }
-        });
+        };
+
+        ActionListener<Object> executeForLoopIterationLogger = ActionListenerUtils.withLogging(executeForLoopIterationListener,
+            "For-Loop-Iteration-Execution: " + statements );
+
+        // Execute loop body statements
+        executeStatementsAsync(statements, 0, executeForLoopIterationLogger);
     }
 
     /**
@@ -151,10 +162,11 @@ public class LoopStatementHandler {
     }
 
     private void doWhileIteration(PlEsqlProcedureParser.Loop_statementContext ctx, ActionListener<Object> listener) {
-        executor.evaluateConditionAsync(ctx.condition(), new ActionListener<Object>() {
+
+        ActionListener<Object> doWhileIterationListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object conditionResult) {
-                if (!(conditionResult instanceof Boolean)) {
+                if ( (conditionResult instanceof Boolean) == false ) {
                     listener.onFailure(new RuntimeException("WHILE condition must be boolean."));
                     return;
                 }
@@ -197,7 +209,12 @@ public class LoopStatementHandler {
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
-        });
+        };
+
+        ActionListener<Object> doWhileIterationLogger = ActionListenerUtils.withLogging(doWhileIterationListener,
+            "Do-While-Iteration:" + ctx.getText() );
+
+        executor.evaluateConditionAsync(ctx.condition(), doWhileIterationLogger);
     }
 
     /**
@@ -211,8 +228,8 @@ public class LoopStatementHandler {
         }
 
         PlEsqlProcedureParser.StatementContext stmtCtx = stmtCtxList.get(index);
-        // Visit the statement asynchronously
-        executor.visitStatementAsync(stmtCtx, new ActionListener<Object>() {
+
+        ActionListener<Object> executeLoopStatementListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
                 if (result instanceof ReturnValue) {
@@ -233,6 +250,12 @@ public class LoopStatementHandler {
                     listener.onFailure(e);
                 }
             }
-        });
+        };
+
+        ActionListener<Object> executeLoopStatementLogger = ActionListenerUtils.withLogging(executeLoopStatementListener,
+            "Execute-Loop-Statement:" + stmtCtx.getText());
+
+        // Visit the statement asynchronously
+        executor.visitStatementAsync(stmtCtx, executeLoopStatementLogger);
     }
 }

@@ -10,6 +10,7 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.PLESQLDataType;
+import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.List;
 
@@ -65,8 +66,7 @@ public class DeclareStatementHandler {
             return;
         }
 
-        // Initialize variable with the expression's value
-        executor.evaluateExpressionAsync(varCtx.expression(), new ActionListener<Object>() {
+        ActionListener<Object> variableDeclarationListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object value) {
                 executor.getContext().setVariable(varName, value);
@@ -84,6 +84,12 @@ public class DeclareStatementHandler {
                     listener.onFailure(e);
                 }
             }
-        });
+        };
+
+        ActionListener<Object> variableDeclarationLogger = ActionListenerUtils.withLogging(variableDeclarationListener,
+            "Variable-Declaration: " + varName + " - " + varType);
+
+        // Initialize variable with the expression's value
+        executor.evaluateExpressionAsync(varCtx.expression(), variableDeclarationListener);
     }
 }
