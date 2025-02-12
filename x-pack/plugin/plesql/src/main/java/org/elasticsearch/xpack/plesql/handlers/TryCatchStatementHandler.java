@@ -130,8 +130,8 @@ public class TryCatchStatementHandler {
             }
         };
 
-        ActionListener<Object> tryCatchLogger = ActionListenerUtils.withLogging(tryCatchListener,
-            "Try-Catch:" + tryStatements );
+        ActionListener<Object> tryCatchLogger = ActionListenerUtils.withLogging(tryCatchListener, this.getClass().getName(),
+                "Try-Catch:" + tryStatements);
 
         executeStatementsAsync(tryStatements, 0, tryCatchListener);
     }
@@ -224,7 +224,8 @@ public class TryCatchStatementHandler {
         };
 
         ActionListener<Object> executeTryCatchStatementLogger = ActionListenerUtils.withLogging(executeTryCatchStatementListener,
-            "Execute-Try-Catch-Statement: " + stmtCtx.getText());
+            this.getClass().getName(),
+                "Execute-Try-Catch-Statement: " + stmtCtx.getText());
 
         // Visit the statement asynchronously
         executor.visitStatementAsync(stmtCtx, executeTryCatchStatementLogger);
@@ -248,8 +249,9 @@ public class TryCatchStatementHandler {
                 }
             };
 
-            ActionListener<Object> executeFinallyBlockStatementLogger = ActionListenerUtils.withLogging(executeFinallyBlockStatementListener,
-                "Execute-Finally-Block: " + finallyStatements);
+            ActionListener<Object> executeFinallyBlockStatementLogger = ActionListenerUtils.withLogging(executeFinallyBlockStatementListener
+                , this.getClass().getName(),
+                    "Execute-Finally-Block: " + finallyStatements);
 
             executeStatementsAsync(finallyStatements, 0, executeFinallyBlockStatementLogger);
         } else {

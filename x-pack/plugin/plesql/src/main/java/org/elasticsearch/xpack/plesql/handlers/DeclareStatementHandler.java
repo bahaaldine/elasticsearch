@@ -87,6 +87,7 @@ public class DeclareStatementHandler {
         };
 
         ActionListener<Object> variableDeclarationLogger = ActionListenerUtils.withLogging(variableDeclarationListener,
+            this.getClass().getName(),
             "Variable-Declaration: " + varName + " - " + varType);
 
         // Initialize variable with the expression's value

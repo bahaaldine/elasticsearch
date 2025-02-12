@@ -76,7 +76,8 @@ public class PlEsqlExecutor {
                 };
 
                 ActionListener<Object> loggingListener =
-                    ActionListenerUtils.withLogging(executeProcedureListener, "ExecutePLESQLProcedure-" + procedureText);
+                    ActionListenerUtils.withLogging(executeProcedureListener,
+                        this.getClass().getName(), "ExecutePLESQLProcedure-" + procedureText);
 
                 // 3) Visit the parse tree asynchronously
                 procedureExecutor.visitProcedureAsync(ctx, loggingListener);

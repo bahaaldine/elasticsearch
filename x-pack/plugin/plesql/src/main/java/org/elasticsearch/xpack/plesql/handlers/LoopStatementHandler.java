@@ -90,8 +90,8 @@ public class LoopStatementHandler {
             }
         };
 
-        ActionListener<Object> forLoopLogger = ActionListenerUtils.withLogging(forLoopListener,
-            "For-Loop:" + ctx.getText() );
+        ActionListener<Object> forLoopLogger = ActionListenerUtils.withLogging(forLoopListener, this.getClass().getName(),
+                "For-Loop:" + ctx.getText());
 
         // Evaluate start and end expressions asynchronously
         executor.evaluateExpressionAsync(ctx.expression(0), forLoopLogger);
@@ -147,7 +147,8 @@ public class LoopStatementHandler {
         };
 
         ActionListener<Object> executeForLoopIterationLogger = ActionListenerUtils.withLogging(executeForLoopIterationListener,
-            "For-Loop-Iteration-Execution: " + statements );
+            this.getClass().getName(),
+                "For-Loop-Iteration-Execution: " + statements);
 
         // Execute loop body statements
         executeStatementsAsync(statements, 0, executeForLoopIterationLogger);
@@ -212,7 +213,8 @@ public class LoopStatementHandler {
         };
 
         ActionListener<Object> doWhileIterationLogger = ActionListenerUtils.withLogging(doWhileIterationListener,
-            "Do-While-Iteration:" + ctx.getText() );
+            this.getClass().getName(),
+                "Do-While-Iteration:" + ctx.getText());
 
         executor.evaluateConditionAsync(ctx.condition(), doWhileIterationLogger);
     }
@@ -253,7 +255,8 @@ public class LoopStatementHandler {
         };
 
         ActionListener<Object> executeLoopStatementLogger = ActionListenerUtils.withLogging(executeLoopStatementListener,
-            "Execute-Loop-Statement:" + stmtCtx.getText());
+            this.getClass().getName(),
+                "Execute-Loop-Statement:" + stmtCtx.getText());
 
         // Visit the statement asynchronously
         executor.visitStatementAsync(stmtCtx, executeLoopStatementLogger);

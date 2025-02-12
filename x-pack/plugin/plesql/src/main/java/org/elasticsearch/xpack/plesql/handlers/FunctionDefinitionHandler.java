@@ -1,3 +1,10 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.
+ * under one or more contributor license agreements. Licensed under the Elastic
+ * License 2.0; you may not use this file except in compliance with the
+ * Elastic License 2.0.
+ */
+
 package org.elasticsearch.xpack.plesql.handlers;
 
 import org.elasticsearch.action.ActionListener;
@@ -162,8 +169,8 @@ public class FunctionDefinitionHandler {
             }
         };
 
-        ActionListener<Object> functionBodyLogger = ActionListenerUtils.withLogging(functionBodyListener,
-            "Function-Body: " + function.getBody() );
+        ActionListener<Object> functionBodyLogger = ActionListenerUtils.withLogging(functionBodyListener, this.getClass().getName(),
+            "Function-Body: " + function.getBody());
 
         // Execute the function body asynchronously
         executor.executeStatementsAsync(function.getBody(), 0, functionBodyLogger);

@@ -64,8 +64,8 @@ public class IfStatementHandler {
             }
         };
 
-        ActionListener<Object> ifStatementLogger = ActionListenerUtils.withLogging(ifStatementListener,
-            "If-Statement " + ctx.condition() );
+        ActionListener<Object> ifStatementLogger = ActionListenerUtils.withLogging(ifStatementListener, this.getClass().getName(),
+            "If-Statement " + ctx.condition());
 
         // Start by evaluating the main IF condition asynchronously
         executor.evaluateConditionAsync(ctx.condition(), ifStatementLogger);
@@ -115,7 +115,7 @@ public class IfStatementHandler {
             }
         };
 
-        ActionListener<Object> elseIfStatementLogger = ActionListenerUtils.withLogging(elseIfStatementListener,
+        ActionListener<Object> elseIfStatementLogger = ActionListenerUtils.withLogging(elseIfStatementListener, this.getClass().getName(),
             "Else-If-Statement: " + elseifBlock.condition());
 
         // Evaluate the ELSEIF condition asynchronously
@@ -163,7 +163,8 @@ public class IfStatementHandler {
         };
 
         ActionListener<Object> ifConditionStatementExecutionLogger = ActionListenerUtils.withLogging(ifConditionStatementExecutionListener,
-            "If-Condition-Statement-Execution: " + stmtCtx.getText() );
+            this.getClass().getName(),
+            "If-Condition-Statement-Execution: " + stmtCtx.getText());
 
         // Visit the statement asynchronously
         executor.visitStatementAsync(stmtCtx, ifConditionStatementExecutionLogger);

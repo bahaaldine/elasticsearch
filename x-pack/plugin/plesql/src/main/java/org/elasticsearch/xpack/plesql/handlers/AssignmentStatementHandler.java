@@ -65,7 +65,7 @@ public class AssignmentStatementHandler {
             }
         };
 
-        ActionListener<Object> assigmentListenerLogger = ActionListenerUtils.withLogging(assignmentListener,
+        ActionListener<Object> assigmentListenerLogger = ActionListenerUtils.withLogging(assignmentListener, this.getClass().getName(),
             "AssignmentHandler: " + varName);
 
         executor.evaluateExpressionAsync(expression, assigmentListenerLogger);

@@ -26,14 +26,15 @@ public final class ActionListenerUtils {
      * Wraps the given delegate ActionListener with logging for onResponse/onFailure.
      *
      * @param delegate  The real listener to be notified eventually
+     * @param className
      * @param operation A short label for logs (e.g. "AssignmentHandler-eval" or "IfHandler-checkCondition")
      * @return A wrapped listener that logs the response/failure before calling delegate
      */
-    public static <T> ActionListener<T> withLogging(ActionListener<T> delegate, String operation) {
+    public static <T> ActionListener<T> withLogging(ActionListener<T> delegate, String className, String operation) {
         return new ActionListener<>() {
             @Override
             public void onResponse(T response) {
-                LOGGER.debug("[{" + operation + "}] onResponse: " + response);
+                LOGGER.debug("[{" + className + "}{" + operation + "}] onResponse: " + response);
                 delegate.onResponse(response);
             }
 

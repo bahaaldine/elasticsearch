@@ -23,14 +23,13 @@ import org.elasticsearch.xpack.core.esql.action.EsqlQueryResponse;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.core.esql.action.ColumnInfo;
+import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import static java.util.concurrent.TimeUnit.SECONDS;
 /*
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 
@@ -155,10 +154,15 @@ public class ExecuteStatementHandler {
                         // 3) Convert builder to a JSON string
                         String jsonString = Strings.toString(builder);
 
+                        // Update the variable in the execution context with the query result
+                        ExecutionContext exeContext = executor.getContext();
+                        if ( exeContext.hasVariable(variableName) == false ) {
+                            exeContext.declareVariable(variableName, "STRING");
+                        }
+                        exeContext.setVariable(variableName, jsonString);
+
                         // 4) Pass this JSON string back to the listener
-                        LOGGER.debug("ESQL row maps: {}", rowMaps);
-                        LOGGER.debug("ESQL JSON Documents {}", jsonString);
-                        listener.onResponse(rowMaps);
+                        listener.onResponse(jsonString);
                     } catch (Exception e) {
                         listener.onFailure(e);
                     }
@@ -171,7 +175,8 @@ public class ExecuteStatementHandler {
             };
 
             ActionListener<EsqlQueryResponse> executeESQLStatementLogger = ActionListenerUtils.withLogging(executeESQLStatementListener,
-                "Execute-ESQL-Statement: " + requestBuilder.request() );
+                this.getClass().getName(),
+                "Execute-ESQL-Statement: " + requestBuilder.request());
 
             client.<EsqlQueryRequest, EsqlQueryResponse>execute(
                 (ActionType<EsqlQueryResponse>) requestBuilder.action(),
