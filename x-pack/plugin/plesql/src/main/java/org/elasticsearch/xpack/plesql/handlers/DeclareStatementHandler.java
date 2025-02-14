@@ -28,6 +28,7 @@ public class DeclareStatementHandler {
                 case NUMBER:
                 case STRING:
                 case DATE:
+                case ARRAY:
                     return true;
                 default:
                     return false;  // Unsupported data type

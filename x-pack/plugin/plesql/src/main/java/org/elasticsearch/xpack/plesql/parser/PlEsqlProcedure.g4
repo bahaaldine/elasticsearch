@@ -33,7 +33,8 @@ INT_TYPE: 'INT';
 FLOAT_TYPE: 'FLOAT';
 STRING_TYPE: 'STRING';
 DATE_TYPE: 'DATE';
-NUMBER: 'NUMBER';
+NUMBER_TYPE: 'NUMBER';
+ARRAY_TYPE: 'ARRAY';
 
 // Operators
 PLUS: '+';
@@ -242,5 +243,6 @@ datatype
     | FLOAT_TYPE
     | STRING_TYPE
     | DATE_TYPE
-    | NUMBER
+    | NUMBER_TYPE
+    | ARRAY_TYPE
     ;

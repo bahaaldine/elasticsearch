@@ -157,12 +157,12 @@ public class ExecuteStatementHandler {
                         // Update the variable in the execution context with the query result
                         ExecutionContext exeContext = executor.getContext();
                         if ( exeContext.hasVariable(variableName) == false ) {
-                            exeContext.declareVariable(variableName, "STRING");
+                            exeContext.declareVariable(variableName, "ARRAY");
                         }
-                        exeContext.setVariable(variableName, jsonString);
+                        exeContext.setVariable(variableName, rowMaps);
 
                         // 4) Pass this JSON string back to the listener
-                        listener.onResponse(jsonString);
+                        listener.onResponse(null);
                     } catch (Exception e) {
                         listener.onFailure(e);
                     }

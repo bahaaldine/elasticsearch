@@ -61,11 +61,8 @@ public class PlEsqlExecutor {
                         if (result == null) {
                             // You might interpret that as "no RETURN found" or "ok"
                             listener.onResponse("Procedure executed. (no return?)");
-                        } else if (result instanceof String s) {
-                            listener.onResponse(s);
                         } else {
-                            // Fallback
-                            listener.onResponse(String.valueOf(result));
+                            listener.onResponse(result);
                         }
                     }
 

@@ -7,6 +7,8 @@
 
 package org.elasticsearch.xpack.plesql.primitives;
 
+import java.util.List;
+
 /**
  * The VariableDefinition class represents a variable in the execution context.
  * It holds the variable's name, data type, and current value.
@@ -95,7 +97,9 @@ public class VariableDefinition {
             case STRING:
                 return value instanceof String;
             case DATE:
-                return value instanceof java.util.Date; // Adjust as per your date handling
+                return value instanceof java.util.Date;
+            case ARRAY:
+                return value instanceof List<?>;
             default:
                 return false;
         }

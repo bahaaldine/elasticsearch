@@ -13,5 +13,6 @@ public enum PLESQLDataType {
     DOUBLE,
     STRING,
     DATE,
-    NUMBER;
+    NUMBER,
+    ARRAY;
 }

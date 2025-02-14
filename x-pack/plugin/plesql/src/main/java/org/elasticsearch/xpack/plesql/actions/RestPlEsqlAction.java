@@ -9,6 +9,7 @@ import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.RestResponse;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.xcontent.XContentBuilder;
+import org.elasticsearch.xcontent.XContentFactory;
 import org.elasticsearch.xcontent.XContentParser;
 import org.elasticsearch.xpack.plesql.PlEsqlExecutor;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
@@ -89,8 +90,10 @@ public class RestPlEsqlAction extends BaseRestHandler {
                         LOGGER.debug("Actual finalValue after extraction: {}", finalValue);
 
                         // Build the JSON response
-                        XContentBuilder builder = channel.newBuilder();
+                        XContentBuilder builder = XContentFactory.jsonBuilder();
                         builder.startObject();
+
+                        System.out.println("Final value class: " +  finalValue.getClass().getName());
 
                         // If it's some recognized type (String, List, Map, etc.), you can do direct field
                         // If you might have a custom object, you can fallback to .toString():
