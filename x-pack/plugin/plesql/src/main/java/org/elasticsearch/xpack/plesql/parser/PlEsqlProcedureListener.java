@@ -353,4 +353,14 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitDatatype(PlEsqlProcedureParser.DatatypeContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#persist_clause}.
+	 * @param ctx the parse tree
+	 */
+	void enterPersist_clause(PlEsqlProcedureParser.Persist_clauseContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#persist_clause}.
+	 * @param ctx the parse tree
+	 */
+	void exitPersist_clause(PlEsqlProcedureParser.Persist_clauseContext ctx);
 }

@@ -426,6 +426,18 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitDatatype(PlEsqlProcedureParser.DatatypeContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterPersist_clause(PlEsqlProcedureParser.Persist_clauseContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitPersist_clause(PlEsqlProcedureParser.Persist_clauseContext ctx) { }
 
 	/**
 	 * {@inheritDoc}

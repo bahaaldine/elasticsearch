@@ -8,6 +8,11 @@ package org.elasticsearch.xpack.plesql.handlers;
 
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionType;
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
+import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
+import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsRequest;
+import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
+import org.elasticsearch.action.admin.indices.resolve.ResolveIndexAction;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.common.Strings;
@@ -25,19 +30,14 @@ import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.core.esql.action.ColumnInfo;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
+import org.elasticsearch.xpack.plesql.utils.PersistUtil;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-/*
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;*/
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Handles EXECUTE statements asynchronously using a standard Elasticsearch SearchRequest,
@@ -55,7 +55,7 @@ public class ExecuteStatementHandler {
     private static final Logger LOGGER = LogManager.getLogger(ExecuteStatementHandler.class);
 
     private final ProcedureExecutor executor;
-    private final Client    client;
+    private final Client client;
 
     /**
      * @param executor The ProcedureExecutor that holds the ExecutionContext, etc.
@@ -100,39 +100,25 @@ public class ExecuteStatementHandler {
     @SuppressWarnings("unchecked")
     public void handleAsync(PlEsqlProcedureParser.Execute_statementContext ctx, ActionListener<Object> listener) {
         try {
-            // Extract the raw ESQL query substring using the parse tree's token info
+            // Extract raw query and variable name
             String rawEsqlQuery = executor.getRawText(ctx.esql_query_content());
-
-            // The name of the variable receiving the query result
             String variableName = ctx.variable_assignment().ID().getText();
+            LOGGER.debug(() -> String.format("Raw ESQL query substring: [%s] and variable [%s]", rawEsqlQuery, variableName));
 
-            LOGGER.debug(() -> String.format("Raw ESQL query substring: [%s]", rawEsqlQuery));
-            LOGGER.debug(() -> String.format("Result variable name: [%s]", variableName));
-
-            // Optionally do variable substitution
+            // Variable substitution
             String substitutedQuery = substituteVariables(rawEsqlQuery);
             String finalSubstitutedQuery = substitutedQuery;
             LOGGER.debug(() -> String.format("After substitution, ESQL query: [%s]", finalSubstitutedQuery));
-            LOGGER.debug("Executing ESQL query via EsqlQueryAction...");
 
-            // 1) Extract the content and the variable name
-            String executeQueryContent = ctx.esql_query_content().getText();
-            String resultVariableName = ctx.variable_assignment().ID().getText();
-
-            // For example, remove parentheses if your grammar encloses the content in parentheses
-            if (executeQueryContent.length() > 2) {
-                substitutedQuery = executeQueryContent.substring(1, executeQueryContent.length() - 2);
-            }
-
+            // Extract the content and the variable name
             SearchRequest searchRequest = buildSearchRequest(finalSubstitutedQuery);
-
             LOGGER.debug("Search Query: [{}]", searchRequest);
 
             EsqlQueryRequestBuilder<? extends EsqlQueryRequest, ? extends EsqlQueryResponse> requestBuilder =
                 EsqlQueryRequestBuilder.newRequestBuilder(client);
-
             requestBuilder.query(finalSubstitutedQuery);
 
+            String finalSubstitutedQuery1 = substitutedQuery;
             ActionListener<EsqlQueryResponse> executeESQLStatementListener = new ActionListener<EsqlQueryResponse>() {
 
                 @Override
@@ -145,24 +131,79 @@ public class ExecuteStatementHandler {
                             esqlQueryResponse.response().rows()
                         );
 
+                        // Convert the result (rowMaps) into JSON with consistent field types.
+                        List<Map<String, Object>> normalizedRows = new ArrayList<>();
+                        for (Map<String, Object> row : rowMaps) {
+                            Map<String, Object> normalized = new LinkedHashMap<>();
+                            for (Map.Entry<String, Object> entry : row.entrySet()) {
+                                Object value = entry.getValue();
+                                // Convert nested objects/arrays to JSON string, or force to string.
+                                if (value instanceof Map || value instanceof List) {
+                                    normalized.put(entry.getKey(), convertToJsonString(value));
+                                } else {
+                                    normalized.put(entry.getKey(), value);
+                                }
+                            }
+                            normalizedRows.add(normalized);
+                        }
+
                         // 2) Build an XContentBuilder to produce a JSON string
                         XContentBuilder builder = XContentFactory.jsonBuilder();
                         builder.startObject();
-                        builder.field("rows", rowMaps);
+                        builder.field("rows", normalizedRows);
                         builder.endObject();
-
-                        // 3) Convert builder to a JSON string
                         String jsonString = Strings.toString(builder);
+                        LOGGER.debug("ESQL JSON Documents: {}", jsonString);
 
-                        // Update the variable in the execution context with the query result
-                        ExecutionContext exeContext = executor.getContext();
-                        if ( exeContext.hasVariable(variableName) == false ) {
-                            exeContext.declareVariable(variableName, "ARRAY");
+                        // Retrieve the persist clause (if any)
+                        String persistIndexName = null;
+                        if (ctx.persist_clause() != null) {
+                            persistIndexName = ctx.persist_clause().ID().getText();
+                            LOGGER.debug("Persist clause provided: [{}]", persistIndexName);
+                        } else {
+                            LOGGER.debug("No persist clause provided. Result will remain transient.");
                         }
-                        exeContext.setVariable(variableName, rowMaps);
 
-                        // 4) Pass this JSON string back to the listener
-                        listener.onResponse(null);
+                        // If a persist clause is provided, index the result into that index
+                        if (persistIndexName != null) {
+                            // Extract the source index from the query (e.g., "FROM retro_arcade_games" yields "retro_arcade_games")
+                            String sourceIndex = extractSourceIndex(finalSubstitutedQuery1);
+                            LOGGER.debug("Extracted source index: [{}]", sourceIndex);
+
+                            ActionListener<Void> persistIndexListener = new ActionListener<Void>() {
+                                @Override
+                                public void onResponse(Void aVoid) {
+                                    ExecutionContext exeContext = executor.getContext();
+                                    if ( exeContext.hasVariable(variableName) == false ) {
+                                        exeContext.declareVariable(variableName, "ARRAY");
+                                    }
+                                    exeContext.setVariable(variableName, normalizedRows);
+                                    listener.onResponse(null);
+                                }
+                                @Override
+                                public void onFailure(Exception e) {
+                                    listener.onFailure(e);
+                                }
+                            };
+
+
+                            ActionListener<Void> persistIndexLogger = ActionListenerUtils.withLogging(persistIndexListener,
+                                this.getClass().getName(),
+                                "Persist-Index-Statement: " + persistIndexName);
+
+                            persistResults(sourceIndex, persistIndexName, rowMaps, persistIndexLogger);
+                        } else {
+                            // Update the variable in the execution context with the query result
+                            ExecutionContext exeContext = executor.getContext();
+                            if ( exeContext.hasVariable(variableName) == false ) {
+                                exeContext.declareVariable(variableName, "ARRAY");
+                            }
+                            exeContext.setVariable(variableName, normalizedRows);
+
+                            // 4) Pass this JSON string back to the listener
+                            listener.onResponse(null);
+                        }
+
                     } catch (Exception e) {
                         listener.onFailure(e);
                     }
@@ -183,117 +224,87 @@ public class ExecuteStatementHandler {
                 requestBuilder.request(),
                 executeESQLStatementLogger
                 );
-
-            /*client.execute( requestBuilder.action(),  requestBuilder.request(), new ActionListener<EsqlQueryResponse>() {
-                @Override
-                public void onResponse(org.elasticsearch.xpack.esql.action.EsqlQueryResponse esqlQueryResponse) {
-                    try {
-                        SearchHit[] hits = searchResponse.getHits().getHits();
-                        long totalHits = searchResponse.getHits().getTotalHits().value;
-
-                        if (hits.length == 0) {
-                            // No results, just log or store a small message
-                            String noResultsMsg = String.format("No results! (Total hits: %d)", totalHits);
-                            LOGGER.debug("Search Result: [{}]", noResultsMsg);
-
-                            // Store it in the context
-                            ExecutionContext exeContext = executor.getContext();
-                            if (exeContext.hasVariable(resultVariableName) == false) {
-                                exeContext.declareVariable(resultVariableName, "STRING");
-                            }
-                            exeContext.setVariable(resultVariableName, noResultsMsg);
-
-                            listener.onResponse(null);
-                            return;
-                        }
-
-                        // 1. Gather all top-level field names across all hits
-                        //    So we can create columns for each field.
-                        Set<String> allFieldNames = new LinkedHashSet<>();  // preserves insertion order
-                        for (SearchHit hit : hits) {
-                            Map<String, Object> sourceMap = hit.getSourceAsMap();
-                            allFieldNames.addAll(sourceMap.keySet());
-                        }
-
-                        // Optionally, sort them alphabetically:
-                        List<String> sortedFieldNames = new ArrayList<>(allFieldNames);
-                        // sortedFieldNames.sort(String::compareTo);
-
-                        // 2. Build a table in ASCII format
-                        StringBuilder tableBuilder = new StringBuilder();
-                        tableBuilder.append(String.format("Total hits: %d%n", totalHits));
-
-                        // Table header
-                        tableBuilder.append("-----------------------------------------------------------------\n");
-                        // First column is "Doc ID", then each top-level field
-                        tableBuilder.append(String.format("%-15s", "Document_ID"));  // e.g. 15 width
-                        for (String fieldName : sortedFieldNames) {
-                            // Each column header, truncated or spaced
-                            tableBuilder.append(" | ").append(fieldName);
-                        }
-                        tableBuilder.append("\n");
-                        tableBuilder.append("-----------------------------------------------------------------\n");
-
-                        // 3. For each document, create one row
-                        for (SearchHit hit : hits) {
-                            String docId = hit.getId();
-                            Map<String, Object> sourceMap = hit.getSourceAsMap();
-
-                            // Print doc ID
-                            tableBuilder.append(String.format("%-15s", docId));
-
-                            // Then each top-level field
-                            for (String fieldName : sortedFieldNames) {
-                                Object val = sourceMap.get(fieldName);
-
-                                if (val == null) {
-                                    // no value => blank cell
-                                    tableBuilder.append(" | ").append("");
-                                } else if (val instanceof Map || val instanceof List) {
-                                    // Nested object or array => convert to JSON
-                                    String jsonVal = convertToJsonString(val);
-                                    tableBuilder.append(" | ").append(jsonVal);
-                                } else {
-                                    // Plain value => just print string
-                                    tableBuilder.append(" | ").append(val.toString());
-                                }
-                            }
-                            tableBuilder.append("\n");
-                        }
-
-                        // This is your table
-                        String tableOutput = tableBuilder.toString();
-                        LOGGER.debug("Search Result:\n{}", tableOutput);
-
-                        // 4. Store the table in your ExecutionContext
-                        ExecutionContext exeContext = executor.getContext();
-                        if ( exeContext.hasVariable(resultVariableName) == false ) {
-                            exeContext.declareVariable(resultVariableName, "STRING");
-                        }
-                        exeContext.setVariable(resultVariableName, tableOutput);
-
-                        // 5. Notify success
-                        listener.onResponse(null);
-
-                    } catch (Exception e) {
-                        listener.onFailure(e);
-                    }
-                }
-
-
-                @Override
-                public void onResponse(EsqlQueryResponse esqlQueryResponse) {
-
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-                    listener.onFailure(e);
-                }
-            });*/
         } catch (Exception ex) {
             listener.onFailure(ex);
         }
+    }
+
+    // --- Asynchronous Persist Workflow ---
+
+    /**
+     * Persists the given documents into the target index by:
+     * 1) Getting the mapping from the source index.
+     * 2) Checking whether the target index exists.
+     * 3) Creating the target index if needed.
+     * 4) Bulk indexing the documents.
+     */
+    private void persistResults(String sourceIndex, String targetIndex, List<Map<String, Object>> documents,
+                                ActionListener<Void> listener) {
+        // 1) Get source mapping asynchronously.
+        GetMappingsRequest getMappingsRequest = new GetMappingsRequest().indices(sourceIndex);
+        client.admin().indices().getMappings(getMappingsRequest, new ActionListener<GetMappingsResponse>() {
+            @Override
+            public void onResponse(GetMappingsResponse getMappingsResponse) {
+                try {
+                    Map<String, Object> sourceMapping = getMappingsResponse.mappings().get(sourceIndex).sourceAsMap();
+                    LOGGER.debug("Source mapping: {}", sourceMapping);
+                    // 2) Check if target index exists asynchronously.
+                    String[] indices = {targetIndex};
+                    ResolveIndexAction.Request getIndexRequest = new ResolveIndexAction.Request(indices);
+                    client.admin().indices().resolveIndex(getIndexRequest, new ActionListener<ResolveIndexAction.Response>() {
+                        @Override
+                        public void onResponse(ResolveIndexAction.Response exists) {
+                            LOGGER.debug("Target index [{}] already exists.", targetIndex);
+                            // If index exists, simply proceed to bulk indexing.
+                            PersistUtil.bulkIndexDocuments(client, targetIndex, documents, listener);
+                        }
+
+                        @Override
+                        public void onFailure(Exception e) {
+                            LOGGER.debug("Index {} has not been created yet", targetIndex);
+                            // 3) Create target index asynchronously using the source mapping.
+                            CreateIndexRequest createIndexRequest = new CreateIndexRequest(targetIndex);
+                            createIndexRequest.mapping(sourceMapping);
+                            client.admin().indices().create(createIndexRequest, new ActionListener<CreateIndexResponse>() {
+                                @Override
+                                public void onResponse(CreateIndexResponse createIndexResponse) {
+                                    LOGGER.debug("Target index [{}] created successfully.", targetIndex);
+                                    // 4) Bulk index documents.
+                                    PersistUtil.bulkIndexDocuments(client, targetIndex, documents, listener);
+                                }
+
+                                @Override
+                                public void onFailure(Exception e) {
+                                    listener.onFailure(e);
+                                }
+                            });
+                        }
+                    });
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
+    }
+
+    // --- Helper Methods ---
+
+    /**
+     * Uses a simple regex to extract the source index from an ESQL query.
+     * For example, "FROM retro_arcade_games | LIMIT 2" returns "retro_arcade_games".
+     */
+    private String extractSourceIndex(String esqlQuery) {
+        Pattern pattern = Pattern.compile("FROM\\s+(\\S+)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(esqlQuery);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        throw new RuntimeException("Unable to extract source index from query: " + esqlQuery);
     }
 
     /**

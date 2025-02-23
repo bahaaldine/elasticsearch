@@ -27,6 +27,8 @@ ENDTRY: 'END TRY';
 FUNCTION: 'FUNCTION';
 RETURN: 'RETURN';
 BREAK: 'BREAK';
+PERSIST: 'PERSIST';
+INTO: 'INTO';
 
 // Data Types
 INT_TYPE: 'INT';
@@ -117,7 +119,7 @@ expression_statement
     ;
 
 execute_statement
-    : EXECUTE variable_assignment LPAREN esql_query_content RPAREN SEMICOLON
+    : EXECUTE variable_assignment LPAREN esql_query_content RPAREN (persist_clause)? SEMICOLON
     ;
 
 variable_assignment
@@ -245,4 +247,8 @@ datatype
     | DATE_TYPE
     | NUMBER_TYPE
     | ARRAY_TYPE
+    ;
+
+persist_clause
+    : PERSIST INTO ID
     ;

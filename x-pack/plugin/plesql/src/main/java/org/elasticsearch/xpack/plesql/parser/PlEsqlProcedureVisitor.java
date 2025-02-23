@@ -220,4 +220,10 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitDatatype(PlEsqlProcedureParser.DatatypeContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#persist_clause}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPersist_clause(PlEsqlProcedureParser.Persist_clauseContext ctx);
 }
