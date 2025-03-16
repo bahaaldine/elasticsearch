@@ -8,40 +8,38 @@
 package org.elasticsearch.xpack.plesql.handlers;
 
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.xcontent.DeprecationHandler;
+import org.elasticsearch.xcontent.NamedXContentRegistry;
+import org.elasticsearch.xcontent.XContentFactory;
+import org.elasticsearch.xcontent.XContentParser;
+import org.elasticsearch.xcontent.XContentType;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
-/**
- * The AssignmentStatementHandler class is responsible for handling assignment statements
- * within the procedural SQL execution context. It evaluates the expression on the right-hand
- * side of the assignment and assigns the resulting value to the specified variable.
- */
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+
 public class AssignmentStatementHandler {
     private final ProcedureExecutor executor;
 
-    /**
-     * Constructs an AssignmentStatementHandler with the given ProcedureExecutor.
-     *
-     * @param executor The ProcedureExecutor instance responsible for executing procedures.
-     */
     public AssignmentStatementHandler(ProcedureExecutor executor) {
         this.executor = executor;
     }
 
     /**
-     * Handles the assignment statement by evaluating the expression and assigning the value
-     * to the specified variable. It ensures that the variable has been declared and that
-     * the assigned value matches the variable's type.
+     * Handles an assignment statement by evaluating the right-hand side expression,
+     * coercing the result to match the declared type of the variable, and storing it.
      *
-     * @param ctx The Assignment_statementContext representing the assignment statement.
+     * @param ctx The assignment statement context.
+     * @param listener The listener to signal success/failure.
      */
     public void handleAsync(PlEsqlProcedureParser.Assignment_statementContext ctx, ActionListener<Object> listener) {
-        // Retrieve the variable name from the assignment statement
+        // Retrieve the variable name
         String varName = ctx.ID().getText();
         PlEsqlProcedureParser.ExpressionContext expression = ctx.expression();
 
-        // Check if the variable has been declared
+        // Check that the variable has been declared.
         if (executor.getContext().hasVariable(varName) == false) {
             throw new RuntimeException("Variable '" + varName + "' is not declared.");
         }
@@ -50,7 +48,6 @@ public class AssignmentStatementHandler {
             @Override
             public void onResponse(Object value) {
                 try {
-                    // Coerce the value to the variable's type
                     Object coercedValue = coerceType(value, varName);
                     executor.getContext().setVariable(varName, coercedValue);
                     listener.onResponse(null);
@@ -58,22 +55,49 @@ public class AssignmentStatementHandler {
                     listener.onFailure(e);
                 }
             }
-
             @Override
             public void onFailure(Exception e) {
                 listener.onFailure(e);
             }
         };
 
-        ActionListener<Object> assigmentListenerLogger = ActionListenerUtils.withLogging(assignmentListener, this.getClass().getName(),
-            "AssignmentHandler: " + varName);
+        ActionListener<Object> assignmentLogger =
+            ActionListenerUtils.withLogging(assignmentListener, this.getClass().getName(), "AssignmentHandler: " + varName);
 
-        executor.evaluateExpressionAsync(expression, assigmentListenerLogger);
+        executor.evaluateExpressionAsync(expression, assignmentLogger);
     }
 
+    /**
+     * Coerces the given value to the type declared for the variable.
+     * For ARRAY types, if the evaluated value is a String, we try to parse it as a JSON array.
+     *
+     * @param value The evaluated value.
+     * @param variableName The variable name.
+     * @return The coerced value.
+     */
     private Object coerceType(Object value, String variableName) {
-        // Implement type coercion logic if necessary
-        // For simplicity, we assume the value is already of the correct type
+        // Retrieve the declared type from the execution context.
+        String varType = executor.getContext().getVariableType(variableName);
+        if ("ARRAY".equalsIgnoreCase(varType)) {
+            if (value instanceof java.util.List) {
+                return value;
+            } else if (value instanceof String) {
+                String str = ((String) value).trim();
+                try (XContentParser parser = XContentFactory.xContent(XContentType.JSON)
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION,
+                        new ByteArrayInputStream(str.getBytes(StandardCharsets.UTF_8)))) {
+                    if (parser.nextToken() != XContentParser.Token.START_ARRAY) {
+                        throw new RuntimeException("Expected a JSON array literal for ARRAY type");
+                    }
+                    return parser.list();
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to parse JSON array for variable " + variableName, e);
+                }
+            } else {
+                throw new RuntimeException("Cannot coerce value to ARRAY for variable " + variableName);
+            }
+        }
+        // For other types, no coercion is performed.
         return value;
     }
 }

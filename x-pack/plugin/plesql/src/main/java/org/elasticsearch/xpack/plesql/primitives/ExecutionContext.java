@@ -66,6 +66,21 @@ public class ExecutionContext {
     }
 
     /**
+     * Declares a new variable with the specified name, type, and element type in the current context.
+     *
+     * @param name The name of the variable.
+     * @param type The data type of the variable.
+     * @param elementType The declared type for the elements if this variable is an array.
+     * @throws RuntimeException If the variable is already declared in the current context.
+     */
+    public void declareVariable(String name, String type, String elementType) {
+        if (variables.containsKey(name)) {
+            throw new RuntimeException("Variable '" + name + "' is already declared in the current scope.");
+        }
+        variables.put(name, new VariableDefinition(name, type, elementType));
+    }
+
+    /**
      * Sets or updates the value of a variable. Searches for the variable in the current
      * context and parent contexts recursively.
      *
@@ -99,6 +114,14 @@ public class ExecutionContext {
         } else {
             throw new RuntimeException("Variable '" + name + "' is not declared.");
         }
+    }
+
+    public String getVariableType(String name) {
+        VariableDefinition def = getVariableDefinition(name);
+        if (def == null) {
+            throw new RuntimeException("Variable '" + name + "' is not declared.");
+        }
+        return def.getType().toString();
     }
 
     /**

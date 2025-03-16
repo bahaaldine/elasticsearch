@@ -815,6 +815,13 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             // Remove the surrounding single quotes and handle escaped characters
             String processedString = text.substring(1, text.length() - 1).replace("\\'", "'");
             listener.onResponse(processedString);
+        } else if (ctx.arrayLiteral() != null) {
+            // Evaluate array literal.
+            if (ctx.arrayLiteral().expressionList() != null) {
+                evaluateExpressionList(ctx.arrayLiteral().expressionList().expression(), listener);
+            } else {
+                listener.onResponse(new java.util.ArrayList<>());
+            }
         } else if (ctx.ID() != null) {
             // Identifier (variable)
             String varName = ctx.ID().getText();
@@ -831,6 +838,52 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         } else {
             listener.onFailure(new RuntimeException("Unsupported primary expression: " + ctx.getText()));
         }
+    }
+
+    /**
+     * Evaluates a list of expression contexts sequentially and collects their evaluated
+     * results into a Java List.
+     * <p>
+     * This method is a convenience wrapper that initializes the accumulator (an empty List)
+     * and calls the recursive helper to process each expression in order.
+     *
+     * @param exprs    the list of ExpressionContext objects representing the array literal elements
+     * @param listener the ActionListener to be notified when evaluation is complete, with the resulting List as its response
+     */
+    private void evaluateExpressionList(List<PlEsqlProcedureParser.ExpressionContext> exprs,
+                                        ActionListener<Object> listener) {
+        evaluateExpressionList(exprs, 0, new java.util.ArrayList<>(), listener);
+    }
+
+    /**
+     * Recursively evaluates a list of expression contexts starting from the specified index,
+     * accumulating the results in the provided list.
+     * <p>
+     * Once all expressions have been evaluated, the listener is notified with the complete list
+     * of evaluation results.
+     *
+     * @param exprs    the list of ExpressionContext objects to be evaluated
+     * @param index    the current index in the list from which to start evaluation
+     * @param results  an accumulator List that stores the evaluated result of each expression
+     * @param listener the ActionListener to be notified with the final List of evaluation results
+     */
+    private void evaluateExpressionList(List<PlEsqlProcedureParser.ExpressionContext> exprs, int index,
+                                        java.util.List<Object> results, ActionListener<Object> listener) {
+        if (index >= exprs.size()) {
+            listener.onResponse(results);
+            return;
+        }
+        evaluateExpressionAsync(exprs.get(index), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                results.add(result);
+                evaluateExpressionList(exprs, index + 1, results, listener);
+            }
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
     }
 
     /**

@@ -17,6 +17,7 @@ public class VariableDefinition {
     private final String name;
     private final PLESQLDataType type;
     private Object value;
+    private final String elementType;
 
     /**
      * Constructs a VariableDefinition with the specified name, type, and initial value.
@@ -33,6 +34,65 @@ public class VariableDefinition {
             throw new IllegalArgumentException("Invalid type provided: " + type, e);
         }
         this.value = value;
+        this.elementType = null;
+    }
+
+    /**
+     * Constructs a VariableDefinition with the specified name, type, and element type.
+     * <p>
+     * For array types, the type string may be provided as "ARRAY", "ARRAY OF elementType"
+     * or even without the expected space (e.g. "ARRAYOFSTRING"). In that case, the variable's
+     * type will be set to ARRAY and the element type will be extracted from the type string
+     * (unless an explicit elementType argument is provided).
+     *
+     * @param name         The name of the variable.
+     * @param type         The data type of the variable (e.g. "NUMBER", "STRING", "ARRAY OF STRING").
+     * @param elementType  (Optional) The element type for array variables; if null, it will be
+     *                     extracted from the type string when applicable.
+     * @throws IllegalArgumentException if the type string is invalid.
+     */
+    public VariableDefinition(String name, String type, String elementType) {
+        this.name = name;
+        String normalizedType = type.trim().toUpperCase();
+
+        if (normalizedType.startsWith("ARRAY")) {
+            // Fix missing space if type is like "ARRAYOFSTRING"
+            if (normalizedType.startsWith("ARRAYOF") && normalizedType.startsWith("ARRAY OF") == false ) {
+                normalizedType = "ARRAY OF " + normalizedType.substring("ARRAYOF".length());
+            }
+            // For plain "ARRAY", simply mark type as ARRAY and use provided elementType (could be null)
+            if (normalizedType.equals("ARRAY")) {
+                this.type = PLESQLDataType.ARRAY;
+                this.elementType = elementType;
+            } else if (normalizedType.startsWith("ARRAY OF ")) {
+                this.type = PLESQLDataType.ARRAY;
+                // If the caller did not supply an elementType, extract it from the type string.
+                String extractedElementType = normalizedType.substring("ARRAY OF ".length()).trim();
+                this.elementType = (elementType != null) ? elementType : extractedElementType;
+            } else {
+                throw new IllegalArgumentException("Invalid array type provided: " + type);
+            }
+        } else {
+            try {
+                this.type = PLESQLDataType.valueOf(normalizedType);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid type provided: " + type, e);
+            }
+            this.elementType = elementType;
+        }
+        this.value = null;
+    }
+
+    /**
+     * Retrieves the declared element type for this ARRAY variable.
+     * <p>
+     * This represents the data type of the elements contained in the array (e.g., NUMBER, STRING, or DATE).
+     * For variables that are not of ARRAY type, this value may be {@code null}.
+     *
+     * @return the element type as a String, or {@code null} if not applicable.
+     */
+    public String getElementType() {
+        return elementType;
     }
 
     /**

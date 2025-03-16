@@ -14,5 +14,6 @@ public enum PLESQLDataType {
     STRING,
     DATE,
     NUMBER,
+    DOCUMENT,
     ARRAY;
 }

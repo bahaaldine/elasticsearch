@@ -113,6 +113,36 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitLoop_statement(PlEsqlProcedureParser.Loop_statementContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#for_range_loop}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitFor_range_loop(PlEsqlProcedureParser.For_range_loopContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#for_array_loop}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitFor_array_loop(PlEsqlProcedureParser.For_array_loopContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#while_loop}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitWhile_loop(PlEsqlProcedureParser.While_loopContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#range_loop_expression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitRange_loop_expression(PlEsqlProcedureParser.Range_loop_expressionContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#array_loop_expression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitArray_loop_expression(PlEsqlProcedureParser.Array_loop_expressionContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#try_catch_statement}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -209,6 +239,36 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitUnaryExpr(PlEsqlProcedureParser.UnaryExprContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#arrayLiteral}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitArrayLiteral(PlEsqlProcedureParser.ArrayLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#expressionList}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitExpressionList(PlEsqlProcedureParser.ExpressionListContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#documentLiteral}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDocumentLiteral(PlEsqlProcedureParser.DocumentLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#pairList}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPairList(PlEsqlProcedureParser.PairListContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#pair}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPair(PlEsqlProcedureParser.PairContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#primaryExpression}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -220,6 +280,12 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitDatatype(PlEsqlProcedureParser.DatatypeContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#array_datatype}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitArray_datatype(PlEsqlProcedureParser.Array_datatypeContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#persist_clause}.
 	 * @param ctx the parse tree

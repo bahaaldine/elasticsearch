@@ -36,6 +36,7 @@ FLOAT_TYPE: 'FLOAT';
 STRING_TYPE: 'STRING';
 DATE_TYPE: 'DATE';
 NUMBER_TYPE: 'NUMBER';
+DOCUMENT_TYPE: 'DOCUMENT';
 ARRAY_TYPE: 'ARRAY';
 
 // Operators
@@ -162,8 +163,29 @@ condition
       ;
 
 loop_statement
-    : FOR ID IN expression DOT_DOT expression LOOP statement+ ENDLOOP
-    | WHILE condition LOOP statement+ ENDLOOP
+    : for_range_loop
+    | for_array_loop
+    | while_loop
+    ;
+
+for_range_loop
+    : FOR ID IN range_loop_expression LOOP statement+ ENDLOOP
+    ;
+
+for_array_loop
+    : FOR ID IN array_loop_expression LOOP statement+ ENDLOOP
+    ;
+
+while_loop
+    : WHILE condition LOOP statement+ ENDLOOP
+    ;
+
+range_loop_expression
+    : expression DOT_DOT expression
+    ;
+
+array_loop_expression
+    : expression
     ;
 
 try_catch_statement
@@ -231,12 +253,34 @@ unaryExpr
     | primaryExpression
     ;
 
+arrayLiteral
+    : '[' expressionList? ']'
+    ;
+
+expressionList
+    : expression (COMMA expression)*
+    ;
+
+documentLiteral
+    : '{' pairList? '}'
+    ;
+
+pairList
+    : pair (COMMA pair)*
+    ;
+
+pair
+    : (ID | STRING) COLON expression
+    ;
+
 primaryExpression
     : LPAREN expression RPAREN
     | function_call
     | INT
     | FLOAT
     | STRING
+    | arrayLiteral
+    | documentLiteral
     | ID
     ;
 
@@ -246,7 +290,11 @@ datatype
     | STRING_TYPE
     | DATE_TYPE
     | NUMBER_TYPE
-    | ARRAY_TYPE
+    | array_datatype
+    ;
+
+array_datatype
+    : ARRAY_TYPE 'OF' (NUMBER_TYPE | STRING_TYPE | DOCUMENT_TYPE | DATE_TYPE | ARRAY_TYPE )
     ;
 
 persist_clause
