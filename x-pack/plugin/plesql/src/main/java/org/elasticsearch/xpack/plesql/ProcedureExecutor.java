@@ -598,31 +598,38 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         }
 
         PlEsqlProcedureParser.MultiplicativeExpressionContext currentExpr = ctx.multiplicativeExpression(index);
-        String operator = ctx.getChild(2 * index - 1).getText(); // Correct operator extraction
+        // Correctly extract the operator based on the grammar. This assumes the operator is at position 2*index - 1.
+        String operator = ctx.getChild(2 * index - 1).getText();
 
         ActionListener<Object> evaluateAdditiveOperand = new ActionListener<>() {
             @Override
             public void onResponse(Object rightValue) {
                 try {
-
-                    System.out.println("this is the place where integers get converted to float" + leftValue + " +  " + rightValue);
-
-                    double leftDouble = ((Number) leftValue).doubleValue();
-                    double rightDouble = ((Number) rightValue).doubleValue();
-                    double result;
-                    switch (operator) {
-                        case "+":
-                            result = leftDouble + rightDouble;
-                            break;
-                        case "-":
-                            result = leftDouble - rightDouble;
-                            break;
-                        default:
-                            listener.onFailure(new RuntimeException("Unknown additive operator: " + operator));
-                            return;
+                    if (operator.equals("+")) {
+                        // If either operand is a String, perform string concatenation.
+                        if (leftValue instanceof String || rightValue instanceof String) {
+                            Object result = leftValue.toString() + rightValue.toString();
+                            evaluateAdditiveOperandsAsync(ctx, index + 1, result, listener);
+                        } else {
+                            // Otherwise, both operands are numbers, so perform numeric addition.
+                            double leftDouble = ((Number) leftValue).doubleValue();
+                            double rightDouble = ((Number) rightValue).doubleValue();
+                            double result = leftDouble + rightDouble;
+                            evaluateAdditiveOperandsAsync(ctx, index + 1, result, listener);
+                        }
+                    } else if (operator.equals("-")) {
+                        // Subtraction only supports numeric operands.
+                        if (leftValue instanceof Number && rightValue instanceof Number) {
+                            double leftDouble = ((Number) leftValue).doubleValue();
+                            double rightDouble = ((Number) rightValue).doubleValue();
+                            double result = leftDouble - rightDouble;
+                            evaluateAdditiveOperandsAsync(ctx, index + 1, result, listener);
+                        } else {
+                            listener.onFailure(new RuntimeException("Subtraction requires numeric operands."));
+                        }
+                    } else {
+                        listener.onFailure(new RuntimeException("Unknown additive operator: " + operator));
                     }
-                    // Continue with the next operand
-                    evaluateAdditiveOperandsAsync(ctx, index + 1, result, listener);
                 } catch (Exception e) {
                     listener.onFailure(e);
                 }
@@ -636,7 +643,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
 
         ActionListener<Object> evaluateOperandLogger =
             ActionListenerUtils.withLogging(evaluateAdditiveOperand, this.getClass().getName(),
-                "Evaluate-Additive-Operands: " + ctx.multiplicativeExpression(0));
+                "Evaluate-Additive-Operands: " + currentExpr);
 
         evaluateMultiplicativeExpressionAsync(currentExpr, evaluateOperandLogger);
     }
@@ -787,44 +794,68 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
 
     /**
      * Evaluates a primary expression asynchronously.
+     * <p>
+     * This method evaluates the base expression (e.g., literals, identifiers, function calls, etc.) and then checks for
+     * any bracket expressions attached (to support DOCUMENT field access using bracket notation). If bracket expressions
+     * exist, they are processed via {@code evaluateDocumentFieldAccessRecursive}; otherwise, the base value is returned.
+     *
+     * @param ctx      the PrimaryExpressionContext representing the expression.
+     * @param listener the ActionListener to receive the evaluated result.
      */
     private void evaluatePrimaryExpressionAsync(PlEsqlProcedureParser.PrimaryExpressionContext ctx, ActionListener<Object> listener) {
-        if (ctx.LPAREN() != null && ctx.RPAREN() != null) {
+        // Create a helper listener to process bracket expressions if they exist.
+        ActionListener<Object> processResult = new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object baseValue) {
+                if (ctx.bracketExpression() != null && ctx.bracketExpression().isEmpty() == false ) {
+                    evaluateDocumentFieldAccessRecursive(baseValue, ctx.bracketExpression(), 0, listener);
+                } else {
+                    listener.onResponse(baseValue);
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        };
+
+        if (ctx.simplePrimaryExpression().LPAREN() != null && ctx.simplePrimaryExpression().RPAREN() != null) {
             // Parenthesized expression
-            evaluateExpressionAsync(ctx.expression(), listener);
-        } else if (ctx.function_call() != null) {
+            evaluateExpressionAsync(ctx.simplePrimaryExpression().expression(), processResult);
+        } else if (ctx.simplePrimaryExpression().function_call() != null) {
             // Function call
-            visitFunctionCallAsync(ctx.function_call(), listener);
-        } else if (ctx.INT() != null) {
+            visitFunctionCallAsync(ctx.simplePrimaryExpression().function_call(), processResult);
+        } else if (ctx.simplePrimaryExpression().INT() != null) {
             // Integer literal
             try {
-                listener.onResponse(Double.valueOf(ctx.INT().getText()));
+                processResult.onResponse(Double.valueOf(ctx.simplePrimaryExpression().INT().getText()));
             } catch (NumberFormatException e) {
-                listener.onFailure(new RuntimeException("Invalid integer literal: " + ctx.INT().getText()));
+                listener.onFailure(new RuntimeException("Invalid integer literal: " + ctx.simplePrimaryExpression().INT().getText()));
             }
-        } else if (ctx.FLOAT() != null) {
+        } else if (ctx.simplePrimaryExpression().FLOAT() != null) {
             // Float literal
             try {
-                listener.onResponse(Double.valueOf(ctx.FLOAT().getText()));
+                processResult.onResponse(Double.valueOf(ctx.simplePrimaryExpression().FLOAT().getText()));
             } catch (NumberFormatException e) {
-                listener.onFailure(new RuntimeException("Invalid float literal: " + ctx.FLOAT().getText()));
+                listener.onFailure(new RuntimeException("Invalid float literal: " + ctx.simplePrimaryExpression().FLOAT().getText()));
             }
-        } else if (ctx.STRING() != null) {
+        } else if (ctx.simplePrimaryExpression().STRING() != null) {
             // String literal
-            String text = ctx.STRING().getText();
+            String text = ctx.simplePrimaryExpression().STRING().getText();
             // Remove the surrounding single quotes and handle escaped characters
             String processedString = text.substring(1, text.length() - 1).replace("\\'", "'");
-            listener.onResponse(processedString);
-        } else if (ctx.arrayLiteral() != null) {
+            processResult.onResponse(processedString);
+        } else if (ctx.simplePrimaryExpression().arrayLiteral() != null) {
             // Evaluate array literal.
-            if (ctx.arrayLiteral().expressionList() != null) {
-                evaluateExpressionList(ctx.arrayLiteral().expressionList().expression(), listener);
+            if (ctx.simplePrimaryExpression().arrayLiteral().expressionList() != null) {
+                evaluateExpressionList(ctx.simplePrimaryExpression().arrayLiteral().expressionList().expression(), processResult);
             } else {
-                listener.onResponse(new java.util.ArrayList<>());
+                processResult.onResponse(new java.util.ArrayList<>());
             }
-        } else if (ctx.ID() != null) {
+        } else if (ctx.simplePrimaryExpression().ID() != null) {
             // Identifier (variable)
-            String varName = ctx.ID().getText();
+            String varName = ctx.simplePrimaryExpression().ID().getText();
             if ( context.hasVariable(varName) == false ) {
                 listener.onFailure(new RuntimeException("Variable not declared: " + varName));
                 return;
@@ -834,10 +865,53 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
                 listener.onFailure(new RuntimeException("Variable '" + varName + "' is not initialized."));
                 return;
             }
-            listener.onResponse(varValue);
+            processResult.onResponse(varValue);
         } else {
             listener.onFailure(new RuntimeException("Unsupported primary expression: " + ctx.getText()));
         }
+    }
+
+
+    /**
+     * Recursively evaluates bracket expressions attached to a primary expression.
+     * <p>
+     * For a DOCUMENT type variable (represented as a Map), each bracket expression is evaluated to a string key,
+     * which is then used to retrieve the nested field. This supports chained access such as:
+     * {@code myvar['field1']['field2']}.
+     *
+     * @param current      the current value (starting with the base DOCUMENT value)
+     * @param bracketExprs the list of bracket expression contexts
+     * @param index        the current index in the bracket expressions list
+     * @param listener     the ActionListener to be notified with the final value after all bracket accesses
+     */
+    private void evaluateDocumentFieldAccessRecursive(Object current, List<PlEsqlProcedureParser.BracketExpressionContext> bracketExprs,
+                                                      int index, ActionListener<Object> listener) {
+        if (index >= bracketExprs.size()) {
+            listener.onResponse(current);
+            return;
+        }
+        evaluateExpressionAsync(bracketExprs.get(index).expression(), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object keyObj) {
+                if ( (keyObj instanceof String) == false ) {
+                    listener.onFailure(new RuntimeException("Document field access requires a string key, but got: " + keyObj));
+                    return;
+                }
+                String key = (String) keyObj;
+                if (current instanceof java.util.Map) {
+                    Object newValue = ((java.util.Map<?, ?>) current).get(key);
+                    evaluateDocumentFieldAccessRecursive(newValue, bracketExprs, index + 1, listener);
+                } else {
+                    listener.onFailure(new RuntimeException("Attempted to access field '" + key +
+                        "' on non-document type: " + (current != null ? current.getClass().getName() : "null")));
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
     }
 
     /**

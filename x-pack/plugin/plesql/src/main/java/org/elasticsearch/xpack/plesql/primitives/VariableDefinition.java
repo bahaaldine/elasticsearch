@@ -80,6 +80,7 @@ public class VariableDefinition {
             }
             this.elementType = elementType;
         }
+
         this.value = null;
     }
 
@@ -130,7 +131,8 @@ public class VariableDefinition {
      */
     public void setValue(Object value) {
         if ( isTypeCompatible(value) == false ) {
-            throw new RuntimeException("Type mismatch: Expected " + type + " for variable '" + name + "'.");
+            throw new RuntimeException("Type mismatch: Expected " + type + " for variable '" + name + "', " +
+                "for value: " + value.getClass() + " .");
         }
         if (value instanceof Number) {
             // If value is a Number (Integer, Float, Double, etc.), convert directly
@@ -160,6 +162,8 @@ public class VariableDefinition {
                 return value instanceof java.util.Date;
             case ARRAY:
                 return value instanceof List<?>;
+            case DOCUMENT:
+                return value instanceof java.util.Map;
             default:
                 return false;
         }

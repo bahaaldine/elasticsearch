@@ -13,6 +13,7 @@ import org.elasticsearch.xpack.plesql.exceptions.BreakException;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
+import org.elasticsearch.xpack.plesql.primitives.VariableDefinition;
 
 import java.util.List;
 
@@ -89,29 +90,110 @@ public class LoopStatementHandler {
     }
 
     /**
-     * Processes a FOR-array loop.
-     * Example: FOR x IN [10, 20, 30] LOOP ... END LOOP
+     * Handles asynchronous processing of a FOR-array loop.
+     *
+     * <p>This method evaluates the array expression provided in the loop context. If the array expression is a simple
+     * identifier, it attempts to retrieve the declared variable's definition (using {@code getVariableDefinition})
+     * to fetch the array's element type. If the definition is found and an element type is specified, that type is used.
+     * Otherwise, the element type is inferred from the array's contents via {@code inferElementType}.
+     *
+     * <p>Once the appropriate element type is determined, the loop variable is declared with that type (if it hasn't
+     * already been declared), and the loop is executed by invoking {@link #executeArrayLoopIteration(String, List, int, List, ActionListener)}
+     * to process each element in the array.
+     *
+     * @param ctx the parse tree context of the FOR-array loop, containing the loop variable identifier,
+     *            the array expression, and the loop body statements.
+     * @param listener an asynchronous callback that is invoked upon completion or failure of the loop processing.
+     *                 In case of failure, the listener receives a {@link RuntimeException} with the relevant error message.
+     *
+     * @throws RuntimeException if the evaluated array expression does not result in a {@link List}.
      */
     private void handleForArrayLoopAsync(PlEsqlProcedureParser.For_array_loopContext ctx, ActionListener<Object> listener) {
         String loopVarName = ctx.ID().getText();
         // Evaluate the array expression
         executor.evaluateExpressionAsync(ctx.array_loop_expression().expression(), ActionListener.wrap(arrayObj -> {
-            if ((arrayObj instanceof List) == false) {
+            if ( (arrayObj instanceof List) == false ) {
                 listener.onFailure(new RuntimeException("Array loop expression must evaluate to a list."));
                 return;
             }
-            // Declare the loop variable if not already declared
-            ExecutionContext context = executor.getContext();
-            if (context.getVariables().containsKey(loopVarName) == false) {
-                context.declareVariable(loopVarName, "ANY");
-            }
             List<?> items = (List<?>) arrayObj;
+            ExecutionContext context = executor.getContext();
+            String elementType = "ANY";
+
+            // Attempt to fetch the declared element type if the array expression is a single identifier.
+            if (ctx.array_loop_expression().expression().getChildCount() == 1) {
+                String arrayVarName = ctx.array_loop_expression().expression().getText();
+                // Retrieve the VariableDefinition associated with the array variable
+                VariableDefinition arrayVarDef = context.getVariableDefinition(arrayVarName);
+                if (arrayVarDef != null && arrayVarDef.getElementType() != null) {
+                    elementType = arrayVarDef.getElementType();
+                } else {
+                    // Fallback: infer type from array contents.
+                    elementType = inferElementType(items);
+                }
+            } else {
+                // If not a simple variable reference, fall back to inference.
+                elementType = inferElementType(items);
+            }
+            // Declare the loop variable if not already declared using the determined type
+            if ( context.getVariables().containsKey(loopVarName) == false ) {
+                context.declareVariable(loopVarName, elementType);
+            }
+
             executeArrayLoopIteration(loopVarName, items, 0, ctx.statement(), listener);
         }, listener::onFailure));
     }
 
     /**
-     * Recursively iterates over the array elements.
+     * Helper method to infer the element type from the array contents.
+     *
+     * @param items the list of items in the array
+     * @return the inferred element type as a String
+     */
+    private String inferElementType(List<?> items) {
+        String elementType = "ANY";
+        if ( items.isEmpty() == false ) {
+            Object firstElement = items.get(0);
+            if (firstElement instanceof Number) {
+                elementType = "NUMBER";
+            } else if (firstElement instanceof String) {
+                elementType = "STRING";
+            } else if (firstElement instanceof List) {
+                List<?> innerList = (List<?>) firstElement;
+                if ( innerList.isEmpty() == false) {
+                    Object inner = innerList.get(0);
+                    if (inner instanceof Number) {
+                        elementType = "ARRAY OF NUMBER";
+                    } else if (inner instanceof String) {
+                        elementType = "ARRAY OF STRING";
+                    } else {
+                        elementType = "ARRAY";
+                    }
+                } else {
+                    elementType = "ARRAY";
+                }
+            } else if (firstElement instanceof java.util.Map) { // assuming DOCUMENT is represented as Map
+                elementType = "DOCUMENT";
+            }
+        }
+        return elementType;
+    }
+
+    /**
+     * Recursively iterates over the elements of an array in a FOR-array loop.
+     *
+     * <p>This method sets the loop variable to the current element from the array and executes the loop body statements.
+     * After the execution of the loop body:
+     * <ul>
+     *   <li>If a {@link BreakException} is encountered, the iteration terminates immediately.</li>
+     *   <li>If not, the method recurses to process the next element in the array.</li>
+     * </ul>
+     *
+     * @param loopVarName the name of the loop variable that will be assigned each element of the array.
+     * @param items the list representing the array over which to iterate.
+     * @param currentIndex the current index in the array that is being processed.
+     * @param statements the list of statements constituting the body of the loop.
+     * @param listener an asynchronous callback that is invoked when the loop completes processing all elements or if an error occurs.
      */
     private void executeArrayLoopIteration(String loopVarName, List<?> items, int currentIndex,
                                            List<PlEsqlProcedureParser.StatementContext> statements,

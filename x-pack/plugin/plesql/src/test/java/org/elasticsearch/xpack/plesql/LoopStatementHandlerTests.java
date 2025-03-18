@@ -133,7 +133,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
         String blockQuery =
             "BEGIN " +
                 "DECLARE sum NUMBER = 0; " +
-                "DECLARE arr ARRAY = [10, 20, 30]; " +
+                "DECLARE arr ARRAY OF NUMBER = [10, 20, 30]; " +
                 "FOR element IN arr LOOP " +
                 " SET sum = sum + element; " +
                 "END LOOP " +
@@ -193,6 +193,181 @@ public class LoopStatementHandlerTests extends ESTestCase {
         });
         latch.await();
     }
+
+    // Test 6: For-array loop with strings.
+    @Test
+    public void testForArrayLoopWithStrings() throws InterruptedException {
+        String blockQuery =
+            "BEGIN " +
+                "DECLARE last STRING = ''; " +
+                "DECLARE arr ARRAY OF STRING = [\"alpha\", \"beta\", \"gamma\"  ]; " +
+                "FOR element IN arr LOOP " +
+                " SET last = element; " +
+                "END LOOP " +
+                "RETURN last; " +
+                "END";
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        CountDownLatch latch = new CountDownLatch(1);
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                Object lastValue = context.getVariable("last");
+                assertNotNull("last should be declared", lastValue);
+                assertEquals("gamma", lastValue);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
+    }
+
+    // Test 7: For-array loop with nested arrays.
+    @Test
+    public void testForArrayLoopWithNestedArrays() throws InterruptedException {
+        String blockQuery =
+            "BEGIN " +
+                "DECLARE sum NUMBER = 0; " +
+                "DECLARE arr ARRAY OF ARRAY OF NUMBER = [[1,2], [3,4]]; " +
+                "FOR innerArr IN arr LOOP " +
+                " SET sum = sum + innerArr[0]; " +
+                "END LOOP " +
+                "RETURN sum; " +
+                "END";
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        CountDownLatch latch = new CountDownLatch(1);
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                Object sumValue = context.getVariable("sum");
+                assertNotNull("sum should be declared", sumValue);
+                assertEquals(4.0, ((Number) sumValue).doubleValue(), 0.001);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
+    }
+
+    // Test 8: For-array loop with documents.
+    @Test
+    public void testForArrayLoopWithDocuments() throws InterruptedException {
+        String blockQuery =
+            "BEGIN " +
+            "DECLARE sum NUMBER = 0; " +
+                "DECLARE arr ARRAY OF DOCUMENT = [{\"value\":10}, {\"value\":20}]; " +
+                "FOR doc IN arr LOOP " +
+                " SET sum = sum + doc['value']; " +
+                "END LOOP " +
+                "RETURN sum; " +
+            "END";
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        CountDownLatch latch = new CountDownLatch(1);
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                Object sumValue = context.getVariable("sum");
+                assertNotNull("sum should be declared", sumValue);
+                assertEquals(30.0, ((Number) sumValue).doubleValue(), 0.001);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
+    }
+
+    @Test
+    public void testForArrayLoopWithMixedDocumentFields() throws InterruptedException {
+        String blockQuery =
+            "BEGIN " +
+                "  DECLARE sum NUMBER = 0; " +
+                "  DECLARE texts STRING = ''; " +
+                "  DECLARE flags STRING = ''; " +
+                "  DECLARE arr ARRAY OF DOCUMENT = [" +
+                "    {\"value\": 10, \"text\": \"alpha\", \"flag\": true}, " +
+                "    {\"value\": 20, \"text\": \"beta\", \"flag\": false}" +
+                "  ]; " +
+                "  FOR doc IN arr LOOP " +
+                "    SET sum = sum + doc['value']; " +
+                "    SET texts = texts + doc['text'] + ' '; " +
+                "    IF doc['flag'] THEN " +
+                "       SET flags = flags + 'T '; " +
+                "    ELSE " +
+                "       SET flags = flags + 'F '; " +
+                "    END IF; " +
+                "  END LOOP " +
+                "  RETURN sum; " +
+                "END";
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        CountDownLatch latch = new CountDownLatch(1);
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                Object sumValue = context.getVariable("sum");
+                Object textsValue = context.getVariable("texts");
+                Object flagsValue = context.getVariable("flags");
+                assertNotNull("sum should be declared", sumValue);
+                assertNotNull("texts should be declared", textsValue);
+                assertNotNull("flags should be declared", flagsValue);
+                // Expected sum is 10 + 20 = 30.
+                assertEquals(30.0, ((Number) sumValue).doubleValue(), 0.001);
+                // Expected concatenated texts is "alpha beta " (may vary if trailing space matters)
+                assertEquals("alpha beta ", textsValue);
+                // Expected flags string is "T F " (using 'T' for true, 'F' for false)
+                assertEquals("T F ", flagsValue);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
+    }
+
+    // Test 9: For-array loop with an empty array.
+    @Test
+    public void testForArrayLoopEmptyArray() throws InterruptedException {
+        String blockQuery =
+            "BEGIN " +
+                "DECLARE count NUMBER = 0; " +
+                "DECLARE arr ARRAY OF NUMBER = []; " +
+                "FOR element IN arr LOOP " +
+                " SET count = count + 1; " +
+                "END LOOP " +
+                "RETURN count; " +
+                "END";
+        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        CountDownLatch latch = new CountDownLatch(1);
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                Object countValue = context.getVariable("count");
+                assertNotNull("count should be declared", countValue);
+                assertEquals(0.0, ((Number) countValue).doubleValue(), 0.001);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
+    }
+
 /*
     // Test 6: Infinite WHILE loop with break condition.
     @Test

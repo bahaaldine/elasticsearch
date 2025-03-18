@@ -444,6 +444,26 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 */
 	void exitPrimaryExpression(PlEsqlProcedureParser.PrimaryExpressionContext ctx);
 	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#bracketExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterBracketExpression(PlEsqlProcedureParser.BracketExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#bracketExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitBracketExpression(PlEsqlProcedureParser.BracketExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#simplePrimaryExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterSimplePrimaryExpression(PlEsqlProcedureParser.SimplePrimaryExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#simplePrimaryExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitSimplePrimaryExpression(PlEsqlProcedureParser.SimplePrimaryExpressionContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#datatype}.
 	 * @param ctx the parse tree
 	 */

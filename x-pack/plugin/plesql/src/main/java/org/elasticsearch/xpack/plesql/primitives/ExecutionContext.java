@@ -261,7 +261,7 @@ public class ExecutionContext {
      * @param name The name of the variable.
      * @return The VariableDefinition object if found; null otherwise.
      */
-    private VariableDefinition getVariableDefinition(String name) {
+    public VariableDefinition getVariableDefinition(String name) {
         if (variables.containsKey(name)) {
             return variables.get(name);
         } else if (parentContext != null) {

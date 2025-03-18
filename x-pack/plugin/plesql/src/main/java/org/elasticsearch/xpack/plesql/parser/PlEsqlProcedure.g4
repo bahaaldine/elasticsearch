@@ -274,6 +274,14 @@ pair
     ;
 
 primaryExpression
+    : simplePrimaryExpression bracketExpression*
+    ;
+
+bracketExpression
+    : '[' expression ']'
+    ;
+
+simplePrimaryExpression
     : LPAREN expression RPAREN
     | function_call
     | INT
