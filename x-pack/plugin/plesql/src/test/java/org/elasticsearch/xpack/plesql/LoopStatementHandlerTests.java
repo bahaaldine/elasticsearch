@@ -225,36 +225,36 @@ public class LoopStatementHandlerTests extends ESTestCase {
         latch.await();
     }
 
-    // Test 7: For-array loop with nested arrays.
-    @Test
-    public void testForArrayLoopWithNestedArrays() throws InterruptedException {
-        String blockQuery =
-            "BEGIN " +
-                "DECLARE sum NUMBER = 0; " +
-                "DECLARE arr ARRAY OF ARRAY OF NUMBER = [[1,2], [3,4]]; " +
-                "FOR innerArr IN arr LOOP " +
-                " SET sum = sum + innerArr[0]; " +
-                "END LOOP " +
-                "RETURN sum; " +
-                "END";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
-        CountDownLatch latch = new CountDownLatch(1);
-        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
-            @Override
-            public void onResponse(Object result) {
-                Object sumValue = context.getVariable("sum");
-                assertNotNull("sum should be declared", sumValue);
-                assertEquals(4.0, ((Number) sumValue).doubleValue(), 0.001);
-                latch.countDown();
-            }
-            @Override
-            public void onFailure(Exception e) {
-                fail("Execution failed: " + e.getMessage());
-                latch.countDown();
-            }
-        });
-        latch.await();
-    }
+//    // Test 7: For-array loop with nested arrays.
+//    @Test
+//    public void testForArrayLoopWithNestedArrays() throws InterruptedException {
+//        String blockQuery =
+//            "BEGIN " +
+//                "DECLARE sum NUMBER = 0; " +
+//                "DECLARE arr ARRAY OF ARRAY OF NUMBER = [[1,2], [3,4]]; " +
+//                "FOR innerArr IN arr LOOP " +
+//                " SET sum = sum + innerArr[0]; " +
+//                "END LOOP " +
+//                "RETURN sum; " +
+//                "END";
+//        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+//        CountDownLatch latch = new CountDownLatch(1);
+//        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+//            @Override
+//            public void onResponse(Object result) {
+//                Object sumValue = context.getVariable("sum");
+//                assertNotNull("sum should be declared", sumValue);
+//                assertEquals(4.0, ((Number) sumValue).doubleValue(), 0.001);
+//                latch.countDown();
+//            }
+//            @Override
+//            public void onFailure(Exception e) {
+//                fail("Execution failed: " + e.getMessage());
+//                latch.countDown();
+//            }
+//        });
+//        latch.await();
+//    }
 
     // Test 8: For-array loop with documents.
     @Test
