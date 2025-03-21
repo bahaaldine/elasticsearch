@@ -1,7 +1,7 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.
- * under one or more contributor license agreements. Licensed under the Elastic
- * License 2.0; you may not use this file except in compliance with the
+ * under one or more contributor license agreements. Licensed under
+ * the Elastic License 2.0; you may not use this file except in compliance with the
  * Elastic License 2.0.
  */
 
@@ -17,6 +17,7 @@ import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The FunctionDefinitionHandler class is responsible for handling function definition statements
@@ -62,8 +63,8 @@ public class FunctionDefinitionHandler {
 
                     // Validate parameter data type
                     if ( isSupportedDataType(paramType) == false ) {
-                        listener.onFailure(new RuntimeException("Unsupported data type '" + paramType + "' for parameter '"
-                            + paramName + "' in function '" + functionName + "'."));
+                        listener.onFailure(new RuntimeException("Unsupported data type '" + paramType
+                            + "' for parameter '" + paramName + "' in function '" + functionName + "'."));
                         return;
                     }
 
@@ -112,12 +113,12 @@ public class FunctionDefinitionHandler {
         List<String> paramTypes = function.getParameterTypes();
 
         if (paramNames.size() != arguments.size()) {
-            listener.onFailure(new RuntimeException("Function '" + functionName + "' expects " + paramNames.size() + " arguments, but "
-                + arguments.size() + " were provided."));
+            listener.onFailure(new RuntimeException("Function '" + functionName + "' expects " + paramNames.size() +
+                " arguments, but " + arguments.size() + " were provided."));
             return;
         }
 
-        // Create a new ExecutionContext for the function
+        // Create a new ExecutionContext for the function (child of the current context)
         ExecutionContext functionContext = new ExecutionContext(executor.getContext());
 
         // Declare and set parameters in the function context
@@ -138,42 +139,45 @@ public class FunctionDefinitionHandler {
             functionContext.setVariable(paramName, argValue);
         }
 
-        // Temporarily set the executor's context to the function context
-        ExecutionContext originalContext = executor.getContext();
-        executor.setContext(functionContext);
+        // Create a new ProcedureExecutor that uses the functionContext.
+        // Since getClient() and getTokenStream() are not available, we pass null.
+        ProcedureExecutor functionExecutor = new ProcedureExecutor(
+            functionContext,
+            executor.getThreadPool(),
+            null,
+            null
+        );
 
         ActionListener<Object> functionBodyListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
-                if (result instanceof ReturnValue) {
-                    // Function returned a value
-                    Object returnValue = ((ReturnValue) result).getValue();
-                    executor.setContext(originalContext);
-                    listener.onResponse(returnValue);
-                } else {
-                    listener.onFailure(new RuntimeException("Function '" + functionName + "' did not return a value."));
-                }
+                // If the result is wrapped in a ReturnValue, unwrap it;
+                // otherwise, assume the result is the intended return value (even if null)
+                Object returnValue = result instanceof ReturnValue
+                    ? ((ReturnValue) result).getValue()
+                    : result;
+                listener.onResponse(returnValue);
             }
 
             @Override
             public void onFailure(Exception e) {
                 if (e instanceof ReturnValue) {
-                    // Function returned a value
                     Object returnValue = ((ReturnValue) e).getValue();
-                    executor.setContext(originalContext);
                     listener.onResponse(returnValue);
                 } else {
-                    executor.setContext(originalContext);
                     listener.onFailure(e);
                 }
             }
         };
 
-        ActionListener<Object> functionBodyLogger = ActionListenerUtils.withLogging(functionBodyListener, this.getClass().getName(),
-            "Function-Body: " + function.getBody());
+        ActionListener<Object> functionBodyLogger = ActionListenerUtils.withLogging(
+            functionBodyListener,
+            this.getClass().getName(),
+            "Function-Body: " + function.getBody()
+        );
 
-        // Execute the function body asynchronously
-        executor.executeStatementsAsync(function.getBody(), 0, functionBodyLogger);
+        // Execute the function body asynchronously using the new executor.
+        functionExecutor.executeStatementsAsync(function.getBody(), 0, functionBodyLogger);
     }
 
     /**
@@ -184,18 +188,20 @@ public class FunctionDefinitionHandler {
         if (functionBody == null || functionBody.isEmpty()) {
             throw new RuntimeException("Function '" + ctx.ID().getText() + "' does not have a valid body.");
         }
-
         return functionBody;
     }
 
     /**
      * Determines if the provided data type is supported.
+     * Updated to support NUMBER, STRING, DATE, DOCUMENT, and ARRAY.
      */
     private boolean isSupportedDataType(String dataType) {
         switch (dataType.toUpperCase()) {
             case "NUMBER":
             case "STRING":
             case "DATE":
+            case "DOCUMENT":
+            case "ARRAY":
                 return true;
             default:
                 return false;  // Unsupported data type
@@ -204,19 +210,23 @@ public class FunctionDefinitionHandler {
 
     /**
      * Validates if the argument value is compatible with the expected data type.
+     * Updated to support NUMBER, STRING, DATE, DOCUMENT, and ARRAY.
      */
     private boolean isArgumentTypeCompatible(String dataType, Object value) {
         if (value == null) {
             return true; // Allow null assignments
         }
-
         switch (dataType.toUpperCase()) {
             case "NUMBER":
-                return value instanceof Double;
+                return value instanceof Double || value instanceof Integer;
             case "STRING":
                 return value instanceof String;
             case "DATE":
                 return value instanceof java.util.Date;
+            case "DOCUMENT":
+                return value instanceof Map;
+            case "ARRAY":
+                return value instanceof List;
             default:
                 return false;
         }
