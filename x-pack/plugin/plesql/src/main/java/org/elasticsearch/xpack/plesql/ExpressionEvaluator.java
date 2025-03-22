@@ -8,9 +8,11 @@ package org.elasticsearch.xpack.plesql;
 
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
+import org.elasticsearch.xpack.plesql.operators.primitives.BinaryOperatorHandler;
+import org.elasticsearch.xpack.plesql.operators.OperatorHandlerRegistry;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -241,32 +243,17 @@ public class ExpressionEvaluator {
         }
         PlEsqlProcedureParser.MultiplicativeExpressionContext currentExpr = ctx.multiplicativeExpression(index);
         String operator = ctx.getChild(2 * index - 1).getText();
+
+        // Instantiate the registry (or use a cached instance)
+        OperatorHandlerRegistry registry = new OperatorHandlerRegistry();
+        BinaryOperatorHandler handler = registry.getHandler(operator);
+
         ActionListener<Object> evalOperandListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object rightValue) {
                 try {
-                    if (operator.equals("+")) {
-                        if (leftValue instanceof String || rightValue instanceof String) {
-                            Object result = leftValue.toString() + rightValue.toString();
-                            evaluateAdditiveOperandsAsync(ctx, index + 1, result, listener);
-                        } else {
-                            double leftDouble = ((Number) leftValue).doubleValue();
-                            double rightDouble = ((Number) rightValue).doubleValue();
-                            double result = leftDouble + rightDouble;
-                            evaluateAdditiveOperandsAsync(ctx, index + 1, result, listener);
-                        }
-                    } else if (operator.equals("-")) {
-                        if (leftValue instanceof Number && rightValue instanceof Number) {
-                            double leftDouble = ((Number) leftValue).doubleValue();
-                            double rightDouble = ((Number) rightValue).doubleValue();
-                            double result = leftDouble - rightDouble;
-                            evaluateAdditiveOperandsAsync(ctx, index + 1, result, listener);
-                        } else {
-                            listener.onFailure(new RuntimeException("Subtraction requires numeric operands."));
-                        }
-                    } else {
-                        listener.onFailure(new RuntimeException("Unknown additive operator: " + operator));
-                    }
+                    Object result = handler.apply(leftValue, rightValue);
+                    evaluateAdditiveOperandsAsync(ctx, index + 1, result, listener);
                 } catch (Exception e) {
                     listener.onFailure(e);
                 }
@@ -409,7 +396,7 @@ public class ExpressionEvaluator {
         if (ctx.simplePrimaryExpression().LPAREN() != null && ctx.simplePrimaryExpression().RPAREN() != null) {
             evaluateExpressionAsync(ctx.simplePrimaryExpression().expression(), processResult);
         } else if (ctx.simplePrimaryExpression().function_call() != null) {
-            // Delegate function call evaluation to the executor's handler
+            // Delegate function call evaluation to the executor's function call handler.
             executor.visitFunctionCallAsync(ctx.simplePrimaryExpression().function_call(), processResult);
         } else if (ctx.simplePrimaryExpression().INT() != null) {
             try {
@@ -532,7 +519,8 @@ public class ExpressionEvaluator {
         evaluateArgumentAsync(argContexts, 0, argValues, listener);
     }
 
-    private void evaluateArgumentAsync(List<PlEsqlProcedureParser.ExpressionContext> argContexts, int index, List<Object> argValues, ActionListener<List<Object>> listener) {
+    private void evaluateArgumentAsync(List<PlEsqlProcedureParser.ExpressionContext> argContexts,
+                                       int index, List<Object> argValues, ActionListener<List<Object>> listener) {
         if (index >= argContexts.size()) {
             listener.onResponse(argValues);
             return;

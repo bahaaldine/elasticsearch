@@ -40,7 +40,7 @@ public class PlEsqlExecutor {
     public void executeProcedure(String procedureText, ActionListener<Object> listener) {
         threadPool.generic().execute(() -> {
             try {
-                // 1) Parse input
+                // 1) Parse inputt
                 PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(procedureText));
                 CommonTokenStream tokens = new CommonTokenStream(lexer);
                 PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);

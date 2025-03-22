@@ -83,6 +83,41 @@ COMMENT
 
 WS : [ \t\r\n]+ -> channel(HIDDEN);
 
+// --- Lexer rules for String built‑in functions ---
+LENGTH: 'LENGTH';
+SUBSTR: 'SUBSTR';
+UPPER: 'UPPER';
+LOWER: 'LOWER';
+TRIM: 'TRIM';
+LTRIM: 'LTRIM';
+RTRIM: 'RTRIM';
+REPLACE: 'REPLACE';
+INSTR: 'INSTR';
+LPAD: 'LPAD';
+RPAD: 'RPAD';
+SPLIT: 'SPLIT';
+CONCAT: 'CONCAT';
+REGEXP_REPLACE: 'REGEXP_REPLACE';
+REGEXP_SUBSTR: 'REGEXP_SUBSTR';
+REVERSE: 'REVERSE';
+INITCAP: 'INITCAP';
+LIKE: 'LIKE';
+
+// --- Lexer Rules for Numeric Built‑In Functions ---
+
+ABS: 'ABS';
+CEIL: 'CEIL';
+FLOOR: 'FLOOR';
+ROUND: 'ROUND';
+POWER: 'POWER';
+SQRT: 'SQRT';
+LOG: 'LOG';
+EXP: 'EXP';
+MOD: 'MOD';
+SIGN: 'SIGN';
+TRUNC: 'TRUNC';
+
+
 // =======================
 // Parser Rules
 // =======================

@@ -49,7 +49,11 @@ public class PlEsqlProcedureParser extends Parser {
 		PLUS=37, MINUS=38, MULTIPLY=39, DIVIDE=40, GREATER_THAN=41, LESS_THAN=42,
 		NOT_EQUAL=43, GREATER_EQUAL=44, LESS_EQUAL=45, OR=46, AND=47, EQUAL=48,
 		DOT_DOT=49, PIPE=50, DOT=51, LPAREN=52, RPAREN=53, COMMA=54, COLON=55,
-		SEMICOLON=56, FLOAT=57, INT=58, STRING=59, ID=60, COMMENT=61, WS=62;
+		SEMICOLON=56, FLOAT=57, INT=58, STRING=59, ID=60, COMMENT=61, WS=62, LENGTH=63,
+		SUBSTR=64, UPPER=65, LOWER=66, TRIM=67, LTRIM=68, RTRIM=69, REPLACE=70,
+		INSTR=71, LPAD=72, RPAD=73, SPLIT=74, CONCAT=75, REGEXP_REPLACE=76, REGEXP_SUBSTR=77,
+		REVERSE=78, INITCAP=79, LIKE=80, ABS=81, CEIL=82, FLOOR=83, ROUND=84,
+		POWER=85, SQRT=86, LOG=87, EXP=88, MOD=89, SIGN=90, TRUNC=91;
 	public static final int
 		RULE_procedure = 0, RULE_statement = 1, RULE_break_statement = 2, RULE_return_statement = 3,
 		RULE_expression_statement = 4, RULE_execute_statement = 5, RULE_variable_assignment = 6,
@@ -94,7 +98,11 @@ public class PlEsqlProcedureParser extends Parser {
 			"'INTO'", "'INT'", "'FLOAT'", "'STRING'", "'DATE'", "'NUMBER'", "'DOCUMENT'",
 			"'ARRAY'", "'+'", "'-'", "'*'", "'/'", "'>'", "'<'", "'!='", "'>='",
 			"'<='", "'OR'", "'AND'", "'='", "'..'", "'|'", "'.'", "'('", "')'", "','",
-			"':'", "';'"
+			"':'", "';'", null, null, null, null, null, null, "'LENGTH'", "'SUBSTR'",
+			"'UPPER'", "'LOWER'", "'TRIM'", "'LTRIM'", "'RTRIM'", "'REPLACE'", "'INSTR'",
+			"'LPAD'", "'RPAD'", "'SPLIT'", "'CONCAT'", "'REGEXP_REPLACE'", "'REGEXP_SUBSTR'",
+			"'REVERSE'", "'INITCAP'", "'LIKE'", "'ABS'", "'CEIL'", "'FLOOR'", "'ROUND'",
+			"'POWER'", "'SQRT'", "'LOG'", "'EXP'", "'MOD'", "'SIGN'", "'TRUNC'"
 		};
 	}
 	private static final String[] _LITERAL_NAMES = makeLiteralNames();
@@ -108,7 +116,10 @@ public class PlEsqlProcedureParser extends Parser {
 			"DIVIDE", "GREATER_THAN", "LESS_THAN", "NOT_EQUAL", "GREATER_EQUAL",
 			"LESS_EQUAL", "OR", "AND", "EQUAL", "DOT_DOT", "PIPE", "DOT", "LPAREN",
 			"RPAREN", "COMMA", "COLON", "SEMICOLON", "FLOAT", "INT", "STRING", "ID",
-			"COMMENT", "WS"
+			"COMMENT", "WS", "LENGTH", "SUBSTR", "UPPER", "LOWER", "TRIM", "LTRIM",
+			"RTRIM", "REPLACE", "INSTR", "LPAD", "RPAD", "SPLIT", "CONCAT", "REGEXP_REPLACE",
+			"REGEXP_SUBSTR", "REVERSE", "INITCAP", "LIKE", "ABS", "CEIL", "FLOOR",
+			"ROUND", "POWER", "SQRT", "LOG", "EXP", "MOD", "SIGN", "TRUNC"
 		};
 	}
 	private static final String[] _SYMBOLIC_NAMES = makeSymbolicNames();
@@ -3523,7 +3534,7 @@ public class PlEsqlProcedureParser extends Parser {
 	}
 
 	public static final String _serializedATN =
-		"\u0004\u0001>\u01c6\u0002\u0000\u0007\u0000\u0002\u0001\u0007\u0001\u0002"+
+		"\u0004\u0001[\u01c6\u0002\u0000\u0007\u0000\u0002\u0001\u0007\u0001\u0002"+
 		"\u0002\u0007\u0002\u0002\u0003\u0007\u0003\u0002\u0004\u0007\u0004\u0002"+
 		"\u0005\u0007\u0005\u0002\u0006\u0007\u0006\u0002\u0007\u0007\u0007\u0002"+
 		"\b\u0007\b\u0002\t\u0007\t\u0002\n\u0007\n\u0002\u000b\u0007\u000b\u0002"+

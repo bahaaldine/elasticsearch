@@ -7,8 +7,12 @@
 
 package org.elasticsearch.xpack.plesql.primitives;
 
+import org.elasticsearch.xpack.plesql.primitives.functions.BuiltInFunctionDefinition;
+import org.elasticsearch.xpack.plesql.primitives.functions.interfaces.BuiltInFunction;
+
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -177,6 +181,27 @@ public class ExecutionContext {
     }
 
     /**
+     * Retrieves the built-in function definition for the specified function name.
+     * <p>
+     * This method first retrieves a function using {@link #getFunction(String)}.
+     * If the returned {@code FunctionDefinition} is an instance of {@code BuiltInFunctionDefinition},
+     * it is cast and returned. Otherwise, a {@code RuntimeException} is thrown, indicating that the
+     * specified function is not implemented as a built-in function.
+     *
+     * @param name the name of the built-in function to retrieve.
+     * @return the {@code BuiltInFunctionDefinition} corresponding to the specified name.
+     * @throws RuntimeException if the function exists but is not a built-in function.
+     */
+    public BuiltInFunctionDefinition getBuiltInFunction(String name) {
+        FunctionDefinition fn = getFunction(name);
+        if (fn instanceof BuiltInFunctionDefinition) {
+            return (BuiltInFunctionDefinition) fn;
+        } else {
+            throw new RuntimeException("Function '" + name + "' is not a built-in function.");
+        }
+    }
+
+    /**
      * Declares a new function in the global context. If the current context is not global,
      * delegates the declaration to the parent context.
      *
@@ -193,6 +218,26 @@ public class ExecutionContext {
         } else {
             parentContext.declareFunction(name, function);
         }
+    }
+
+    /**
+     * Convenience overload: Declares a built-in function by wrapping it in a FunctionDefinition.
+     *
+     * @param name          The name of the function (e.g., "UPPER", "LENGTH", etc.).
+     * @param builtInLambda A BuiltInFunction lambda to be invoked for this function.
+     */
+    public void declareFunction(String name, BuiltInFunction builtInLambda) {
+        FunctionDefinition def = new FunctionDefinition(
+            name,
+            Collections.emptyList(),    // parameterNames: built-in functions have no declared parameters here
+            Collections.emptyList(),    // parameterTypes: built-in functions have no declared parameter types here
+            Collections.emptyList()     // function body: built-in functions have no body since they're executed via lambda
+        ) {
+            public Object execute(List<Object> args) {
+                return builtInLambda.apply(args);
+            }
+        };
+        declareFunction(name, def);
     }
 
     /**
