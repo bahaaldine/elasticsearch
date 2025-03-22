@@ -17,6 +17,10 @@ import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.primitives.functions.ArrayBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.primitives.functions.DateBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.primitives.functions.NumberBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.primitives.functions.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 /**
@@ -52,6 +56,13 @@ public class PlEsqlExecutor {
 
                 // 2) Build executor
                 ExecutionContext executionContext = new ExecutionContext();
+
+                // Register built-in functions
+                StringBuiltInFunctions.registerAll(executionContext);
+                NumberBuiltInFunctions.registerAll(executionContext);
+                ArrayBuiltInFunctions.registerAll(executionContext);
+                DateBuiltInFunctions.registerAll(executionContext);
+
                 ProcedureExecutor procedureExecutor = new ProcedureExecutor(executionContext, threadPool, client, tokens);
 
                 ActionListener<Object> executeProcedureListener = new ActionListener<Object>() {
