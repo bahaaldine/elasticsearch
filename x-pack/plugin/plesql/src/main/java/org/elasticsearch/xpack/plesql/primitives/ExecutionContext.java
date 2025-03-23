@@ -1,3 +1,4 @@
+
 /*
  * Copyright Elasticsearch B.V.
  * under one or more contributor license agreements. Licensed under the Elastic
@@ -12,9 +13,9 @@ import org.elasticsearch.xpack.plesql.primitives.functions.interfaces.BuiltInFun
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.List;
 
 /**
  * The ExecutionContext class manages the execution state, including variables and functions,
@@ -46,14 +47,9 @@ public class ExecutionContext {
         this.parentContext = parentContext;
     }
 
-    /**
-     * Retrieves the parent ExecutionContext.
-     *
-     * @return The parent ExecutionContext, or null if this is the global context.
-     */
-    public ExecutionContext getParentContext() {
-        return this.parentContext;
-    }
+    // -------------------------
+    // Variable Management
+    // -------------------------
 
     /**
      * Declares a new variable with the specified name and type in the current context.
@@ -113,18 +109,26 @@ public class ExecutionContext {
     public Object getVariable(String name) {
         VariableDefinition varDef = getVariableDefinition(name);
         if (varDef != null) {
-            Object value = varDef.getValue();
-            return value;
+            return varDef.getValue();
         } else {
             throw new RuntimeException("Variable '" + name + "' is not declared.");
         }
     }
 
+    /**
+     * Retrieves the type of a declared variable as a String.
+     * It calls toString() on the underlying type object.
+     *
+     * @param name The variable name.
+     * @return The type as a String.
+     * @throws RuntimeException If the variable is not declared.
+     */
     public String getVariableType(String name) {
         VariableDefinition def = getVariableDefinition(name);
         if (def == null) {
             throw new RuntimeException("Variable '" + name + "' is not declared.");
         }
+        // Explicitly return the string representation of the type.
         return def.getType().toString();
     }
 
@@ -140,15 +144,6 @@ public class ExecutionContext {
 
     /**
      * Prints all declared variables and their current values in the execution context.
-     * If no variables are declared, it will print "No variables declared."
-     *
-     * Example output:
-     * <pre>
-     * All Variables:
-     * x = 5
-     * y = 10.0
-     * z = null
-     * </pre>
      */
     public void printAllVariables() {
         if (variables.isEmpty()) {
@@ -161,6 +156,27 @@ public class ExecutionContext {
             System.out.println(entry.getKey() + " = " + entry.getValue());
         }
     }
+
+    /**
+     * Retrieves the VariableDefinition for a given variable name by searching the current
+     * and parent contexts recursively.
+     *
+     * @param name The name of the variable.
+     * @return The VariableDefinition object if found; null otherwise.
+     */
+    public VariableDefinition getVariableDefinition(String name) {
+        if (variables.containsKey(name)) {
+            return variables.get(name);
+        } else if (parentContext != null) {
+            return parentContext.getVariableDefinition(name);
+        } else {
+            return null;
+        }
+    }
+
+    // -------------------------
+    // Function Management
+    // -------------------------
 
     /**
      * Retrieves the FunctionDefinition associated with the specified function name.
@@ -184,12 +200,11 @@ public class ExecutionContext {
      * Retrieves the built-in function definition for the specified function name.
      * <p>
      * This method first retrieves a function using {@link #getFunction(String)}.
-     * If the returned {@code FunctionDefinition} is an instance of {@code BuiltInFunctionDefinition},
-     * it is cast and returned. Otherwise, a {@code RuntimeException} is thrown, indicating that the
-     * specified function is not implemented as a built-in function.
+     * If the returned FunctionDefinition is an instance of BuiltInFunctionDefinition,
+     * it is cast and returned. Otherwise, a RuntimeException is thrown.
      *
      * @param name the name of the built-in function to retrieve.
-     * @return the {@code BuiltInFunctionDefinition} corresponding to the specified name.
+     * @return the BuiltInFunctionDefinition corresponding to the specified name.
      * @throws RuntimeException if the function exists but is not a built-in function.
      */
     public BuiltInFunctionDefinition getBuiltInFunction(String name) {
@@ -202,8 +217,8 @@ public class ExecutionContext {
     }
 
     /**
-     * Declares a new function in the global context. If the current context is not global,
-     * delegates the declaration to the parent context.
+     * Declares a new function in the global context. If the current context is nested,
+     * the declaration is delegated to the parent context.
      *
      * @param name     The name of the function.
      * @param function The FunctionDefinition object.
@@ -221,7 +236,9 @@ public class ExecutionContext {
     }
 
     /**
-     * Convenience overload: Declares a built-in function by wrapping it in a FunctionDefinition.
+     * Convenience overload: Declares a built-in function by wrapping a BuiltInFunction lambda
+     * in a FunctionDefinition. This anonymous subclass provides an execute method that delegates
+     * to the lambda. Empty lists are passed for parameters, parameter types, and function body.
      *
      * @param name          The name of the function (e.g., "UPPER", "LENGTH", etc.).
      * @param builtInLambda A BuiltInFunction lambda to be invoked for this function.
@@ -229,10 +246,11 @@ public class ExecutionContext {
     public void declareFunction(String name, BuiltInFunction builtInLambda) {
         FunctionDefinition def = new FunctionDefinition(
             name,
-            Collections.emptyList(),    // parameterNames: built-in functions have no declared parameters here
-            Collections.emptyList(),    // parameterTypes: built-in functions have no declared parameter types here
-            Collections.emptyList()     // function body: built-in functions have no body since they're executed via lambda
+            Collections.emptyList(),    // parameter names (none for built-in)
+            Collections.emptyList(),    // parameter types (none for built-in)
+            Collections.emptyList()     // function body (not used)
         ) {
+            // No @Override annotation because FunctionDefinition does not declare execute.
             public Object execute(List<Object> args) {
                 return builtInLambda.apply(args);
             }
@@ -257,7 +275,8 @@ public class ExecutionContext {
     }
 
     /**
-     * Retrieves all variable names accessible in the current context, including those from parent contexts.
+     * Retrieves an unmodifiable set of variable names available in the current context,
+     * including those from parent contexts.
      *
      * @return A Set of variable names.
      */
@@ -291,28 +310,11 @@ public class ExecutionContext {
 
     /**
      * Clears all variables and functions from the current context.
-     * This does not affect parent contexts.
+     * This does not affect any parent contexts.
      */
     public void clear() {
         variables.clear();
         functions.clear();
         System.out.println("Cleared all variables and functions from the current context.");
-    }
-
-    /**
-     * Retrieves the VariableDefinition for a given variable name by searching the current
-     * and parent contexts recursively.
-     *
-     * @param name The name of the variable.
-     * @return The VariableDefinition object if found; null otherwise.
-     */
-    public VariableDefinition getVariableDefinition(String name) {
-        if (variables.containsKey(name)) {
-            return variables.get(name);
-        } else if (parentContext != null) {
-            return parentContext.getVariableDefinition(name);
-        } else {
-            return null;
-        }
     }
 }
