@@ -5,9 +5,10 @@
  * 2.0.
  */
 
-package org.elasticsearch.xpack.plesql.primitives.functions;
+package org.elasticsearch.xpack.plesql.primitives.functions.builtin;
 
-import org.elasticsearch.xpack.plesql.primitives.FunctionDefinition;
+import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
+import org.elasticsearch.xpack.plesql.primitives.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.functions.interfaces.BuiltInFunction;
 
 import java.util.Collections;
@@ -25,7 +26,7 @@ public class BuiltInFunctionDefinition extends FunctionDefinition {
      * @param function the lambda that implements this built-in function
      */
     public BuiltInFunctionDefinition(String name, BuiltInFunction function) {
-        super(name, Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+        super(name, Collections.emptyList(), Collections.<PlEsqlProcedureParser.StatementContext>emptyList());
         this.function = function;
     }
 

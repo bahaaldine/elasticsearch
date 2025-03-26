@@ -8,8 +8,8 @@
 package org.elasticsearch.xpack.plesql.functions;
 
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.primitives.functions.BuiltInFunctionDefinition;
-import org.elasticsearch.xpack.plesql.primitives.functions.NumberBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.primitives.functions.builtin.BuiltInFunctionDefinition;
+import org.elasticsearch.xpack.plesql.primitives.functions.builtin.NumberBuiltInFunctions;
 import org.junit.Before;
 import org.junit.Test;
 

@@ -24,7 +24,7 @@ import org.elasticsearch.xpack.plesql.handlers.TryCatchStatementHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureBaseVisitor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.primitives.FunctionDefinition;
+import org.elasticsearch.xpack.plesql.primitives.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 

@@ -7,8 +7,9 @@
 
 package org.elasticsearch.xpack.plesql.symbol;
 
-import org.elasticsearch.xpack.plesql.primitives.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.VariableDefinition;
+import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
+import org.elasticsearch.xpack.plesql.primitives.functions.FunctionDefinition;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -63,8 +64,7 @@ public class SymbolTableTests {
         // Create a dummy function definition using an anonymous subclass.
         FunctionDefinition dummy = new FunctionDefinition("dummy",
             Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList()) {
+            Collections.<PlEsqlProcedureParser.StatementContext>emptyList()) {
             public Object execute(List<Object> args) {
                 return "result";
             }
@@ -80,8 +80,7 @@ public class SymbolTableTests {
     public void testDuplicateFunctionDeclaration() {
         FunctionDefinition dummy = new FunctionDefinition("dummy",
             Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList()) {
+            Collections.<PlEsqlProcedureParser.StatementContext>emptyList()) {
             public Object execute(List<Object> args) {
                 return "result";
             }
@@ -104,8 +103,7 @@ public class SymbolTableTests {
     public void testGetFunctions() {
         FunctionDefinition dummy = new FunctionDefinition("dummy",
             Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList()) {
+            Collections.<PlEsqlProcedureParser.StatementContext>emptyList()) {
             public Object execute(List<Object> args) {
                 return "result";
             }
@@ -120,8 +118,7 @@ public class SymbolTableTests {
         symbolTable.declareVariable("b", "STRING");
         symbolTable.declareFunction("dummy", new FunctionDefinition("dummy",
             Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList()) {
+            Collections.<PlEsqlProcedureParser.StatementContext>emptyList()) {
             public Object execute(List<Object> args) {
                 return "result";
             }

@@ -15,7 +15,12 @@ EXECUTE: 'EXECUTE';
 DECLARE: 'DECLARE';
 SET: 'SET';
 FOR: 'FOR';
+
+// Reminder: In is used both in loops and in parameters
 IN: 'IN';
+OUT: 'OUT';
+INOUT: 'INOUT';
+
 WHILE: 'WHILE';
 LOOP: 'LOOP';
 ENDLOOP: 'END LOOP';
@@ -273,7 +278,7 @@ parameter_list
     ;
 
 parameter
-    : ID datatype
+    : (IN | OUT | INOUT)? ID datatype
     ;
 
 argument_list

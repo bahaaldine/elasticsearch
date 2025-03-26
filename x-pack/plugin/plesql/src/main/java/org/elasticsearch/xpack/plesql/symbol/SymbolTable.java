@@ -6,7 +6,7 @@
  */
 package org.elasticsearch.xpack.plesql.symbol;
 
-import org.elasticsearch.xpack.plesql.primitives.FunctionDefinition;
+import org.elasticsearch.xpack.plesql.primitives.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.VariableDefinition;
 
 import java.util.Collections;

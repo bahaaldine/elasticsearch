@@ -17,10 +17,10 @@ import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.primitives.functions.ArrayBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.primitives.functions.DateBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.primitives.functions.NumberBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.primitives.functions.StringBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.primitives.functions.builtin.ArrayBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.primitives.functions.builtin.DateBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.primitives.functions.builtin.NumberBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.primitives.functions.builtin.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 /**

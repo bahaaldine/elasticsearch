@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-package org.elasticsearch.xpack.plesql.primitives.functions;
+package org.elasticsearch.xpack.plesql.primitives.functions.builtin;
 
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.functions.interfaces.BuiltInFunction;

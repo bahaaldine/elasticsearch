@@ -8,14 +8,13 @@
 
 package org.elasticsearch.xpack.plesql.primitives;
 
-import org.elasticsearch.xpack.plesql.primitives.functions.BuiltInFunctionDefinition;
-import org.elasticsearch.xpack.plesql.primitives.functions.interfaces.BuiltInFunction;
+import org.elasticsearch.xpack.plesql.primitives.functions.FunctionDefinition;
+import org.elasticsearch.xpack.plesql.primitives.functions.builtin.BuiltInFunctionDefinition;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.List;
 
 /**
  * The ExecutionContext class manages the execution state, including variables and functions,
@@ -236,26 +235,18 @@ public class ExecutionContext {
     }
 
     /**
-     * Convenience overload: Declares a built-in function by wrapping a BuiltInFunction lambda
-     * in a FunctionDefinition. This anonymous subclass provides an execute method that delegates
-     * to the lambda. Empty lists are passed for parameters, parameter types, and function body.
+     * Overrides an existing function definition (or declares it if not already present).
+     * This is primarily useful for testing or updating built-in function definitions.
      *
-     * @param name          The name of the function (e.g., "UPPER", "LENGTH", etc.).
-     * @param builtInLambda A BuiltInFunction lambda to be invoked for this function.
+     * @param name The function name.
+     * @param function The new FunctionDefinition.
      */
-    public void declareFunction(String name, BuiltInFunction builtInLambda) {
-        FunctionDefinition def = new FunctionDefinition(
-            name,
-            Collections.emptyList(),    // parameter names (none for built-in)
-            Collections.emptyList(),    // parameter types (none for built-in)
-            Collections.emptyList()     // function body (not used)
-        ) {
-            // No @Override annotation because FunctionDefinition does not declare execute.
-            public Object execute(List<Object> args) {
-                return builtInLambda.apply(args);
-            }
-        };
-        declareFunction(name, def);
+    public void overrideFunction(String name, FunctionDefinition function) {
+        if (parentContext != null) {
+            parentContext.overrideFunction(name, function);
+        } else {
+            functions.put(name, function);
+        }
     }
 
     /**
