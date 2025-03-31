@@ -65,7 +65,11 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 1: Simple IF statement with a true condition
     @Test
     public void testSimpleIfTrueCondition() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 1 = 1 THEN SET myVar = 10; END IF END";
+        String blockQuery = "" +
+            "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
+            "BEGIN " +
+                "DECLARE myVar NUMBER; IF 1 = 1 THEN SET myVar = 10; END IF " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -91,7 +95,10 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 2: Simple IF statement with a false condition
     @Test
     public void testSimpleIfFalseCondition() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 1 = 2 THEN SET myVar = 10; END IF END";
+        String blockQuery = "" +
+            "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
+                "BEGIN DECLARE myVar NUMBER; IF 1 = 2 THEN SET myVar = 10; END IF " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -117,7 +124,10 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 3: IF-ELSE statement with false IF and true ELSE
     @Test
     public void testIfElseStatement() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 1 = 2 THEN SET myVar = 10; ELSE SET myVar = 20; END IF END";
+        String blockQuery = "" +
+            "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
+                "BEGIN DECLARE myVar NUMBER; IF 1 = 2 THEN SET myVar = 10; ELSE SET myVar = 20; END IF " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -144,6 +154,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     @Test
     public void testIfElseIfElseStatement() throws InterruptedException {
         String blockQuery =
+            "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
             "BEGIN " +
                 "DECLARE myVar NUMBER; " +
                 "IF 1 = 2 THEN " +
@@ -153,7 +164,7 @@ public class IfStatementHandlerTests extends ESTestCase {
                 "ELSE " +
                     "SET myVar = 30; " +
                 "END IF; " +
-            "END";
+            "END PROCEDURE";
 
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -180,7 +191,12 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 5: Arithmetic operations in IF condition
     @Test
     public void testArithmeticInIfCondition() throws Exception {
-        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 5 + 5 = 10 THEN SET myVar = 10; END IF END";
+        String blockQuery = " " +
+            "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
+            "BEGIN " +
+                "DECLARE myVar NUMBER; " +
+                "IF 5 + 5 = 10 THEN SET myVar = 10; END IF;" +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -212,7 +228,10 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 6: Nested IF statement
     @Test
     public void testNestedIfStatement() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 1 = 1 THEN IF 2 = 2 THEN SET myVar = 10; END IF END IF END";
+        String blockQuery = " " +
+            "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
+                "BEGIN DECLARE myVar NUMBER; IF 1 = 1 THEN IF 2 = 2 THEN SET myVar = 10; END IF END IF " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -238,7 +257,10 @@ public class IfStatementHandlerTests extends ESTestCase {
     // Test 7: IF statement with comparison operators
     @Test
     public void testIfStatementWithComparisonOperators() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE myVar NUMBER; IF 5 > 3 THEN SET myVar = 10; END IF END";
+        String blockQuery = "" +
+            "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
+                "BEGIN DECLARE myVar NUMBER; IF 5 > 3 THEN SET myVar = 10; END IF " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);

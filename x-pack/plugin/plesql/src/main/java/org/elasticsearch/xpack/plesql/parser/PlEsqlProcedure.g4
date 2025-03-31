@@ -17,6 +17,7 @@ SET: 'SET';
 FOR: 'FOR';
 
 // Reminder: In is used both in loops and in parameters
+PROCEDURE: 'PROCEDURE';
 IN: 'IN';
 OUT: 'OUT';
 INOUT: 'INOUT';
@@ -153,7 +154,7 @@ DOCUMENT_CONTAINS: 'DOCUMENT_CONTAINS';
 // =======================
 
 procedure
-    : BEGIN statement+ END EOF
+    : PROCEDURE ID LPAREN (parameter_list)? RPAREN BEGIN statement+ END PROCEDURE
     ;
 
 statement

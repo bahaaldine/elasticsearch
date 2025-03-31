@@ -57,7 +57,7 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
     // Test 1: Basic Try Block Execution Without Errors
     @Test
     public void testTryBlockExecution() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE j NUMBER; TRY SET j = 10; END TRY END";
+        String blockQuery = "PROCEDURE dummy_procedure(INOUT x NUMBER) BEGIN DECLARE j NUMBER; TRY SET j = 10; END TRY END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -84,7 +84,9 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
     // Test 2: Try-Catch Block Execution With an Error
     @Test
     public void testTryCatchBlockExecution() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE j NUMBER; TRY SET j = 10 / 0; CATCH SET j = 20; END TRY END";
+        String blockQuery = "PROCEDURE dummy_procedure(INOUT x NUMBER) " +
+                "BEGIN DECLARE j NUMBER; TRY SET j = 10 / 0; CATCH SET j = 20; END TRY " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -112,7 +114,9 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
     // Test 3: Try-Catch-Finally Block Execution With an Error
     @Test
     public void testTryCatchFinallyBlockExecution() throws InterruptedException {
-        String blockQuery = "BEGIN  DECLARE j NUMBER; TRY SET j = 10 / 0; CATCH SET j = 20; FINALLY SET j = 30; END TRY END";
+        String blockQuery = "PROCEDURE dummy_procedure(INOUT x NUMBER) " +
+            "BEGIN  DECLARE j NUMBER; TRY SET j = 10 / 0; CATCH SET j = 20; FINALLY SET j = 30; END TRY " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -139,7 +143,9 @@ public class TryCatchStatementHandlerTests extends ESTestCase {
     // Test 4: Try-Finally Block Execution Without Catch Block
     @Test
     public void testTryFinallyBlockExecution() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE j NUMBER; TRY SET j = 10; FINALLY SET j = 20; END TRY END";
+        String blockQuery = "PROCEDURE dummy_procedure(INOUT x NUMBER) " +
+                "BEGIN DECLARE j NUMBER; TRY SET j = 10; FINALLY SET j = 20; END TRY " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);

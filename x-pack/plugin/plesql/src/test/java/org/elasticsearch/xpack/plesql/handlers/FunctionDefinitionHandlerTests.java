@@ -171,11 +171,12 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
     @Test
     public void testFunctionDefinitionAndCallWithinBlock() throws InterruptedException {
         String blockQuery = """
+            PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)
             BEGIN
                 DECLARE result NUMBER;
                 FUNCTION add(IN a NUMBER, IN b NUMBER) BEGIN RETURN a + b; END FUNCTION;
                 SET result = add(3, 4);
-            END
+            END PROCEDURE
         """;
         PlEsqlProcedureParser.ProcedureContext blockCtx = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
@@ -203,14 +204,15 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
     @Test
     public void testFunctionCallWithinLoop() throws InterruptedException {
         String blockQuery = """
-            BEGIN
-                DECLARE total NUMBER, i NUMBER;
-                FUNCTION add(IN a NUMBER, IN b NUMBER) BEGIN RETURN a + b; END FUNCTION;
-                SET total = 0;
-                FOR i IN 1..3 LOOP
-                    SET total = add(total, i);
-                END LOOP;
-            END
+        PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)
+        BEGIN
+            DECLARE total NUMBER, i NUMBER;
+            FUNCTION add(IN a NUMBER, IN b NUMBER) BEGIN RETURN a + b; END FUNCTION;
+            SET total = 0;
+            FOR i IN 1..3 LOOP
+                SET total = add(total, i);
+            END LOOP;
+        END PROCEDURE
         """;
         PlEsqlProcedureParser.ProcedureContext blockCtx = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
@@ -236,11 +238,12 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
     @Test
     public void testFunctionDefinitionWithoutReturnThrowsError() throws InterruptedException {
         String blockQuery = """
+            PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)
             BEGIN
                 DECLARE result INT;
                 FUNCTION faultyFunction(IN a INT, IN b INT) BEGIN SET result = a + b; END FUNCTION;
                 SET result = faultyFunction(1, 2);
-            END
+            END PROCEDURE
         """;
         PlEsqlProcedureParser.ProcedureContext blockCtx = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);

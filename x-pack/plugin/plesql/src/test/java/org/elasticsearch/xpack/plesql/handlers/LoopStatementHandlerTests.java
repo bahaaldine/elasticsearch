@@ -57,11 +57,12 @@ public class LoopStatementHandlerTests extends ESTestCase {
     @Test
     public void testSimpleForRangeLoop() throws InterruptedException {
         String blockQuery =
-            "BEGIN DECLARE j NUMBER, i NUMBER; " +
+            "PROCEDURE dummy_function(INOUT x NUMBER) " +
+                "BEGIN DECLARE j NUMBER, i NUMBER; " +
                 "FOR i IN 1..3 LOOP " +
                 " SET j = i + 1; " +
                 "END LOOP " +
-                "END";
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
@@ -84,7 +85,10 @@ public class LoopStatementHandlerTests extends ESTestCase {
     // Test 2: Simple WHILE loop.
     @Test
     public void testSimpleWhileLoop() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE i NUMBER = 1; WHILE i < 4 LOOP SET i = i + 1; END LOOP END";
+        String blockQuery = " " +
+            "PROCEDURE dummy_function(INOUT x NUMBER) +" +
+                "BEGIN DECLARE i NUMBER = 1; WHILE i < 4 LOOP SET i = i + 1; END LOOP " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
@@ -107,7 +111,10 @@ public class LoopStatementHandlerTests extends ESTestCase {
     // Test 3: Reverse FOR-range loop.
     @Test
     public void testReverseForRangeLoop() throws InterruptedException {
-        String blockQuery = "BEGIN DECLARE j NUMBER = 0, i NUMBER; FOR i IN 5..3 LOOP SET j = j + i; END LOOP END";
+        String blockQuery = " " +
+            "PROCEDURE dummy_function(INOUT x NUMBER) " +
+                "BEGIN DECLARE j NUMBER = 0, i NUMBER; FOR i IN 5..3 LOOP SET j = j + i; END LOOP " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
@@ -133,6 +140,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
         // In this test, we declare an array and iterate over its elements.
         // We compute the sum of the elements.
         String blockQuery =
+            "PROCEDURE dummy_function(INOUT x NUMBER) " +
             "BEGIN " +
                 "DECLARE sum NUMBER = 0; " +
                 "DECLARE arr ARRAY OF NUMBER = [10, 20, 30]; " +
@@ -140,7 +148,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 " SET sum = sum + element; " +
                 "END LOOP " +
                 "RETURN sum; " +
-                "END";
+            "END PROCEDURE ";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
@@ -165,6 +173,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
     @Test
     public void testNestedForLoop() throws InterruptedException {
         String blockQuery =
+            "PROCEDURE dummy_function(INOUT x NUMBER) " +
             "BEGIN " +
                 "DECLARE i NUMBER; DECLARE j NUMBER; " +
                 "FOR i IN 1..2 LOOP " +
@@ -172,7 +181,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 "  SET j = j + 1; " +
                 " END LOOP " +
                 "END LOOP " +
-                "END";
+             "END PROCEDURE ";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
@@ -200,6 +209,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
     @Test
     public void testForArrayLoopWithStrings() throws InterruptedException {
         String blockQuery =
+            "PROCEDURE dummy_function(INOUT x NUMBER) " +
             "BEGIN " +
                 "DECLARE last STRING = ''; " +
                 "DECLARE arr ARRAY OF STRING = [\"alpha\", \"beta\", \"gamma\"  ]; " +
@@ -207,7 +217,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 " SET last = element; " +
                 "END LOOP " +
                 "RETURN last; " +
-                "END";
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
@@ -262,14 +272,15 @@ public class LoopStatementHandlerTests extends ESTestCase {
     @Test
     public void testForArrayLoopWithDocuments() throws InterruptedException {
         String blockQuery =
+            "PROCEDURE dummy_function(INOUT x NUMBER) " +
             "BEGIN " +
-            "DECLARE sum NUMBER = 0; " +
+                "DECLARE sum NUMBER = 0; " +
                 "DECLARE arr ARRAY OF DOCUMENT = [{\"value\":10}, {\"value\":20}]; " +
                 "FOR doc IN arr LOOP " +
                 " SET sum = sum + doc['value']; " +
                 "END LOOP " +
                 "RETURN sum; " +
-            "END";
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
@@ -292,6 +303,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
     @Test
     public void testForArrayLoopWithMixedDocumentFields() throws InterruptedException {
         String blockQuery =
+            "PROCEDURE dummy_function(INOUT x NUMBER) " +
             "BEGIN " +
                 "  DECLARE sum NUMBER = 0; " +
                 "  DECLARE texts STRING = ''; " +
@@ -310,7 +322,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 "    END IF; " +
                 "  END LOOP " +
                 "  RETURN sum; " +
-                "END";
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
@@ -343,6 +355,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
     @Test
     public void testForArrayLoopEmptyArray() throws InterruptedException {
         String blockQuery =
+            "PROCEDURE dummy_function(INOUT x NUMBER) " +
             "BEGIN " +
                 "DECLARE count NUMBER = 0; " +
                 "DECLARE arr ARRAY OF NUMBER = []; " +
@@ -350,7 +363,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 " SET count = count + 1; " +
                 "END LOOP " +
                 "RETURN count; " +
-                "END";
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {

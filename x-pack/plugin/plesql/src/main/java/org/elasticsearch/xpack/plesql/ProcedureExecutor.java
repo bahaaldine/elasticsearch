@@ -187,9 +187,9 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         ActionListener<Object> statementListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object o) {
+                System.out.println(" >>>>> On Response " + o);
                 if (o instanceof ReturnValue) {
-                    // ReturnValue signals an early return.
-                    listener.onResponse(((ReturnValue) o).getValue());
+                    listener.onResponse(o);
                 } else {
                     executeStatementsAsync(statements, index + 1, listener);
                 }

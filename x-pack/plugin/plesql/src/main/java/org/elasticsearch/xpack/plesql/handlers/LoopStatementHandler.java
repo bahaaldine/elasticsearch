@@ -80,6 +80,8 @@ public class LoopStatementHandler {
         executeStatementsAsync(statements, 0, ActionListener.wrap(bodyResult -> {
             if (bodyResult instanceof BreakException) {
                 listener.onResponse(null);
+            } else if (bodyResult instanceof ReturnValue) {
+                listener.onResponse(bodyResult);
             } else {
                 double nextVal = currentVal + step;
                 executor.getThreadPool().generic().execute(() ->
@@ -207,6 +209,8 @@ public class LoopStatementHandler {
         executeStatementsAsync(statements, 0, ActionListener.wrap(bodyResult -> {
             if (bodyResult instanceof BreakException) {
                 listener.onResponse(null);
+            } else if (bodyResult instanceof ReturnValue) {
+                listener.onResponse(bodyResult);
             } else {
                 executor.getThreadPool().generic().execute(() ->
                     executeArrayLoopIteration(loopVarName, items, currentIndex + 1, statements, listener)

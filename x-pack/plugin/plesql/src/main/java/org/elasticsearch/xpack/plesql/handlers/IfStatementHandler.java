@@ -45,15 +45,12 @@ public class IfStatementHandler {
         ActionListener<Object> ifStatementListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object conditionResult) {
-                System.out.println("Condition result: " + conditionResult);
                 if ( conditionResult instanceof Boolean && (Boolean) conditionResult ) {
                     // Execute the THEN block
                     List<PlEsqlProcedureParser.StatementContext> thenStatements = ctx.then_block;
-                    System.out.println("Condition is true. Executing THEN block.");
                     executeStatementsAsync(thenStatements, 0, listener);
                 } else {
                     // Proceed to ELSEIF blocks
-                    System.out.println("Condition is false. Skipping THEN block.");
                     handleElseIfBlocksAsync(ctx, 0, listener);
                 }
             }

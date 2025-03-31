@@ -60,9 +60,10 @@ public class ThrowStatementHandlerTests {
     @Test
     public void testBasicThrowStatementInProcedure() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_function(INOUT x NUMBER)
                 BEGIN
                     THROW 'Error occurred';
-                END
+                END PROCEDURE
             """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -89,9 +90,10 @@ public class ThrowStatementHandlerTests {
     @Test
     public void testThrowStatementWithComplexMessageInProcedure() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_function(INOUT x NUMBER)
                 BEGIN
                     THROW 'Complex error: something went wrong with details #$%!';
-                END
+                END PROCEDURE
             """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -118,6 +120,7 @@ public class ThrowStatementHandlerTests {
     @Test
     public void testThrowInTryCatchBlock() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_function(INOUT x NUMBER)
                 BEGIN
                     DECLARE v NUMBER = 1;
                     TRY
@@ -125,7 +128,7 @@ public class ThrowStatementHandlerTests {
                     CATCH
                         SET v = 10;
                     END TRY;
-                END
+                END PROCEDURE
             """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -152,6 +155,7 @@ public class ThrowStatementHandlerTests {
     @Test
     public void testNestedTryCatchWithThrow() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_function(INOUT x NUMBER)
                 BEGIN
                     DECLARE v NUMBER = 1;
                     TRY
@@ -164,7 +168,7 @@ public class ThrowStatementHandlerTests {
                     CATCH
                         SET v = 30;
                     END TRY;
-                END
+                END PROCEDURE
             """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -191,9 +195,10 @@ public class ThrowStatementHandlerTests {
     @Test
     public void testThrowOutsideTryCatch() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_function(INOUT x NUMBER)
                 BEGIN
                     THROW 'Uncaught exception';
-                END
+                END PROCEDURE
             """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 

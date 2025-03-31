@@ -52,7 +52,16 @@ import java.util.regex.Pattern;
  */
 public class ExecuteStatementHandler {
 
-    private static final Logger LOGGER = LogManager.getLogger(ExecuteStatementHandler.class);
+    private static Logger LOGGER;
+    static {
+        try {
+            LOGGER = LogManager.getLogger(ExecuteStatementHandler.class);
+        } catch (Exception e) {
+            // Log the error using System.err, or assign a no-op logger
+            System.err.println("Failed to initialize logger in ExecuteStatementHandler: " + e);
+            LOGGER = null; // or a fallback logger if available
+        }
+    }
 
     private final ProcedureExecutor executor;
     private final Client client;

@@ -57,7 +57,10 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     // Test 1: Simple RETURN with integer
     @Test
     public void testProcedureReturnInteger() throws InterruptedException {
-        String blockQuery = "BEGIN RETURN 100; END";
+        String blockQuery = "" +
+            "PROCEDURE dummy_procedure (INOUT x NUMBER) " +
+                "BEGIN RETURN 100; " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -67,7 +70,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
-                System.out.println("Result : " + result);
+                System.out.println("Result : " + result + " class: " + result.getClass());
                 resultHolder[0] = result;
                 latch.countDown();
             }
@@ -91,7 +94,10 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     // Test 2: RETURN with a string
     @Test
     public void testProcedureReturnString() throws InterruptedException {
-        String blockQuery = "BEGIN RETURN 'Hello, PL|ESQL!'; END";
+        String blockQuery = "" +
+            "PROCEDURE dummy_procedure (INOUT x NUMBER) +" +
+                "BEGIN RETURN 'Hello, PL|ESQL!'; " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -124,7 +130,10 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     // Test 3: RETURN with arithmetic operation
     @Test
     public void testProcedureReturnArithmeticOperation() throws InterruptedException {
-        String blockQuery = "BEGIN RETURN 50 + 25; END";
+        String blockQuery = "" +
+            "PROCEDURE dummy_procedure (INOUT x NUMBER) +" +
+                "BEGIN RETURN 50 + 25; " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -157,7 +166,10 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     // Test 4: RETURN with boolean comparison
     @Test
     public void testProcedureReturnBoolean() throws InterruptedException {
-        String blockQuery = "BEGIN RETURN 10 > 5; END";
+        String blockQuery = "" +
+            "PROCEDURE dummy_procedure (INOUT x NUMBER) +" +
+                "BEGIN RETURN 10 > 5; " +
+            "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -191,12 +203,13 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     @Test
     public void testProcedureReturnInsideIfCondition() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_procedure (INOUT x NUMBER)
                 BEGIN
                     IF 1 = 1 THEN
                         RETURN 'Condition met';
                     END IF;
                     RETURN 'Condition not met';
-                END
+                END PROCEDURE
             """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -231,6 +244,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     @Test
     public void testProcedureReturnInsideLoop() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_procedure (INOUT x NUMBER)
                 BEGIN
                     DECLARE i NUMBER;
                     FOR i IN 1..5 LOOP
@@ -239,7 +253,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
                         END IF;
                     END LOOP;
                     RETURN 'Loop completed';
-                END
+                END PROCEDURE
             """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -274,12 +288,13 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     @Test
     public void testProcedureReturnWithNestedFunctionCall() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_procedure (INOUT x NUMBER)
                 BEGIN
                     FUNCTION add(a NUMBER, b NUMBER) BEGIN
                         RETURN a + b;
                     END FUNCTION;
                     RETURN add(5, 10);
-                END
+                END PROCEDURE
             """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -314,10 +329,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     @Test
     public void testProcedureReturnWithEsqlQuery() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_procedure (INOUT x NUMBER)
                 BEGIN
                     EXECUTE result = (ROW a=10 | KEEP a);
                     RETURN result;
-                END
+                END PROCEDURE
             """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -355,6 +371,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     @Test
     public void testProcedureReturnAfterTryCatch() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_procedure (INOUT x NUMBER)
                 BEGIN
                     TRY
                         THROW 'Error';
@@ -362,7 +379,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
                         RETURN 'Error handled';
                     END TRY;
                     RETURN 'No error';
-                END
+                END PROCEDURE
             """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -397,13 +414,14 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     @Test
     public void testReturnInsideIfBlock() throws InterruptedException {
         String blockQuery = """
+                PROCEDURE dummy_procedure (INOUT x NUMBER)
                 BEGIN
                     DECLARE myVar NUMBER;
                     IF 1 = 1 THEN
                         RETURN 42;
                     END IF;
                     SET myVar = 100; -- This should never be executed
-                END
+                END PROCEDURE
             """;
 
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
