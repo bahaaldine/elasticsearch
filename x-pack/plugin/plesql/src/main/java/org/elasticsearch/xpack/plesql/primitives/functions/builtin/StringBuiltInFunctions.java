@@ -137,7 +137,7 @@ public class StringBuiltInFunctions {
             return Arrays.asList(parts);
         }));
 
-        context.declareFunction("CONCAT", new BuiltInFunctionDefinition("CONCAT", (List<Object> args) -> {
+        context.declareFunction("||", new BuiltInFunctionDefinition("||", (List<Object> args) -> {
             StringBuilder sb = new StringBuilder();
             for (Object arg : args) {
                 if (arg != null) {

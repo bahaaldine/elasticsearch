@@ -29,12 +29,52 @@ public class ExpressionEvaluator {
         this.context = executor.getContext();
     }
 
+    /**
+     * Evaluates an expression asynchronously.
+     * If the expression contains concatenation (i.e. multiple logicalOrExpressions separated by '||'),
+     * then each operand is evaluated and the results are concatenated as strings.
+     *
+     * @param ctx the ExpressionContext from the parse tree.
+     * @param listener an ActionListener to receive the evaluated result.
+     */
     public void evaluateExpressionAsync(PlEsqlProcedureParser.ExpressionContext ctx, ActionListener<Object> listener) {
         if (ctx == null) {
             listener.onFailure(new RuntimeException("Null expression context"));
             return;
         }
-        evaluateLogicalOrExpressionAsync(ctx.logicalOrExpression(), listener);
+        List<PlEsqlProcedureParser.LogicalOrExpressionContext> operands = ctx.logicalOrExpression();
+        if (operands.size() == 1) {
+            // No concatenation operator present – evaluate normally.
+            evaluateLogicalOrExpressionAsync(operands.get(0), listener);
+        } else {
+            // Evaluate each operand and concatenate their results as strings.
+            evaluateOperandsAndConcatenate(operands, 0, new ArrayList<>(), listener);
+        }
+    }
+
+    private void evaluateOperandsAndConcatenate(List<PlEsqlProcedureParser.LogicalOrExpressionContext> operands,
+                                                int index, List<Object> results, ActionListener<Object> listener) {
+        if (index >= operands.size()) {
+            // Concatenate all results into one string.
+            StringBuilder sb = new StringBuilder();
+            for (Object res : results) {
+                sb.append(String.valueOf(res));
+            }
+            listener.onResponse(sb.toString());
+            return;
+        }
+        // Evaluate each operand asynchronously.
+        evaluateLogicalOrExpressionAsync(operands.get(index), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                results.add(result);
+                evaluateOperandsAndConcatenate(operands, index + 1, results, listener);
+            }
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
     }
 
     private void evaluateLogicalOrExpressionAsync(PlEsqlProcedureParser.LogicalOrExpressionContext ctx, ActionListener<Object> listener) {

@@ -317,7 +317,6 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
                 double x = ((Number) args.get(0)).doubleValue();
                 double newX = x + 10;
                 executor.getContext().setVariable("x", newX);
-                System.out.println("on response X  = " + context.getVariable("x") );
                 return new ReturnValue(newX);
             }
         };
@@ -332,7 +331,6 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
             public void onResponse(Object result) {
                 assertEquals(15.0, ((Number) result).doubleValue(), 0.001);
                 Object xVal = context.getVariable("x");
-                System.out.println("on response X  = " + context.getVariable("x") );
                 assertNotNull(xVal);
                 assertEquals(15.0, ((Number) xVal).doubleValue(), 0.001);
                 latch.countDown();

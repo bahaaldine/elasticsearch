@@ -4,6 +4,13 @@ grammar PlEsqlProcedure;
 // Lexer Rules
 // =======================
 
+// Print rules
+PRINT: 'PRINT';
+DEBUG: 'DEBUG';
+INFO: 'INFO';
+WARN: 'WARN';
+ERROR: 'ERROR';
+
 // Keywords
 ELSEIF: 'ELSEIF';
 ELSE: 'ELSE';
@@ -102,7 +109,7 @@ INSTR: 'INSTR';
 LPAD: 'LPAD';
 RPAD: 'RPAD';
 SPLIT: 'SPLIT';
-CONCAT: 'CONCAT';
+CONCAT: '||';
 REGEXP_REPLACE: 'REGEXP_REPLACE';
 REGEXP_SUBSTR: 'REGEXP_SUBSTR';
 REVERSE: 'REVERSE';
@@ -159,6 +166,7 @@ procedure
 
 statement
     : throw_statement
+    | print_statement
     | execute_statement
     | declare_statement
     | assignment_statement
@@ -171,6 +179,10 @@ statement
     | break_statement
     | expression_statement
     | SEMICOLON
+    ;
+
+print_statement
+    : PRINT expression (COMMA severity)? SEMICOLON
     ;
 
 break_statement
@@ -287,7 +299,7 @@ argument_list
     ;
 
 expression
-    : logicalOrExpression
+    : logicalOrExpression (CONCAT logicalOrExpression)*
     ;
 
 logicalOrExpression
@@ -373,4 +385,11 @@ array_datatype
 
 persist_clause
     : PERSIST INTO ID
+    ;
+
+severity
+    : DEBUG
+    | INFO
+    | WARN
+    | ERROR
     ;

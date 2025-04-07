@@ -34,6 +34,16 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 */
 	void exitStatement(PlEsqlProcedureParser.StatementContext ctx);
 	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#print_statement}.
+	 * @param ctx the parse tree
+	 */
+	void enterPrint_statement(PlEsqlProcedureParser.Print_statementContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#print_statement}.
+	 * @param ctx the parse tree
+	 */
+	void exitPrint_statement(PlEsqlProcedureParser.Print_statementContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#break_statement}.
 	 * @param ctx the parse tree
 	 */
@@ -493,4 +503,14 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitPersist_clause(PlEsqlProcedureParser.Persist_clauseContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#severity}.
+	 * @param ctx the parse tree
+	 */
+	void enterSeverity(PlEsqlProcedureParser.SeverityContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#severity}.
+	 * @param ctx the parse tree
+	 */
+	void exitSeverity(PlEsqlProcedureParser.SeverityContext ctx);
 }

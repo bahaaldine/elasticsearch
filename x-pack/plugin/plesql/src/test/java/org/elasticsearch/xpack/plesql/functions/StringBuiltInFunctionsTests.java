@@ -119,7 +119,7 @@ public class StringBuiltInFunctionsTests {
 
     @Test
     public void testConcat() {
-        BuiltInFunctionDefinition concatFn = context.getBuiltInFunction("CONCAT");
+        BuiltInFunctionDefinition concatFn = context.getBuiltInFunction("||");
         Object result = concatFn.execute(Arrays.asList("hello", " ", "world"));
         assertEquals("hello world", result);
     }

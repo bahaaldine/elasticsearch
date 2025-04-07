@@ -47,6 +47,18 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterPrint_statement(PlEsqlProcedureParser.Print_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitPrint_statement(PlEsqlProcedureParser.Print_statementContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterBreak_statement(PlEsqlProcedureParser.Break_statementContext ctx) { }
 	/**
 	 * {@inheritDoc}
@@ -594,6 +606,18 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitPersist_clause(PlEsqlProcedureParser.Persist_clauseContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterSeverity(PlEsqlProcedureParser.SeverityContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitSeverity(PlEsqlProcedureParser.SeverityContext ctx) { }
 
 	/**
 	 * {@inheritDoc}

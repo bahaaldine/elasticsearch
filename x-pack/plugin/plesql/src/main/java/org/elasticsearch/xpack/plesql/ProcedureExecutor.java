@@ -19,6 +19,7 @@ import org.elasticsearch.xpack.plesql.handlers.ExecuteStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
 import org.elasticsearch.xpack.plesql.handlers.IfStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.LoopStatementHandler;
+import org.elasticsearch.xpack.plesql.handlers.PrintStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.ThrowStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.TryCatchStatementHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureBaseVisitor;
@@ -51,6 +52,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     private final TryCatchStatementHandler tryCatchHandler;
     private final ThrowStatementHandler throwHandler;
     private final ExecuteStatementHandler executeHandler;
+    private final PrintStatementHandler printStatementHandler;
 
     private final CommonTokenStream tokenStream;
 
@@ -77,6 +79,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         this.functionDefHandler = new FunctionDefinitionHandler(this);
         this.tryCatchHandler = new TryCatchStatementHandler(this);
         this.throwHandler = new ThrowStatementHandler(this);
+        this.printStatementHandler = new PrintStatementHandler(this);
         this.tokenStream = tokenStream;
         // Initialize ExpressionEvaluator with this executor instance.
         this.expressionEvaluator = new ExpressionEvaluator(this);
@@ -230,6 +233,9 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             throwHandler.handleAsync(ctx.throw_statement(), listener);
         } else if (ctx.execute_statement() != null) {
             executeHandler.handleAsync(ctx.execute_statement(), listener);
+        } else if (ctx.print_statement() != null) {
+            System.out.println("PRINT STATEMENT " + ctx.print_statement().getText() );
+            printStatementHandler.execute(ctx.print_statement(), listener);
         } else if (ctx.return_statement() != null) {
             visitReturn_statementAsync(ctx.return_statement(), listener);
         } else if (ctx.break_statement() != null) {

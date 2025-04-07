@@ -70,7 +70,6 @@ public class ProcedureReturnStatementTests extends ESTestCase {
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
-                System.out.println("Result : " + result + " class: " + result.getClass());
                 resultHolder[0] = result;
                 latch.countDown();
             }

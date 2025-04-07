@@ -206,7 +206,6 @@ public class IfStatementHandlerTests extends ESTestCase {
             public void onResponse(Object unused) {
                 try {
                     Object varValue = context.getVariable("myVar");
-                    System.out.println("Retrieved 'myVar' value: " + varValue);
                     assertNotNull("Variable 'myVar' should have been set.", varValue);
                     assertEquals("Variable 'myVar' should be set to 10.", 10.0, varValue);
                     future.complete(null);

@@ -29,6 +29,12 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitStatement(PlEsqlProcedureParser.StatementContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#print_statement}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPrint_statement(PlEsqlProcedureParser.Print_statementContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#break_statement}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -304,4 +310,10 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitPersist_clause(PlEsqlProcedureParser.Persist_clauseContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#severity}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSeverity(PlEsqlProcedureParser.SeverityContext ctx);
 }
