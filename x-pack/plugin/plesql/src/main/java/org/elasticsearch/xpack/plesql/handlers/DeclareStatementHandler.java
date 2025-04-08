@@ -51,7 +51,6 @@ public class DeclareStatementHandler {
                 try {
                     // Verify that the element type is a valid base type.
                     PLESQLDataType.valueOf(elementType);
-                    System.out.println("NORMALIZED TYPE : " + normalizedType );
                     return true;
                 } catch (IllegalArgumentException e) {
                     return false;

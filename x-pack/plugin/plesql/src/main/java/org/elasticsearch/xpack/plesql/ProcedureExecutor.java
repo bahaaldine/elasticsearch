@@ -25,7 +25,7 @@ import org.elasticsearch.xpack.plesql.handlers.TryCatchStatementHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureBaseVisitor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.primitives.functions.FunctionDefinition;
+import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
@@ -190,7 +190,6 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         ActionListener<Object> statementListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object o) {
-                System.out.println(" >>>>> On Response " + o);
                 if (o instanceof ReturnValue) {
                     listener.onResponse(o);
                 } else {
@@ -234,7 +233,6 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         } else if (ctx.execute_statement() != null) {
             executeHandler.handleAsync(ctx.execute_statement(), listener);
         } else if (ctx.print_statement() != null) {
-            System.out.println("PRINT STATEMENT " + ctx.print_statement().getText() );
             printStatementHandler.execute(ctx.print_statement(), listener);
         } else if (ctx.return_statement() != null) {
             visitReturn_statementAsync(ctx.return_statement(), listener);

@@ -3,7 +3,6 @@ package org.elasticsearch.xpack.plesql.utils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import org.apache.logging.log4j.core.Appender;
 import org.apache.logging.log4j.core.Filter;
 import org.apache.logging.log4j.core.Layout;
 import org.apache.logging.log4j.core.LogEvent;
@@ -22,7 +21,9 @@ public class TestListAppender extends AbstractAppender {
 
     @Override
     public void append(LogEvent event) {
-        messages.add(event.getMessage().getFormattedMessage());
+        String msg = event.getMessage().getFormattedMessage();
+        System.out.println("TestListAppender captured: " + msg);
+        messages.add(msg);
     }
 
     public List<String> getMessages() {

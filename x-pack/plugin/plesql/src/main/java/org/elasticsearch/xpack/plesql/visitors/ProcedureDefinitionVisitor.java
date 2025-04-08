@@ -8,8 +8,8 @@
 package org.elasticsearch.xpack.plesql.visitors;
 
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.primitives.functions.Parameter;
-import org.elasticsearch.xpack.plesql.primitives.functions.ParameterMode;
+import org.elasticsearch.xpack.plesql.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.ParameterMode;
 import org.elasticsearch.xpack.plesql.primitives.procedure.ProcedureDefinition;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureBaseVisitor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;

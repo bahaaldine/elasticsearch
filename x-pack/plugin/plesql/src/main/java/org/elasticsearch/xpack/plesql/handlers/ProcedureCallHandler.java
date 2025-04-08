@@ -11,8 +11,8 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.procedure.ProcedureDefinition;
-import org.elasticsearch.xpack.plesql.primitives.functions.Parameter;
-import org.elasticsearch.xpack.plesql.primitives.functions.ParameterMode;
+import org.elasticsearch.xpack.plesql.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.ParameterMode;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.List;

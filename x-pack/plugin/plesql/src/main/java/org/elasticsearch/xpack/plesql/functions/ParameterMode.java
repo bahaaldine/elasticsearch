@@ -5,11 +5,13 @@
  * 2.0.
  */
 
-package org.elasticsearch.xpack.plesql.primitives.functions.interfaces;
+package org.elasticsearch.xpack.plesql.functions;
 
-import java.util.List;
-
-@FunctionalInterface
-public interface BuiltInFunction {
-    Object apply(List<Object> args);
+/**
+ * An enum representing the mode of a function parameter.
+ */
+public enum ParameterMode {
+    IN,
+    OUT,
+    INOUT
 }

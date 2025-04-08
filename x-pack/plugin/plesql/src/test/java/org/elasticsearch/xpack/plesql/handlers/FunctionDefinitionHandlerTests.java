@@ -17,10 +17,10 @@ import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.primitives.functions.FunctionDefinition;
+import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
-import org.elasticsearch.xpack.plesql.primitives.functions.Parameter;
-import org.elasticsearch.xpack.plesql.primitives.functions.ParameterMode;
+import org.elasticsearch.xpack.plesql.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.ParameterMode;
 import org.junit.Test;
 
 import java.util.Arrays;

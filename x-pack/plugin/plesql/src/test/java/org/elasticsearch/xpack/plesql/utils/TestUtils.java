@@ -8,6 +8,7 @@
 package org.elasticsearch.xpack.plesql.utils;
 
 import org.antlr.v4.runtime.ANTLRInputStream;
+import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
@@ -34,5 +35,13 @@ public class TestUtils {
 
         // Parse the input and return the procedure context
         return parser.procedure();
+    }
+
+    // Helper method to parse a BEGIN ... END procedure block.
+    public static PlEsqlProcedureParser.ProcedureContext parseBlock(String query) {
+        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(query));
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
+        return parser.procedure();  // returns the procedure parse tree.
     }
 }

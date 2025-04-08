@@ -41,7 +41,6 @@ public class PrintStatementHandler {
     public void execute(PlEsqlProcedureParser.Print_statementContext ctx, ActionListener<Object> listener) {
         // Use the expression() method provided by the parser – this should return only the expression node.
         PlEsqlProcedureParser.ExpressionContext exprCtx = ctx.expression();
-        System.out.println("PRINT EXPRESSION : " + exprCtx.getText() );
 
         new ExpressionEvaluator(executor)
             .evaluateExpressionAsync(exprCtx, new ActionListener<Object>() {

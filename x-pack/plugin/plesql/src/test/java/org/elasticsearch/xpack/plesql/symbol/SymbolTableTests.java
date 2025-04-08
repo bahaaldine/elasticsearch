@@ -9,7 +9,7 @@ package org.elasticsearch.xpack.plesql.symbol;
 
 import org.elasticsearch.xpack.plesql.primitives.VariableDefinition;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
-import org.elasticsearch.xpack.plesql.primitives.functions.FunctionDefinition;
+import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 import org.junit.Before;
 import org.junit.Test;
 

@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-package org.elasticsearch.xpack.plesql.primitives.functions;
+package org.elasticsearch.xpack.plesql.functions;
 
 /**
  * Represents a function (or procedure) parameter with a name, a type, and a mode (IN, OUT, or INOUT).

@@ -17,8 +17,10 @@ import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.utils.TestUtils;
 import org.junit.Test;
 
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 public class LoopStatementHandlerTests extends ESTestCase {
@@ -45,14 +47,6 @@ public class LoopStatementHandlerTests extends ESTestCase {
         super.tearDown();
     }
 
-    // Helper method to parse a BEGIN ... END procedure block.
-    private PlEsqlProcedureParser.ProcedureContext parseBlock(String query) {
-        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(query));
-        CommonTokenStream tokens = new CommonTokenStream(lexer);
-        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
-        return parser.procedure();  // returns the procedure parse tree.
-    }
-
     // Test 1: Simple FOR-range loop.
     @Test
     public void testSimpleForRangeLoop() throws InterruptedException {
@@ -63,7 +57,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 " SET j = i + 1; " +
                 "END LOOP " +
             "END PROCEDURE";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
@@ -89,7 +83,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
             "PROCEDURE dummy_function(INOUT x NUMBER) +" +
                 "BEGIN DECLARE i NUMBER = 1; WHILE i < 4 LOOP SET i = i + 1; END LOOP " +
             "END PROCEDURE";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
@@ -115,7 +109,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
             "PROCEDURE dummy_function(INOUT x NUMBER) " +
                 "BEGIN DECLARE j NUMBER = 0, i NUMBER; FOR i IN 5..3 LOOP SET j = j + i; END LOOP " +
             "END PROCEDURE";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
@@ -149,7 +143,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 "END LOOP " +
                 "RETURN sum; " +
             "END PROCEDURE ";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
@@ -182,7 +176,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 " END LOOP " +
                 "END LOOP " +
              "END PROCEDURE ";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
@@ -218,7 +212,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 "END LOOP " +
                 "RETURN last; " +
             "END PROCEDURE";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
@@ -249,7 +243,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
 //                "END LOOP " +
 //                "RETURN sum; " +
 //                "END";
-//        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+//        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
 //        CountDownLatch latch = new CountDownLatch(1);
 //        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
 //            @Override
@@ -281,7 +275,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 "END LOOP " +
                 "RETURN sum; " +
             "END PROCEDURE";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
@@ -323,7 +317,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 "  END LOOP " +
                 "  RETURN sum; " +
             "END PROCEDURE";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
@@ -364,7 +358,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 "END LOOP " +
                 "RETURN count; " +
             "END PROCEDURE";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override
@@ -396,7 +390,7 @@ public class LoopStatementHandlerTests extends ESTestCase {
                 "END LOOP " +
                 "RETURN i; " +
                 "END";
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
         executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
             @Override

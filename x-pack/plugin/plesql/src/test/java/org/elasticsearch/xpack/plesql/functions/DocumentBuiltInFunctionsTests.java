@@ -8,8 +8,8 @@
 package org.elasticsearch.xpack.plesql.functions;
 
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.primitives.functions.builtin.BuiltInFunctionDefinition;
-import org.elasticsearch.xpack.plesql.primitives.functions.builtin.DocumentBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
+import org.elasticsearch.xpack.plesql.functions.builtin.DocumentBuiltInFunctions;
 import org.junit.Before;
 import org.junit.Test;
 

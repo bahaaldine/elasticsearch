@@ -24,7 +24,9 @@ import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.functions.builtin.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.utils.TestListAppender;
+import org.elasticsearch.xpack.plesql.utils.TestUtils;
 import org.junit.Test;
 
 public class PrintStatementHandlerTests extends ESTestCase {
@@ -53,6 +55,10 @@ public class PrintStatementHandlerTests extends ESTestCase {
 
         // Initialize the ExecutionContext and thread pool.
         context = new ExecutionContext();
+        // *** REGISTER BUILT-IN FUNCTIONS ***
+        // Register string built-in functions so that UPPER, LOWER, etc. are defined.
+        StringBuiltInFunctions.registerAll(context);
+
         threadPool = new TestThreadPool("test-thread-pool");
         Client mockClient = null; // Use a mock if needed.
         // Create a dummy token stream from an empty source for executor initialization.
@@ -195,5 +201,133 @@ public class PrintStatementHandlerTests extends ESTestCase {
         boolean found = messages.stream().anyMatch(
             msg -> msg.contains("[PRINT]") && msg.contains("The value is: ") && msg.contains("variableValue"));
         assertTrue("Expected concatenated log message not found. Captured messages: " + messages, found);
+    }
+
+    @Test
+    public void testForArrayLoopPrintDocumentField() throws InterruptedException {
+        // This procedure declares an array of 10 documents and prints the 'name' field from each.
+        String blockQuery =
+            "PROCEDURE printDocFieldTest(INOUT dummy NUMBER) " +
+                "BEGIN " +
+                "  DECLARE arr ARRAY OF DOCUMENT = " +
+                "    [" +
+                "      {\"name\": \"Alice\", \"age\": 30}, " +
+                "      {\"name\": \"Bob\", \"age\": 25}, " +
+                "      {\"name\": \"Charlie\", \"age\": 40}, " +
+                "      {\"name\": \"David\", \"age\": 35}, " +
+                "      {\"name\": \"Eve\", \"age\": 28}, " +
+                "      {\"name\": \"Frank\", \"age\": 45}, " +
+                "      {\"name\": \"Grace\", \"age\": 32}, " +
+                "      {\"name\": \"Heidi\", \"age\": 29}, " +
+                "      {\"name\": \"Ivan\", \"age\": 38}, " +
+                "      {\"name\": \"Judy\", \"age\": 26} " +
+                "    ]; " +
+                "  FOR doc IN arr LOOP " +
+                "    PRINT doc['name'], INFO; " +
+                "  END LOOP " +
+                "END PROCEDURE";
+
+        // Parse the procedure block.
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
+
+        // Execute the procedure block asynchronously.
+        CountDownLatch latch = new CountDownLatch(1);
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
+
+        // After execution, check that the PRINT statements were processed correctly.
+        // The TestListAppender (configured in your test setup) should capture log messages for each document's "name".
+        List<String> messages = testListAppender.getMessages();
+        String[] expectedNames = {"Alice", "Bob", "Charlie", "David", "Eve", "Frank", "Grace", "Heidi", "Ivan", "Judy"};
+        for (String name : expectedNames) {
+            boolean found = messages.stream().anyMatch(msg -> msg.contains("[PRINT]") && msg.contains(name));
+            assertTrue("Expected log message to contain '" + name + "'. Captured messages: " + messages, found);
+        }
+    }
+
+    @Test
+    public void testLargeDatasetProcessingWithBuiltInFunctions() throws InterruptedException {
+        // This procedure declares an array of 10 document records and uses built-in functions
+        // to process and print the results. In this example:
+        // - For each document, it prints:
+        //      UPPER(TRIM(doc['name'])) || ": " || LENGTH(TRIM(doc['value']))
+        // For example, if the first document is {"name": " John Doe ", "value": " data1 "},
+        // then UPPER(TRIM(" John Doe ")) gives "JOHN DOE" and LENGTH(TRIM(" data1 ")) gives 5,
+        // so the printed output should be: "[PRINT] JOHN DOE: 5"
+
+        String blockQuery =
+            "PROCEDURE processLargeDataset() " +
+                "BEGIN " +
+                "  DECLARE arr ARRAY OF DOCUMENT = [ " +
+                "    {\"name\": \" John Doe \", \"value\": \" data1 \"}, " +
+                "    {\"name\": \" Alice \", \"value\": \" data2 \"}, " +
+                "    {\"name\": \" Bob \", \"value\": \" data3 \"}, " +
+                "    {\"name\": \" Charlie \", \"value\": \" data4 \"}, " +
+                "    {\"name\": \" David \", \"value\": \" data5 \"}, " +
+                "    {\"name\": \" Eve \", \"value\": \" data6 \"}, " +
+                "    {\"name\": \" Frank \", \"value\": \" data7 \"}, " +
+                "    {\"name\": \" Grace \", \"value\": \" data8 \"}, " +
+                "    {\"name\": \" Heidi \", \"value\": \" data9 \"}, " +
+                "    {\"name\": \" Ivan \", \"value\": \" data10 \"} " +
+                "  ]; " +
+                "  FOR doc IN arr LOOP " +
+                "    PRINT UPPER(TRIM(doc['name'])) || ': ' || LENGTH(TRIM(doc['value'])), INFO; " +
+                "  END LOOP; " +
+                "  RETURN 1; " +
+                "END PROCEDURE";
+
+        // Use your existing TestUtils.parseBlock() method (or similar) to parse the procedure.
+        PlEsqlProcedureParser.ProcedureContext blockContext = TestUtils.parseBlock(blockQuery);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("Procedure execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
+
+        // Verify that the log output (captured by TestListAppender) contains the expected messages.
+        // We expect for each record a message in the form "[PRINT] <NAME>: <LENGTH>".
+        // For our first document, after trimming, we expect:
+        //   UPPER(" John Doe ") → "JOHN DOE"
+        //   TRIM(" data1 ") → "data1" → LENGTH is 5
+        List<String> messages = testListAppender.getMessages();
+
+        // Define expected outputs for each document.
+        // Adjust the expected numbers if your implementation of TRIM and LENGTH differs.
+        String[] expectedOutputs = new String[] {
+            "JOHN DOE: 5",
+            "ALICE: 5",
+            "BOB: 5",
+            "CHARLIE: 5",
+            "DAVID: 5",
+            "EVE: 5",
+            "FRANK: 5",
+            "GRACE: 5",
+            "HEIDI: 5",
+            "IVAN: 6"  // Example: " data10 " trimmed → "data10" has 6 characters.
+        };
+
+        for (String expected : expectedOutputs) {
+            boolean found = messages.stream().anyMatch(msg -> msg.contains("[PRINT]") && msg.contains(expected));
+            assertTrue("Expected log message containing '" + expected + "' not found. Captured messages: " + messages, found);
+        }
     }
 }

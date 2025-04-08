@@ -8,8 +8,8 @@
 package org.elasticsearch.xpack.plesql.primitives.procedure;
 
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
-import org.elasticsearch.xpack.plesql.primitives.functions.FunctionDefinition;
-import org.elasticsearch.xpack.plesql.primitives.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
+import org.elasticsearch.xpack.plesql.functions.Parameter;
 
 import java.util.List;
 

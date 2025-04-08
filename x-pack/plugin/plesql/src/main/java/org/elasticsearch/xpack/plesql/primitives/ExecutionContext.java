@@ -8,11 +8,13 @@
 
 package org.elasticsearch.xpack.plesql.primitives;
 
-import org.elasticsearch.xpack.plesql.primitives.functions.FunctionDefinition;
-import org.elasticsearch.xpack.plesql.primitives.functions.builtin.BuiltInFunctionDefinition;
+import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
+import org.elasticsearch.xpack.plesql.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -224,6 +226,7 @@ public class ExecutionContext {
      * @throws RuntimeException If the function is already defined in the global context.
      */
     public void declareFunction(String name, FunctionDefinition function) {
+        System.out.println("Declaring function '" + name + "' with new definition: " + function);
         if (parentContext == null) {
             if (functions.containsKey(name)) {
                 throw new RuntimeException("Function '" + name + "' is already defined in the global context.");
@@ -231,6 +234,37 @@ public class ExecutionContext {
             functions.put(name, function);
         } else {
             parentContext.declareFunction(name, function);
+        }
+    }
+
+    /**
+     * Declares (or overrides) a function definition in the global execution context with a specified parameter list.
+     * <p>
+     * This method registers a new function with the given name and parameter list. If the current context is nested,
+     * the declaration is delegated recursively to the parent context so that only the global context ultimately holds the definition.
+     * <p>
+     * If the provided FunctionDefinition is an instance of BuiltInFunctionDefinition, its parameter list is updated
+     * using the provided parameters. Otherwise, the function is registered as-is.
+     *
+     * @param name       The name of the function to declare.
+     * @param parameters A list of Parameter objects defining the function's parameter signature.
+     *                   This should reflect the exact number of parameters the function expects.
+     * @param function   The FunctionDefinition object that encapsulates the function's implementation.
+     * @throws RuntimeException if a function with the given name is already defined in the global context.
+     */
+    public void declareFunction(String name, List<Parameter> parameters, FunctionDefinition function) {
+        System.out.println("Declaring function '" + name + "' with new definition: " + function);
+        if (parentContext == null) {
+            if (functions.containsKey(name)) {
+                throw new RuntimeException("Function '" + name + "' is already defined in the global context.");
+            }
+            // If the function is a BuiltInFunctionDefinition, update its parameter list.
+            if (function instanceof BuiltInFunctionDefinition) {
+                ((BuiltInFunctionDefinition) function).setParameters(parameters);
+            }
+            functions.put(name, function);
+        } else {
+            parentContext.declareFunction(name, parameters, function);
         }
     }
 
