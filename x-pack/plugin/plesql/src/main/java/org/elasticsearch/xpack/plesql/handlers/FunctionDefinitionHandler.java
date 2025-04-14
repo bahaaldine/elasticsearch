@@ -100,10 +100,38 @@ public class FunctionDefinitionHandler {
             // Create a FunctionDefinition using the new Parameter list.
             FunctionDefinition functionDefinition = new FunctionDefinition(functionName, parameters, functionBody) {
                 @Override
-                public Object execute(List<Object> args) {
-                    // The execution for user-defined functions would go here.
-                    // This method might be overridden by a visitor handling function execution.
-                    return null;
+                public void execute(List<Object> args, ActionListener<Object> listener) {
+                    // Create a child context for the function call.
+                    // Here we assume that the ProcedureExecutor constructor takes an ExecutionContext, thread pool,
+                    // client, and token stream.
+                    ExecutionContext childContext = new ExecutionContext(executor.getContext());
+                    // (Optionally, assign input (IN) parameters from the args into the childContext.)
+                    for (int i = 0; i < parameters.size(); i++) {
+                        Parameter param = parameters.get(i);
+                        // For IN parameters (and INOUT), assign the initial value.
+                        if (param.getMode() == ParameterMode.IN || param.getMode() == ParameterMode.INOUT) {
+                            childContext.declareVariable(param.getName(), param.getType());
+                            childContext.setVariable(param.getName(), args.get(i));
+                        }
+                    }
+
+                    // Create a new ProcedureExecutor to execute the function body.
+                    // Here we pass a null client and token stream if they are not necessary for function body evaluation.
+                    ProcedureExecutor functionExecutor = new ProcedureExecutor(childContext, executor.getThreadPool(), null, null);
+
+                    // Execute the statements from the function's body asynchronously.
+                    functionExecutor.executeStatementsAsync(functionBody, 0, new ActionListener<>() {
+                        @Override
+                        public void onResponse(Object result) {
+                            // In a real implementation, you might also propagate OUT/INOUT parameters back to the parent's context.
+                            // Here we simply forward the result.
+                            listener.onResponse(result);
+                        }
+                        @Override
+                        public void onFailure(Exception e) {
+                            listener.onFailure(e);
+                        }
+                    });
                 }
             };
 
@@ -173,21 +201,30 @@ public class FunctionDefinitionHandler {
         }
 
         // If the function body is empty, directly call execute().
+        // If the function body is empty, we still need to invoke the function asynchronously.
         if (function.getBody() == null || function.getBody().isEmpty()) {
-            Object execResult = function.execute(arguments);
-            // Propagate OUT and INOUT parameters.
-            for (Parameter param : parameters) {
-                if (param.getMode() == ParameterMode.OUT || param.getMode() == ParameterMode.INOUT) {
-                    // For INOUT, since it wasn't declared in the child, the lookup delegates to the parent.
-                    Object updatedValue = functionContext.getVariable(param.getName());
-                    if (updatedValue == null) {
-                        updatedValue = executor.getContext().getVariable(param.getName());
+            function.execute(arguments, new ActionListener<Object>() {
+                @Override
+                public void onResponse(Object execResult) {
+                    // Propagate OUT and INOUT parameters.
+                    for (Parameter param : parameters) {
+                        if (param.getMode() == ParameterMode.OUT || param.getMode() == ParameterMode.INOUT) {
+                            // For INOUT, if not updated in the child, retrieve from the parent.
+                            Object updatedValue = functionContext.getVariable(param.getName());
+                            if (updatedValue == null) {
+                                updatedValue = executor.getContext().getVariable(param.getName());
+                            }
+                            executor.getContext().setVariable(param.getName(), updatedValue);
+                        }
                     }
-                    executor.getContext().setVariable(param.getName(), updatedValue);
+                    Object returnValue = execResult instanceof ReturnValue ? ((ReturnValue) execResult).getValue() : execResult;
+                    listener.onResponse(returnValue);
                 }
-            }
-            Object returnValue = execResult instanceof ReturnValue ? ((ReturnValue) execResult).getValue() : execResult;
-            listener.onResponse(returnValue);
+                @Override
+                public void onFailure(Exception e) {
+                    listener.onFailure(e);
+                }
+            });
             return;
         }
 
@@ -301,6 +338,8 @@ public class FunctionDefinitionHandler {
                 return value instanceof java.util.Map;
             case "ARRAY":
                 return value instanceof java.util.List;
+            case "ANY":
+                return true;
             default:
                 return false;
         }

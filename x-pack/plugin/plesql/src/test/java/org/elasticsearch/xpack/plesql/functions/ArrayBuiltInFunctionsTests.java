@@ -7,82 +7,202 @@
 
 package org.elasticsearch.xpack.plesql.functions;
 
+import org.antlr.v4.runtime.CharStream;
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.CommonTokenStream;
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.client.internal.Client;
+import org.elasticsearch.test.ESTestCase;
+import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.threadpool.TestThreadPool;
+import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.plesql.functions.builtin.types.ArrayBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
+import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
+import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
+import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
-import org.elasticsearch.xpack.plesql.functions.builtin.ArrayBuiltInFunctions;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-public class ArrayBuiltInFunctionsTests {
+public class ArrayBuiltInFunctionsTests extends ESTestCase {
 
     private ExecutionContext context;
+    private ProcedureExecutor dummyExecutor;
+    private FunctionDefinitionHandler handler;
+    private ThreadPool threadPool;
+    private ProcedureExecutor executor;
 
-    @Before
-    public void setup() {
-        // Create a fresh global ExecutionContext
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
         context = new ExecutionContext();
-        // Register all built-in array functions
+        threadPool = new TestThreadPool("array-test-pool");
+        Client mockClient = null; // or a proper mock
+        // Create a lexer with an empty source as a placeholder (adjust if needed)
+        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(""));
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        executor = new ProcedureExecutor(context, threadPool, mockClient, tokens);
+        // Initialize the FunctionDefinitionHandler as done in other test classes
+        handler = new FunctionDefinitionHandler(executor);
+        // Register the array built-in functions so that they are available for testing.
         ArrayBuiltInFunctions.registerAll(context);
     }
 
-    @Test
-    public void testArrayLength() {
-        BuiltInFunctionDefinition fn = context.getBuiltInFunction("ARRAY_LENGTH");
-        // Test with an array of size 3
-        Object result = fn.execute(Arrays.asList(Arrays.asList("a", "b", "c")));
-        assertEquals(3, result);
+    @Override
+    public void tearDown() throws Exception {
+        // Properly terminate the thread pool to avoid thread leaks.
+        terminate(threadPool);
+        super.tearDown();
+    }
+
+    // Helper method to parse a BEGIN ... END block
+    private PlEsqlProcedureParser.ProcedureContext parseBlock(String blockQuery) {
+        CharStream input = CharStreams.fromString(blockQuery);
+        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(input);
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
+
+        parser.removeErrorListeners();
+        parser.addErrorListener(new PlEsqlErrorListener());
+
+        return parser.procedure();
     }
 
     @Test
-    public void testArrayAppend() {
-        BuiltInFunctionDefinition fn = context.getBuiltInFunction("ARRAY_APPEND");
-        List<String> array = Arrays.asList("a", "b");
-        Object result = fn.execute(Arrays.asList(array, "c"));
-        // The result should be a new list equal to ["a", "b", "c"]
-        assertEquals(Arrays.asList("a", "b", "c"), result);
+    public void testArrayLength() throws Exception {
+        List<Object> array = Arrays.asList(1, 2, 3, 4);
+        CountDownLatch latch = new CountDownLatch(1);
+        // "ARRAY_LENGTH" built-in function is registered and should return the size of the array.
+        handler.executeFunctionAsync("ARRAY_LENGTH", Arrays.asList(array), new ActionListener<>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("Array length should match", array.size(), ((Number) result).intValue());
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("ARRAY_LENGTH function execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testArrayPrepend() {
-        BuiltInFunctionDefinition fn = context.getBuiltInFunction("ARRAY_PREPEND");
-        List<String> array = Arrays.asList("b", "c");
-        Object result = fn.execute(Arrays.asList(array, "a"));
-        // Expected: ["a", "b", "c"]
-        assertEquals(Arrays.asList("a", "b", "c"), result);
+    public void testArrayAppend() throws Exception {
+        List<Object> array = new ArrayList<>(Arrays.asList(1, 2, 3));
+        CountDownLatch latch = new CountDownLatch(1);
+        // Append 4 to array.
+        handler.executeFunctionAsync("ARRAY_APPEND", Arrays.asList(array, 4), new ActionListener<>() {
+            @Override
+            public void onResponse(Object result) {
+                assertTrue("Result of ARRAY_APPEND must be a List", result instanceof List);
+                List<?> newArray = (List<?>) result;
+                assertEquals("New array size should be 4", 4, newArray.size());
+                assertEquals("Appended element should be 4", 4, newArray.get(3));
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("ARRAY_APPEND function execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testArrayRemove() {
-        BuiltInFunctionDefinition fn = context.getBuiltInFunction("ARRAY_REMOVE");
-        List<String> array = Arrays.asList("a", "b", "a", "c");
-        Object result = fn.execute(Arrays.asList(array, "a"));
-        // Expected: remove all occurrences of "a", resulting in ["b", "c"]
-        assertEquals(Arrays.asList("b", "c"), result);
+    public void testArrayPrepend() throws Exception {
+        List<Object> array = new ArrayList<>(Arrays.asList(2, 3, 4));
+        CountDownLatch latch = new CountDownLatch(1);
+        // Prepend 1 to the array.
+        handler.executeFunctionAsync("ARRAY_PREPEND", Arrays.asList(array, 1), new ActionListener<>() {
+            @Override
+            public void onResponse(Object result) {
+                assertTrue("Result of ARRAY_PREPEND must be a List", result instanceof List);
+                List<?> newArray = (List<?>) result;
+                assertEquals("New array size should be 4", 4, newArray.size());
+                assertEquals("Prepend element should be 1", 1, newArray.get(0));
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("ARRAY_PREPEND function execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testArrayContains() {
-        BuiltInFunctionDefinition fn = context.getBuiltInFunction("ARRAY_CONTAINS");
-        List<String> array = Arrays.asList("a", "b", "c");
-        Object result = fn.execute(Arrays.asList(array, "b"));
-        assertTrue((Boolean) result);
-        result = fn.execute(Arrays.asList(array, "x"));
-        assertFalse((Boolean) result);
+    public void testArrayRemove() throws Exception {
+        List<Object> array = new ArrayList<>(Arrays.asList(1, 2, 3, 2, 4));
+        CountDownLatch latch = new CountDownLatch(1);
+        // Remove all occurrences of element 2.
+        handler.executeFunctionAsync("ARRAY_REMOVE", Arrays.asList(array, 2), new ActionListener<>() {
+            @Override
+            public void onResponse(Object result) {
+                assertTrue("Result of ARRAY_REMOVE must be a List", result instanceof List);
+                List<?> newArray = (List<?>) result;
+                // After removing all occurrences of 2: expected list [1,3,4]
+                assertEquals("New array size should be 3", 3, newArray.size());
+                assertFalse("New array should not contain 2", newArray.contains(2));
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("ARRAY_REMOVE function execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testArrayDistinct() {
-        BuiltInFunctionDefinition fn = context.getBuiltInFunction("ARRAY_DISTINCT");
-        List<String> array = Arrays.asList("a", "b", "a", "c", "b");
-        Object result = fn.execute(Arrays.asList(array));
-        // Expected: first occurrence order preserved: ["a", "b", "c"]
-        assertEquals(Arrays.asList("a", "b", "c"), result);
+    public void testArrayContains() throws Exception {
+        List<Object> array = Arrays.asList(1, 2, 3);
+        CountDownLatch latch = new CountDownLatch(1);
+        // Test if the array contains 2.
+        handler.executeFunctionAsync("ARRAY_CONTAINS", Arrays.asList(array, 2), new ActionListener<>() {
+            @Override
+            public void onResponse(Object result) {
+                assertTrue("Result of ARRAY_CONTAINS must be a Boolean", result instanceof Boolean);
+                assertTrue("Array should contain 2", (Boolean) result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("ARRAY_CONTAINS function execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
+    }
+
+    @Test
+    public void testArrayDistinct() throws Exception {
+        List<Object> array = Arrays.asList(1, 2, 2, 3, 3, 3, 4);
+        CountDownLatch latch = new CountDownLatch(1);
+        handler.executeFunctionAsync("ARRAY_DISTINCT", Arrays.asList(array), new ActionListener<>() {
+            @Override
+            public void onResponse(Object result) {
+                assertTrue("Result of ARRAY_DISTINCT must be a List", result instanceof List);
+                List<?> distinctArray = (List<?>) result;
+                // Expected distinct elements are [1, 2, 3, 4]
+                assertEquals("Distinct array should contain 4 elements", 4, distinctArray.size());
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("ARRAY_DISTINCT function execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 }

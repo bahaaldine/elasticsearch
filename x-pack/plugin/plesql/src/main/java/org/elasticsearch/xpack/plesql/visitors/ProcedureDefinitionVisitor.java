@@ -7,6 +7,7 @@
 
 package org.elasticsearch.xpack.plesql.visitors;
 
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
@@ -76,6 +77,11 @@ public class ProcedureDefinitionVisitor extends PlEsqlProcedureBaseVisitor<Objec
 
         // Create a ProcedureDefinition instance.
         ProcedureDefinition procDef = new ProcedureDefinition(procName, parameters, body) {
+            @Override
+            public void execute(List<Object> args, ActionListener<Object> listener) {
+
+            }
+
             @Override
             protected void executeProcedure(List<Object> args) {
                 // For now, simply delegate execution to a ProcedureExecutor.

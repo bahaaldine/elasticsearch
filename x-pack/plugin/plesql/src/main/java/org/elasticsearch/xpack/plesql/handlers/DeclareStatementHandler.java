@@ -42,6 +42,8 @@ public class DeclareStatementHandler {
         // Normalize and trim the type string.
         String normalizedType = varType.trim().toUpperCase();
 
+        System.out.println("Normalized type :" + normalizedType );
+
         // If the type starts with "ARRAY", check for the "OF" clause.
         if (normalizedType.startsWith("ARRAY")) {
             // If the token comes in as "ARRAYOF..." without a space, insert the space.
@@ -61,7 +63,10 @@ public class DeclareStatementHandler {
             try {
                 PLESQLDataType type = PLESQLDataType.valueOf(normalizedType);
                 // For non-array types, allow NUMBER, STRING, and DATE.
-                return (type == PLESQLDataType.NUMBER || type == PLESQLDataType.STRING || type == PLESQLDataType.DATE);
+                return ( type == PLESQLDataType.NUMBER
+                    || type == PLESQLDataType.STRING
+                    || type == PLESQLDataType.DATE
+                    || type == PLESQLDataType.DOCUMENT);
             } catch (IllegalArgumentException e) {
                 return false;
             }
@@ -88,7 +93,7 @@ public class DeclareStatementHandler {
 
         // Check if the datatype is supported.
         if ( isSupportedDataType(varType) == false ) {
-            listener.onFailure(new RuntimeException("Unsupporteddddd data type: " + varType));
+            listener.onFailure(new RuntimeException("Unsupported data type: " + varType + " + for variable " + varName));
             return;
         }
 

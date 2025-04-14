@@ -40,9 +40,9 @@ dependencies {
   api project(path: xpackModule('mapper-version'))
 
   compileOnly project(':x-pack:plugin:esql')
+  implementation project(path: xpackModule('core'))
 
-
-  compileOnly project(path: xpackModule('core'))
+  testImplementation project(':x-pack:plugin:esql-core')
 
   testImplementation project(':test:framework')
   internalClusterTestImplementation project(":modules:mapper-extras")

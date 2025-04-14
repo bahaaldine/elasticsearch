@@ -7,6 +7,7 @@
 
 package org.elasticsearch.xpack.plesql.functions.builtin;
 
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
@@ -36,10 +37,15 @@ public class BuiltInFunctionDefinition extends FunctionDefinition {
      * Executes the built-in function by delegating to the stored BuiltInFunction lambda.
      *
      * @param args the list of argument values
-     * @return the result of applying the built-in function
      */
-    public Object execute(List<Object> args) {
-        return function.apply(args);
+    @Override
+    public void execute(List<Object> args, ActionListener<Object> listener) {
+        try {
+            Object result = function.apply(args);
+            listener.onResponse(result);
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     /**

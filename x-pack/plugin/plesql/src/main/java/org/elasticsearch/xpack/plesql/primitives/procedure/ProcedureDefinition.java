@@ -48,7 +48,6 @@ public abstract class ProcedureDefinition extends FunctionDefinition {
      * @param args the list of argument values.
      * @return always returns null.
      */
-    @Override
     public Object execute(List<Object> args) {
         executeProcedure(args);
         return null;

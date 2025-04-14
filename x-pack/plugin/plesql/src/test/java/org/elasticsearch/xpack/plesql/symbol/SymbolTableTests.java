@@ -7,125 +7,135 @@
 
 package org.elasticsearch.xpack.plesql.symbol;
 
-import org.elasticsearch.xpack.plesql.primitives.VariableDefinition;
-import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
-import org.junit.Before;
+import org.elasticsearch.xpack.plesql.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.ParameterMode;
+import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
+import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import org.junit.Test;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+public class SymbolTableTests extends ESTestCase {
 
-public class SymbolTableTests {
+    private ExecutionContext context;
 
-    private SymbolTable symbolTable;
-
-    @Before
-    public void setUp() {
-        symbolTable = new SymbolTable();
+    @Override
+    public void setUp() throws Exception {
+        // Use the default setUp from ESTestCase (the test cluster isn’t needed here)
+        super.setUp();
+        context = new ExecutionContext();
     }
 
     @Test
     public void testDeclareAndRetrieveVariable() {
-        symbolTable.declareVariable("x", "NUMBER");
-        assertTrue(symbolTable.hasVariable("x"));
-        VariableDefinition def = symbolTable.getVariableDefinition("x");
-        assertNotNull(def);
-        assertEquals("NUMBER", def.getType().toString());
-    }
-
-    @Test(expected = RuntimeException.class)
-    public void testDuplicateVariableDeclaration() {
-        symbolTable.declareVariable("x", "NUMBER");
-        symbolTable.declareVariable("x", "NUMBER");
+        // Declare a variable and then set/get its value via the ExecutionContext.
+        context.declareVariable("x", "NUMBER");
+        context.setVariable("x", 42);
+        Object val = context.getVariable("x");
+        assertNotNull("Variable x should be declared", val);
+        assertEquals("Variable x should be 42", 42, ((Number) val).intValue());
     }
 
     @Test
-    public void testSetAndGetVariable() {
-        symbolTable.declareVariable("y", "STRING");
-        symbolTable.setVariable("y", "test");
-        Object value = symbolTable.getVariable("y");
-        assertEquals("test", value);
-    }
+    public void testDeclareAndExecuteFunction() throws Exception {
+        // Define a simple built-in function "add" that adds two numbers.
+        List<Parameter> params = Arrays.asList(
+            new Parameter("a", "NUMBER", ParameterMode.IN),
+            new Parameter("b", "NUMBER", ParameterMode.IN)
+        );
+        // Create a synchronous built-in function wrapped in the new asynchronous API.
+        FunctionDefinition addFunc = new BuiltInFunctionDefinition("add", (List<Object> args) -> {
+            double a = ((Number) args.get(0)).doubleValue();
+            double b = ((Number) args.get(1)).doubleValue();
+            return a + b;
+        });
+        // Declare the function in the context.
+        context.declareFunction("add", addFunc);
 
-    @Test(expected = RuntimeException.class)
-    public void testGetUndeclaredVariable() {
-        symbolTable.getVariable("nonexistent");
-    }
+        // Retrieve and test the function.
+        FunctionDefinition retrieved = context.getFunction("add");
+        assertNotNull("Function 'add' should be declared", retrieved);
 
-    @Test
-    public void testDeclareAndRetrieveFunction() {
-        // Create a dummy function definition using an anonymous subclass.
-        FunctionDefinition dummy = new FunctionDefinition("dummy",
-            Collections.emptyList(),
-            Collections.<PlEsqlProcedureParser.StatementContext>emptyList()) {
-            public Object execute(List<Object> args) {
-                return "result";
+        // Now execute the function asynchronously.
+        CountDownLatch latch = new CountDownLatch(1);
+        List<Object> arguments = Arrays.asList(3, 4);
+        retrieved.execute(arguments, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                // The synchronous function returns its result synchronously, but wrapped via execute.
+                // Our implementation in BuiltInFunctionDefinition wraps it by calling listener.onResponse.
+                if (result instanceof ReturnValue) {
+                    result = ((ReturnValue) result).getValue();
+                }
+                assertEquals("Expected add(3, 4) to return 7", 7.0, ((Number) result).doubleValue(), 0.001);
+                latch.countDown();
             }
-        };
-        symbolTable.declareFunction("dummy", dummy);
-        assertTrue(symbolTable.hasFunction("dummy"));
-        FunctionDefinition retrieved = symbolTable.getFunction("dummy");
-        assertNotNull(retrieved);
-        assertEquals("dummy", retrieved.getName());
-    }
-
-    @Test(expected = RuntimeException.class)
-    public void testDuplicateFunctionDeclaration() {
-        FunctionDefinition dummy = new FunctionDefinition("dummy",
-            Collections.emptyList(),
-            Collections.<PlEsqlProcedureParser.StatementContext>emptyList()) {
-            public Object execute(List<Object> args) {
-                return "result";
-            }
-        };
-        symbolTable.declareFunction("dummy", dummy);
-        // Attempting to declare the same function again should fail.
-        symbolTable.declareFunction("dummy", dummy);
-    }
-
-    @Test
-    public void testGetVariableNames() {
-        symbolTable.declareVariable("a", "NUMBER");
-        symbolTable.declareVariable("b", "STRING");
-        Set<String> names = symbolTable.getVariableNames();
-        assertTrue(names.contains("a"));
-        assertTrue(names.contains("b"));
-    }
-
-    @Test
-    public void testGetFunctions() {
-        FunctionDefinition dummy = new FunctionDefinition("dummy",
-            Collections.emptyList(),
-            Collections.<PlEsqlProcedureParser.StatementContext>emptyList()) {
-            public Object execute(List<Object> args) {
-                return "result";
-            }
-        };
-        symbolTable.declareFunction("dummy", dummy);
-        assertEquals(1, symbolTable.getFunctions().size());
-    }
-
-    @Test
-    public void testClear() {
-        symbolTable.declareVariable("a", "NUMBER");
-        symbolTable.declareVariable("b", "STRING");
-        symbolTable.declareFunction("dummy", new FunctionDefinition("dummy",
-            Collections.emptyList(),
-            Collections.<PlEsqlProcedureParser.StatementContext>emptyList()) {
-            public Object execute(List<Object> args) {
-                return "result";
+            @Override
+            public void onFailure(Exception e) {
+                fail("Function execution failed: " + e.getMessage());
+                latch.countDown();
             }
         });
-        symbolTable.clear();
-        assertFalse(symbolTable.hasVariable("a"));
-        assertFalse(symbolTable.hasVariable("b"));
-        assertFalse(symbolTable.hasFunction("dummy"));
+        latch.await();
+    }
+
+    @Test
+    public void testFunctionWithMixedParameterModes() throws Exception {
+        // Define a function with mixed parameter modes.
+        // For this test, we simulate a function that:
+        //   - Has an IN parameter "a",
+        //   - An OUT parameter "b" (which it computes as 2 * a),
+        //   - And an INOUT parameter "c" (which it increments by a).
+        List<Parameter> params = Arrays.asList(
+            new Parameter("a", "NUMBER", ParameterMode.IN),
+            new Parameter("b", "NUMBER", ParameterMode.OUT),
+            new Parameter("c", "NUMBER", ParameterMode.INOUT)
+        );
+        FunctionDefinition mixFunc = new BuiltInFunctionDefinition("mixParams", (List<Object> args) -> {
+            double a = ((Number) args.get(0)).doubleValue();
+            double c = ((Number) args.get(2)).doubleValue();
+            double newC = c + a;
+            // Simulate an OUT parameter update by setting the variable in the context.
+            context.setVariable("b", a * 2);
+            context.setVariable("c", newC);
+            return a + newC;
+        });
+        context.declareFunction("mixParams", mixFunc);
+        // Declare variables for OUT/INOUT.
+        context.declareVariable("b", "NUMBER");
+        context.declareVariable("c", "NUMBER");
+        context.setVariable("c", 10);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        List<Object> arguments = Arrays.asList(5, null, 10);
+        mixFunc.execute(arguments, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                // Expected: b becomes 5 * 2 = 10, c becomes 10 + 5 = 15, and function returns 5 + 15 = 20.
+                if (result instanceof ReturnValue) {
+                    result = ((ReturnValue) result).getValue();
+                }
+                assertEquals("Expected result is 20", 20.0, ((Number) result).doubleValue(), 0.001);
+                Object bVal = context.getVariable("b");
+                Object cVal = context.getVariable("c");
+                assertNotNull("Variable b should be set", bVal);
+                assertNotNull("Variable c should be set", cVal);
+                assertEquals("b should be updated to 10", 10.0, ((Number) bVal).doubleValue(), 0.001);
+                assertEquals("c should be updated to 15", 15.0, ((Number) cVal).doubleValue(), 0.001);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("Function execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 }

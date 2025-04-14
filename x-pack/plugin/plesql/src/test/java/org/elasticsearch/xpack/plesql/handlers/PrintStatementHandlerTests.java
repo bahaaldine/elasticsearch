@@ -24,7 +24,7 @@ import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.functions.builtin.StringBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.types.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.utils.TestListAppender;
 import org.elasticsearch.xpack.plesql.utils.TestUtils;
 import org.junit.Test;

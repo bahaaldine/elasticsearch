@@ -1,8 +1,7 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
  * or more contributor license agreements. Licensed under the Elastic License
- * 2.0; you may not use this file except in compliance with the Elastic License
- * 2.0.
+ * 2.0; you may not use this file except in compliance with the Elastic License 2.0.
  */
 package org.elasticsearch.xpack.plesql.handlers;
 
@@ -17,8 +16,8 @@ import org.elasticsearch.xpack.plesql.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
+import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
 import org.junit.Test;
@@ -40,7 +39,7 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
         super.setUp();
         context = new ExecutionContext();
         threadPool = new TestThreadPool("test-thread-pool");
-        Client mockClient = null; // or mock(Client.class);
+        Client mockClient = null; // Keeping client null since our tests do not use real querying
         PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString("")); // empty source
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         executor = new ProcedureExecutor(context, threadPool, mockClient, tokens);
@@ -87,6 +86,7 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
                 assertNotNull(func);
                 assertEquals("myFunction", func.getName());
                 assertEquals(0, func.getParameters().size());
+                // Assuming getBody returns the function body (which should not be empty).
                 assertNotNull(func.getBody());
                 latch.countDown();
             }
@@ -204,15 +204,15 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
     @Test
     public void testFunctionCallWithinLoop() throws InterruptedException {
         String blockQuery = """
-        PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)
-        BEGIN
-            DECLARE total NUMBER, i NUMBER;
-            FUNCTION add(IN a NUMBER, IN b NUMBER) BEGIN RETURN a + b; END FUNCTION;
-            SET total = 0;
-            FOR i IN 1..3 LOOP
-                SET total = add(total, i);
-            END LOOP;
-        END PROCEDURE
+            PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)
+            BEGIN
+                DECLARE total NUMBER, i NUMBER;
+                FUNCTION add(IN a NUMBER, IN b NUMBER) BEGIN RETURN a + b; END FUNCTION;
+                SET total = 0;
+                FOR i IN 1..3 LOOP
+                    SET total = add(total, i);
+                END LOOP;
+            END PROCEDURE
         """;
         PlEsqlProcedureParser.ProcedureContext blockCtx = parseBlock(blockQuery);
         CountDownLatch latch = new CountDownLatch(1);
@@ -266,18 +266,17 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
     @Test
     public void testFunctionWithOutParameterPropagation() throws InterruptedException {
         // Define function: FUNCTION testOut(IN a NUMBER, OUT b NUMBER) BEGIN RETURN a + 5; END FUNCTION;
-        // In dummy execution, simulate updating OUT parameter 'b' to a * 2.
-        List<Parameter> parameters = Arrays.asList(
+        List<Parameter> parameters = Collections.unmodifiableList(Arrays.asList(
             new Parameter("a", "NUMBER", ParameterMode.IN),
             new Parameter("b", "NUMBER", ParameterMode.OUT)
-        );
+        ));
         FunctionDefinition testOutFunc = new FunctionDefinition("testOut", parameters, Collections.emptyList()) {
             @Override
-            public Object execute(List<Object> args) {
+            public void execute(List<Object> args, ActionListener<Object> listener) {
                 double a = ((Number) args.get(0)).doubleValue();
-                // Simulate updating OUT parameter 'b' in the function's child context.
+                // Simulate updating OUT parameter 'b' in the function's context.
                 executor.getContext().setVariable("b", a * 2);
-                return new ReturnValue(a + 5);
+                listener.onResponse(new ReturnValue(a + 5));
             }
         };
         context.declareFunction("testOut", testOutFunc);
@@ -307,17 +306,16 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
     @Test
     public void testFunctionWithInOutParameterPropagation() throws InterruptedException {
         // Define function: FUNCTION increment(INOUT x NUMBER) BEGIN RETURN x + 10; END FUNCTION;
-        // Dummy execution: simulate updating INOUT parameter 'x' to x + 10.
         List<Parameter> parameters = Collections.singletonList(
             new Parameter("x", "NUMBER", ParameterMode.INOUT)
         );
         FunctionDefinition incrementFunc = new FunctionDefinition("increment", parameters, Collections.emptyList()) {
             @Override
-            public Object execute(List<Object> args) {
+            public void execute(List<Object> args, ActionListener<Object> listener) {
                 double x = ((Number) args.get(0)).doubleValue();
                 double newX = x + 10;
                 executor.getContext().setVariable("x", newX);
-                return new ReturnValue(newX);
+                listener.onResponse(new ReturnValue(newX));
             }
         };
         context.declareFunction("increment", incrementFunc);
@@ -347,12 +345,6 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
     // Test 9: Function with mixed parameter modes (explicit IN, OUT, INOUT).
     @Test
     public void testFunctionWithMixedParameterModes() throws InterruptedException {
-        // Define a function "mixParams" with:
-        // - IN a NUMBER, OUT b NUMBER, INOUT c NUMBER.
-        // The function will:
-        //   - Set OUT parameter 'b' = a * 2.
-        //   - Update INOUT parameter 'c' to c + a.
-        //   - Return a + (c + a).
         String functionQuery = "FUNCTION mixParams(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER) " +
             "BEGIN RETURN a + c; END FUNCTION;";
         PlEsqlProcedureParser.Function_definitionContext funcCtx = parseFunction(functionQuery);
@@ -384,25 +376,20 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
         });
         latchDef.await();
 
-        // Overwrite the function definition with a dummy execute implementation that simulates:
-        // - OUT parameter 'b' becomes a * 2.
-        // - INOUT parameter 'c' becomes c + a.
-        // - Return value is a + (c + a).
+        // Overwrite the function definition with a dummy asynchronous implementation.
         FunctionDefinition mixParamsFunc = new FunctionDefinition("mixParams",
             context.getFunction("mixParams").getParameters(), Collections.emptyList()) {
             @Override
-            public Object execute(List<Object> args) {
+            public void execute(List<Object> args, ActionListener<Object> listener) {
                 double a = ((Number) args.get(0)).doubleValue();
                 double c = ((Number) args.get(2)).doubleValue();
                 double newC = c + a;
                 executor.getContext().setVariable("b", a * 2);
                 executor.getContext().setVariable("c", newC);
-                return new ReturnValue(a + newC);
+                listener.onResponse(new ReturnValue(a + newC));
             }
         };
-        // Overwrite the function in the context.
         context.overrideFunction("mixParams", mixParamsFunc);
-        // Declare parent's variables for OUT/INOUT parameters.
         context.declareVariable("b", "NUMBER");
         context.declareVariable("c", "NUMBER");
         context.setVariable("c", 10);
@@ -412,10 +399,7 @@ public class FunctionDefinitionHandlerTests extends ESTestCase {
         handler.executeFunctionAsync("mixParams", arguments, new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
-                // Expected:
-                // OUT parameter 'b' should be 5 * 2 = 10,
-                // INOUT parameter 'c' should be 10 + 5 = 15,
-                // Return value should be 5 + 15 = 20.
+                // Expected: OUT 'b' becomes 5 * 2 = 10, INOUT 'c' becomes 10 + 5 = 15, function returns 5 + 15 = 20.
                 assertEquals(20.0, ((Number) result).doubleValue(), 0.001);
                 Object bVal = context.getVariable("b");
                 Object cVal = context.getVariable("c");

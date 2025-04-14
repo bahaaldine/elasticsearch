@@ -6,149 +6,385 @@
  */
 
 package org.elasticsearch.xpack.plesql.functions;
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License 2.0.
+ */
 
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.CommonTokenStream;
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.client.internal.Client;
+import org.elasticsearch.test.ESTestCase;
+import org.elasticsearch.threadpool.TestThreadPool;
+import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.functions.builtin.types.NumberBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.types.StringBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
+import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
-import org.elasticsearch.xpack.plesql.functions.builtin.StringBuiltInFunctions;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
 
-import static org.junit.Assert.assertEquals;
-
-public class StringBuiltInFunctionsTests {
+public class StringBuiltInFunctionsTests extends ESTestCase {
 
     private ExecutionContext context;
+    private ProcedureExecutor dummyExecutor;
+    private FunctionDefinitionHandler handler;
+    private ThreadPool threadPool;
+    private ProcedureExecutor executor;
 
-    @Before
-    public void setup() {
-        // Create a fresh global execution context
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
         context = new ExecutionContext();
-        // Register all built-in functions
+        threadPool = new TestThreadPool("array-test-pool");
+        Client mockClient = null; // or a proper mock
+        // Create a lexer with an empty source as a placeholder (adjust if needed)
+        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(""));
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        executor = new ProcedureExecutor(context, threadPool, mockClient, tokens);
+        // Initialize the FunctionDefinitionHandler as done in other test classes
+        handler = new FunctionDefinitionHandler(executor);
+        // Register the array built-in functions so that they are available for testing.
         StringBuiltInFunctions.registerAll(context);
     }
 
+    @Override
+    public void tearDown() throws Exception {
+        // Properly terminate the thread pool to avoid thread leaks.
+        terminate(threadPool);
+        super.tearDown();
+    }
+
     @Test
-    public void testLength() {
+    public void testLength() throws Exception {
         BuiltInFunctionDefinition lengthFn = context.getBuiltInFunction("LENGTH");
-        Object result = lengthFn.execute(Arrays.asList("hello world"));
-        // "hello world" is 11 characters long
-        assertEquals(11, result);
+        CountDownLatch latch = new CountDownLatch(1);
+        lengthFn.execute(Arrays.asList("hello world"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                // "hello world" is 11 characters.
+                assertEquals(11, result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testSubstr() {
+    public void testSubstr() throws Exception {
         BuiltInFunctionDefinition substrFn = context.getBuiltInFunction("SUBSTR");
-        Object result = substrFn.execute(Arrays.asList("hello world", 7, 5));
-        // Expected substring is "world"
-        assertEquals("world", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        substrFn.execute(Arrays.asList("hello world", 7, 5), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                // Expected substring is "world"
+                assertEquals("world", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testUpper() {
+    public void testUpper() throws Exception {
         BuiltInFunctionDefinition upperFn = context.getBuiltInFunction("UPPER");
-        Object result = upperFn.execute(Arrays.asList("hello"));
-        assertEquals("HELLO", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        upperFn.execute(Arrays.asList("hello"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("HELLO", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testLower() {
+    public void testLower() throws Exception {
         BuiltInFunctionDefinition lowerFn = context.getBuiltInFunction("LOWER");
-        Object result = lowerFn.execute(Arrays.asList("HELLO"));
-        assertEquals("hello", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        lowerFn.execute(Arrays.asList("HELLO"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("hello", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testTrim() {
+    public void testTrim() throws Exception {
         BuiltInFunctionDefinition trimFn = context.getBuiltInFunction("TRIM");
-        Object result = trimFn.execute(Arrays.asList("  hello  "));
-        assertEquals("hello", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        trimFn.execute(Arrays.asList("  hello  "), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("hello", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testLTrim() {
+    public void testLTrim() throws Exception {
         BuiltInFunctionDefinition ltrimFn = context.getBuiltInFunction("LTRIM");
-        Object result = ltrimFn.execute(Arrays.asList("   hello"));
-        assertEquals("hello", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        ltrimFn.execute(Arrays.asList("   hello"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("hello", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testRTrim() {
+    public void testRTrim() throws Exception {
         BuiltInFunctionDefinition rtrimFn = context.getBuiltInFunction("RTRIM");
-        Object result = rtrimFn.execute(Arrays.asList("hello   "));
-        assertEquals("hello", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        rtrimFn.execute(Arrays.asList("hello   "), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("hello", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testReplace() {
+    public void testReplace() throws Exception {
         BuiltInFunctionDefinition replaceFn = context.getBuiltInFunction("REPLACE");
-        Object result = replaceFn.execute(Arrays.asList("hello world", "world", "PLESQL"));
-        assertEquals("hello PLESQL", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        replaceFn.execute(Arrays.asList("hello world", "world", "PLESQL"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("hello PLESQL", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testInstr() {
+    public void testInstr() throws Exception {
         BuiltInFunctionDefinition instrFn = context.getBuiltInFunction("INSTR");
-        Object result = instrFn.execute(Arrays.asList("hello world", "world"));
-        // Expecting 7 (1-indexed)
-        assertEquals(7, result);
+        CountDownLatch latch = new CountDownLatch(1);
+        instrFn.execute(Arrays.asList("hello world", "world"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                // Expecting 7 (1-indexed)
+                assertEquals(7, result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testLPad() {
+    public void testLPad() throws Exception {
         BuiltInFunctionDefinition lpadFn = context.getBuiltInFunction("LPAD");
-        Object result = lpadFn.execute(Arrays.asList("hello", 10, "*"));
-        assertEquals("*****hello", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        lpadFn.execute(Arrays.asList("hello", 10, "*"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("*****hello", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testRPad() {
+    public void testRPad() throws Exception {
         BuiltInFunctionDefinition rpadFn = context.getBuiltInFunction("RPAD");
-        Object result = rpadFn.execute(Arrays.asList("hello", 10, "*"));
-        assertEquals("hello*****", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        rpadFn.execute(Arrays.asList("hello", 10, "*"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("hello*****", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testSplit() {
+    public void testSplit() throws Exception {
         BuiltInFunctionDefinition splitFn = context.getBuiltInFunction("SPLIT");
-        Object result = splitFn.execute(Arrays.asList("a,b,c", ","));
-        // Expected to return a list with ["a", "b", "c"]
-        assertEquals(Arrays.asList("a", "b", "c"), result);
+        CountDownLatch latch = new CountDownLatch(1);
+        splitFn.execute(Arrays.asList("a,b,c", ","), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals(Arrays.asList("a", "b", "c"), result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testConcat() {
+    public void testConcat() throws Exception {
         BuiltInFunctionDefinition concatFn = context.getBuiltInFunction("||");
-        Object result = concatFn.execute(Arrays.asList("hello", " ", "world"));
-        assertEquals("hello world", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        concatFn.execute(Arrays.asList("hello", " ", "world"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("hello world", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testRegexpReplace() {
+    public void testRegexpReplace() throws Exception {
         BuiltInFunctionDefinition regexpReplaceFn = context.getBuiltInFunction("REGEXP_REPLACE");
-        Object result = regexpReplaceFn.execute(Arrays.asList("abc123def", "[0-9]+", ""));
-        assertEquals("abcdef", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        regexpReplaceFn.execute(Arrays.asList("abc123def", "[0-9]+", ""), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("abcdef", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testRegexpSubstr() {
+    public void testRegexpSubstr() throws Exception {
         BuiltInFunctionDefinition regexpSubstrFn = context.getBuiltInFunction("REGEXP_SUBSTR");
-        Object result = regexpSubstrFn.execute(Arrays.asList("abc123def", "[0-9]+"));
-        assertEquals("123", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        regexpSubstrFn.execute(Arrays.asList("abc123def", "[0-9]+"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("123", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testReverse() {
+    public void testReverse() throws Exception {
         BuiltInFunctionDefinition reverseFn = context.getBuiltInFunction("REVERSE");
-        Object result = reverseFn.execute(Arrays.asList("hello"));
-        assertEquals("olleh", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        reverseFn.execute(Arrays.asList("hello"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("olleh", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 
     @Test
-    public void testInitCap() {
+    public void testInitCap() throws Exception {
         BuiltInFunctionDefinition initcapFn = context.getBuiltInFunction("INITCAP");
-        Object result = initcapFn.execute(Arrays.asList("hello world"));
-        assertEquals("Hello World", result);
+        CountDownLatch latch = new CountDownLatch(1);
+        initcapFn.execute(Arrays.asList("hello world"), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                assertEquals("Hello World", result);
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail(e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 }

@@ -13,6 +13,7 @@
  */
 package org.elasticsearch.xpack.plesql.functions;
 
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 
 import java.util.List;
@@ -78,10 +79,11 @@ public abstract class FunctionDefinition {
     }
 
     /**
-     * Executes the function with the given argument values.
+     * Asynchronously execute the function with the provided arguments.
+     * Implementations must call listener.onResponse(result) or listener.onFailure(exception).
      *
-     * @param args The list of argument values.
-     * @return The result of executing the function.
+     * @param args     The function arguments.
+     * @param listener The ActionListener to receive the result.
      */
-    public abstract Object execute(List<Object> args);
+    public abstract void execute(List<Object> args, ActionListener<Object> listener);
 }

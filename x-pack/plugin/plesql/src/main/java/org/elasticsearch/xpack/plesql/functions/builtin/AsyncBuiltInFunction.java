@@ -5,16 +5,11 @@
  * 2.0.
  */
 
-package org.elasticsearch.xpack.plesql.primitives;
+package org.elasticsearch.xpack.plesql.functions.builtin;
 
-public enum PLESQLDataType {
-    INT,
-    FLOAT,
-    DOUBLE,
-    STRING,
-    DATE,
-    NUMBER,
-    DOCUMENT,
-    ANY,
-    ARRAY;
+import org.elasticsearch.action.ActionListener;
+import java.util.List;
+
+public interface AsyncBuiltInFunction {
+    void apply(List<Object> args, ActionListener<Object> listener);
 }

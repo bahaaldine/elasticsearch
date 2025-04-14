@@ -111,131 +111,131 @@ public class ExecuteStatementHandler {
         try {
             // Extract raw query and variable name
             String rawEsqlQuery = executor.getRawText(ctx.esql_query_content());
-            String variableName = ctx.variable_assignment().ID().getText();
-            LOGGER.debug(() -> String.format("Raw ESQL query substring: [%s] and variable [%s]", rawEsqlQuery, variableName));
+                String variableName = ctx.variable_assignment().ID().getText();
+                LOGGER.info(() -> String.format("Raw ESQL query substring: [%s] and variable [%s]", rawEsqlQuery, variableName));
 
-            // Variable substitution
-            String substitutedQuery = substituteVariables(rawEsqlQuery);
-            String finalSubstitutedQuery = substitutedQuery;
-            LOGGER.debug(() -> String.format("After substitution, ESQL query: [%s]", finalSubstitutedQuery));
+                // Variable substitution
+                String substitutedQuery = substituteVariables(rawEsqlQuery);
+                String finalSubstitutedQuery = substitutedQuery;
+                LOGGER.info(() -> String.format("After substitution, ESQL query: [%s]", finalSubstitutedQuery));
 
-            // Extract the content and the variable name
-            SearchRequest searchRequest = buildSearchRequest(finalSubstitutedQuery);
-            LOGGER.debug("Search Query: [{}]", searchRequest);
+                // Extract the content and the variable name
+                SearchRequest searchRequest = buildSearchRequest(finalSubstitutedQuery);
+                LOGGER.info("Search Query: [{}]", searchRequest);
 
-            EsqlQueryRequestBuilder<? extends EsqlQueryRequest, ? extends EsqlQueryResponse> requestBuilder =
-                EsqlQueryRequestBuilder.newRequestBuilder(client);
-            requestBuilder.query(finalSubstitutedQuery);
+                EsqlQueryRequestBuilder<? extends EsqlQueryRequest, ? extends EsqlQueryResponse> requestBuilder =
+                    EsqlQueryRequestBuilder.newRequestBuilder(client);
+                requestBuilder.query(finalSubstitutedQuery);
 
-            String finalSubstitutedQuery1 = substitutedQuery;
-            ActionListener<EsqlQueryResponse> executeESQLStatementListener = new ActionListener<EsqlQueryResponse>() {
+                String finalSubstitutedQuery1 = substitutedQuery;
+                ActionListener<EsqlQueryResponse> executeESQLStatementListener = new ActionListener<EsqlQueryResponse>() {
 
-                @Override
-                public void onResponse(EsqlQueryResponse esqlQueryResponse) {
-                    try {
-                        // 1) Convert columns+rows to a List<Map<String,Object>>:
-                        //    e.g. the `rowsAsMaps(...)` method from earlier
-                        List<Map<String, Object>> rowMaps = rowsAsMaps(
-                            (List<ColumnInfo>) esqlQueryResponse.response().columns(),
-                            esqlQueryResponse.response().rows()
-                        );
+                    @Override
+                    public void onResponse(EsqlQueryResponse esqlQueryResponse) {
+                        try {
+                            // 1) Convert columns+rows to a List<Map<String,Object>>:
+                            //    e.g. the `rowsAsMaps(...)` method from earlier
+                            List<Map<String, Object>> rowMaps = rowsAsMaps(
+                                (List<ColumnInfo>) esqlQueryResponse.response().columns(),
+                                esqlQueryResponse.response().rows()
+                            );
 
-                        // Convert the result (rowMaps) into JSON with consistent field types.
-                        List<Map<String, Object>> normalizedRows = new ArrayList<>();
-                        for (Map<String, Object> row : rowMaps) {
-                            Map<String, Object> normalized = new LinkedHashMap<>();
-                            for (Map.Entry<String, Object> entry : row.entrySet()) {
-                                Object value = entry.getValue();
-                                // Convert nested objects/arrays to JSON string, or force to string.
-                                if (value instanceof Map || value instanceof List) {
-                                    normalized.put(entry.getKey(), convertToJsonString(value));
-                                } else {
-                                    normalized.put(entry.getKey(), value);
-                                }
-                            }
-                            normalizedRows.add(normalized);
-                        }
-
-                        // 2) Build an XContentBuilder to produce a JSON string
-                        XContentBuilder builder = XContentFactory.jsonBuilder();
-                        builder.startObject();
-                        builder.field("rows", normalizedRows);
-                        builder.endObject();
-                        String jsonString = Strings.toString(builder);
-                        LOGGER.debug("ESQL JSON Documents: {}", jsonString);
-
-                        // Retrieve the persist clause (if any)
-                        String persistIndexName = null;
-                        if (ctx.persist_clause() != null) {
-                            persistIndexName = ctx.persist_clause().ID().getText();
-                            LOGGER.debug("Persist clause provided: [{}]", persistIndexName);
-                        } else {
-                            LOGGER.debug("No persist clause provided. Result will remain transient.");
-                        }
-
-                        // If a persist clause is provided, index the result into that index
-                        if (persistIndexName != null) {
-                            // Extract the source index from the query (e.g., "FROM retro_arcade_games" yields "retro_arcade_games")
-                            String sourceIndex = extractSourceIndex(finalSubstitutedQuery1);
-                            LOGGER.debug("Extracted source index: [{}]", sourceIndex);
-
-                            ActionListener<Void> persistIndexListener = new ActionListener<Void>() {
-                                @Override
-                                public void onResponse(Void aVoid) {
-                                    ExecutionContext exeContext = executor.getContext();
-                                    if ( exeContext.hasVariable(variableName) == false ) {
-                                        exeContext.declareVariable(variableName, "ARRAY");
+                            // Convert the result (rowMaps) into JSON with consistent field types.
+                            List<Map<String, Object>> normalizedRows = new ArrayList<>();
+                            for (Map<String, Object> row : rowMaps) {
+                                Map<String, Object> normalized = new LinkedHashMap<>();
+                                for (Map.Entry<String, Object> entry : row.entrySet()) {
+                                    Object value = entry.getValue();
+                                    // Convert nested objects/arrays to JSON string, or force to string.
+                                    if (value instanceof Map || value instanceof List) {
+                                        normalized.put(entry.getKey(), convertToJsonString(value));
+                                    } else {
+                                        normalized.put(entry.getKey(), value);
                                     }
-                                    exeContext.setVariable(variableName, normalizedRows);
-                                    listener.onResponse(null);
                                 }
-                                @Override
-                                public void onFailure(Exception e) {
-                                    listener.onFailure(e);
-                                }
-                            };
-
-
-                            ActionListener<Void> persistIndexLogger = ActionListenerUtils.withLogging(persistIndexListener,
-                                this.getClass().getName(),
-                                "Persist-Index-Statement: " + persistIndexName);
-
-                            persistResults(sourceIndex, persistIndexName, rowMaps, persistIndexLogger);
-                        } else {
-                            // Update the variable in the execution context with the query result
-                            ExecutionContext exeContext = executor.getContext();
-                            if ( exeContext.hasVariable(variableName) == false ) {
-                                exeContext.declareVariable(variableName, "ARRAY");
+                                normalizedRows.add(normalized);
                             }
-                            exeContext.setVariable(variableName, normalizedRows);
 
-                            // 4) Pass this JSON string back to the listener
-                            listener.onResponse(null);
+                            // 2) Build an XContentBuilder to produce a JSON string
+                            XContentBuilder builder = XContentFactory.jsonBuilder();
+                            builder.startObject();
+                            builder.field("rows", normalizedRows);
+                            builder.endObject();
+                            String jsonString = Strings.toString(builder);
+                            LOGGER.debug("ESQL JSON Documents: {}", jsonString);
+
+                            // Retrieve the persist clause (if any)
+                            String persistIndexName = null;
+                            if (ctx.persist_clause() != null) {
+                                persistIndexName = ctx.persist_clause().ID().getText();
+                                LOGGER.debug("Persist clause provided: [{}]", persistIndexName);
+                            } else {
+                                LOGGER.debug("No persist clause provided. Result will remain transient.");
+                            }
+
+                            // If a persist clause is provided, index the result into that index
+                            if (persistIndexName != null) {
+                                // Extract the source index from the query (e.g., "FROM retro_arcade_games" yields "retro_arcade_games")
+                                String sourceIndex = extractSourceIndex(finalSubstitutedQuery1);
+                                LOGGER.debug("Extracted source index: [{}]", sourceIndex);
+
+                                ActionListener<Void> persistIndexListener = new ActionListener<Void>() {
+                                    @Override
+                                    public void onResponse(Void aVoid) {
+                                        ExecutionContext exeContext = executor.getContext();
+                                        if ( exeContext.hasVariable(variableName) == false ) {
+                                            exeContext.declareVariable(variableName, "ARRAY");
+                                        }
+                                        exeContext.setVariable(variableName, normalizedRows);
+                                        listener.onResponse(null);
+                                    }
+                                    @Override
+                                    public void onFailure(Exception e) {
+                                        listener.onFailure(e);
+                                    }
+                                };
+
+
+                                ActionListener<Void> persistIndexLogger = ActionListenerUtils.withLogging(persistIndexListener,
+                                    this.getClass().getName(),
+                                    "Persist-Index-Statement: " + persistIndexName);
+
+                                persistResults(sourceIndex, persistIndexName, rowMaps, persistIndexLogger);
+                            } else {
+                                // Update the variable in the execution context with the query result
+                                ExecutionContext exeContext = executor.getContext();
+                                if ( exeContext.hasVariable(variableName) == false ) {
+                                    exeContext.declareVariable(variableName, "ARRAY");
+                                }
+                                exeContext.setVariable(variableName, normalizedRows);
+
+                                // 4) Pass this JSON string back to the listener
+                                listener.onResponse(null);
+                            }
+
+                        } catch (Exception e) {
+                            listener.onFailure(e);
                         }
+                    }
 
-                    } catch (Exception e) {
+                    @Override
+                    public void onFailure(Exception e) {
                         listener.onFailure(e);
                     }
-                }
+                };
 
-                @Override
-                public void onFailure(Exception e) {
-                    listener.onFailure(e);
-                }
-            };
+                ActionListener<EsqlQueryResponse> executeESQLStatementLogger = ActionListenerUtils.withLogging(executeESQLStatementListener,
+                    this.getClass().getName(),
+                    "Execute-ESQL-Statement: " + requestBuilder.request());
 
-            ActionListener<EsqlQueryResponse> executeESQLStatementLogger = ActionListenerUtils.withLogging(executeESQLStatementListener,
-                this.getClass().getName(),
-                "Execute-ESQL-Statement: " + requestBuilder.request());
-
-            client.<EsqlQueryRequest, EsqlQueryResponse>execute(
-                (ActionType<EsqlQueryResponse>) requestBuilder.action(),
-                requestBuilder.request(),
-                executeESQLStatementLogger
-                );
-        } catch (Exception ex) {
-            listener.onFailure(ex);
-        }
+                client.<EsqlQueryRequest, EsqlQueryResponse>execute(
+                    (ActionType<EsqlQueryResponse>) requestBuilder.action(),
+                    requestBuilder.request(),
+                    executeESQLStatementLogger
+                    );
+            } catch (Exception ex) {
+                listener.onFailure(ex);
+            }
     }
 
     // --- Asynchronous Persist Workflow ---

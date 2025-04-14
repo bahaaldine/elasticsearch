@@ -164,6 +164,8 @@ public class VariableDefinition {
                 return value instanceof List<?>;
             case DOCUMENT:
                 return value instanceof java.util.Map;
+            case ANY:
+                return true;
             default:
                 return false;
         }

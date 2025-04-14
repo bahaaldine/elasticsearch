@@ -4,6 +4,9 @@ grammar PlEsqlProcedure;
 // Lexer Rules
 // =======================
 
+// Datasource
+ESQL_QUERY: 'ESQL_QUERY';
+
 // Print rules
 PRINT: 'PRINT';
 DEBUG: 'DEBUG';
@@ -376,6 +379,7 @@ datatype
     | STRING_TYPE
     | DATE_TYPE
     | NUMBER_TYPE
+    | DOCUMENT_TYPE
     | array_datatype
     ;
 
