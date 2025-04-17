@@ -4,9 +4,6 @@ grammar PlEsqlProcedure;
 // Lexer Rules
 // =======================
 
-// Datasource
-ESQL_QUERY: 'ESQL_QUERY';
-
 // Print rules
 PRINT: 'PRINT';
 DEBUG: 'DEBUG';
@@ -158,6 +155,9 @@ DOCUMENT_GET: 'DOCUMENT_GET';
 DOCUMENT_MERGE: 'DOCUMENT_MERGE';
 DOCUMENT_REMOVE: 'DOCUMENT_REMOVE';
 DOCUMENT_CONTAINS: 'DOCUMENT_CONTAINS';
+
+// Datasource
+ESQL_QUERY: 'ESQL_QUERY';
 
 // =======================
 // Parser Rules

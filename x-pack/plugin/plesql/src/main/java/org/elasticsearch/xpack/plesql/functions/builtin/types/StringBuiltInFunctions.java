@@ -11,6 +11,7 @@ import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.action.ActionListener;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -26,11 +27,12 @@ public class StringBuiltInFunctions {
         // LENGTH: expects one argument of type STRING.
         context.declareFunction("LENGTH",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
-            new BuiltInFunctionDefinition("LENGTH", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("LENGTH", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 1) {
-                    throw new RuntimeException("LENGTH expects one argument");
+                    listener.onFailure(new RuntimeException("LENGTH expects one argument"));
+                } else {
+                    listener.onResponse(args.get(0).toString().length());
                 }
-                return args.get(0).toString().length();
             })
         );
 
@@ -43,17 +45,18 @@ public class StringBuiltInFunctions {
                 new Parameter("start", "NUMBER", ParameterMode.IN),
                 new Parameter("length", "NUMBER", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("SUBSTR", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("SUBSTR", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() < 2 || args.size() > 3) {
-                    throw new RuntimeException("SUBSTR expects 2 or 3 arguments");
-                }
-                String s = args.get(0).toString();
-                int start = ((Number) args.get(1)).intValue();
-                if (args.size() == 2) {
-                    return s.substring(start - 1);  // Assuming 1-indexed positions.
+                    listener.onFailure(new RuntimeException("SUBSTR expects 2 or 3 arguments"));
                 } else {
-                    int length = ((Number) args.get(2)).intValue();
-                    return s.substring(start - 1, Math.min(s.length(), start - 1 + length));
+                    String s = args.get(0).toString();
+                    int start = ((Number) args.get(1)).intValue();
+                    if (args.size() == 2) {
+                        listener.onResponse(s.substring(start - 1));
+                    } else {
+                        int length = ((Number) args.get(2)).intValue();
+                        listener.onResponse(s.substring(start - 1, Math.min(s.length(), start - 1 + length)));
+                    }
                 }
             })
         );
@@ -61,55 +64,60 @@ public class StringBuiltInFunctions {
         // UPPER: expects one STRING argument.
         context.declareFunction("UPPER",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
-            new BuiltInFunctionDefinition("UPPER", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("UPPER", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 1) {
-                    throw new RuntimeException("UPPER expects one argument");
+                    listener.onFailure(new RuntimeException("UPPER expects one argument"));
+                } else {
+                    listener.onResponse(args.get(0).toString().toUpperCase());
                 }
-                return args.get(0).toString().toUpperCase();
             })
         );
 
         // LOWER: expects one STRING argument.
         context.declareFunction("LOWER",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
-            new BuiltInFunctionDefinition("LOWER", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("LOWER", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 1) {
-                    throw new RuntimeException("LOWER expects one argument");
+                    listener.onFailure(new RuntimeException("LOWER expects one argument"));
+                } else {
+                    listener.onResponse(args.get(0).toString().toLowerCase());
                 }
-                return args.get(0).toString().toLowerCase();
             })
         );
 
         // TRIM: expects one STRING argument.
         context.declareFunction("TRIM",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
-            new BuiltInFunctionDefinition("TRIM", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("TRIM", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 1) {
-                    throw new RuntimeException("TRIM expects one argument, but " + args.size() + " were provided.");
+                    listener.onFailure(new RuntimeException("TRIM expects one argument, but " + args.size() + " were provided."));
+                } else {
+                    listener.onResponse(args.get(0).toString().trim());
                 }
-                return args.get(0).toString().trim();
             })
         );
 
         // LTRIM: expects one STRING argument.
         context.declareFunction("LTRIM",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
-            new BuiltInFunctionDefinition("LTRIM", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("LTRIM", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 1) {
-                    throw new RuntimeException("LTRIM expects one argument");
+                    listener.onFailure(new RuntimeException("LTRIM expects one argument"));
+                } else {
+                    listener.onResponse(args.get(0).toString().replaceAll("^\\s+", ""));
                 }
-                return args.get(0).toString().replaceAll("^\\s+", "");
             })
         );
 
         // RTRIM: expects one STRING argument.
         context.declareFunction("RTRIM",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
-            new BuiltInFunctionDefinition("RTRIM", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("RTRIM", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 1) {
-                    throw new RuntimeException("RTRIM expects one argument");
+                    listener.onFailure(new RuntimeException("RTRIM expects one argument"));
+                } else {
+                    listener.onResponse(args.get(0).toString().replaceAll("\\s+$", ""));
                 }
-                return args.get(0).toString().replaceAll("\\s+$", "");
             })
         );
 
@@ -120,14 +128,15 @@ public class StringBuiltInFunctions {
                 new Parameter("target", "STRING", ParameterMode.IN),
                 new Parameter("replacement", "STRING", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("REPLACE", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("REPLACE", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 3) {
-                    throw new RuntimeException("REPLACE expects three arguments");
+                    listener.onFailure(new RuntimeException("REPLACE expects three arguments"));
+                } else {
+                    String s = args.get(0).toString();
+                    String target = args.get(1).toString();
+                    String replacement = args.get(2).toString();
+                    listener.onResponse(s.replace(target, replacement));
                 }
-                String s = args.get(0).toString();
-                String target = args.get(1).toString();
-                String replacement = args.get(2).toString();
-                return s.replace(target, replacement);
             })
         );
 
@@ -137,14 +146,15 @@ public class StringBuiltInFunctions {
                 new Parameter("input", "STRING", ParameterMode.IN),
                 new Parameter("substring", "STRING", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("INSTR", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("INSTR", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 2) {
-                    throw new RuntimeException("INSTR expects two arguments");
+                    listener.onFailure(new RuntimeException("INSTR expects two arguments"));
+                } else {
+                    String s = args.get(0).toString();
+                    String sub = args.get(1).toString();
+                    int pos = s.indexOf(sub);
+                    listener.onResponse(pos >= 0 ? pos + 1 : 0);
                 }
-                String s = args.get(0).toString();
-                String sub = args.get(1).toString();
-                int pos = s.indexOf(sub);
-                return pos >= 0 ? pos + 1 : 0; // Return 1-indexed position; 0 if not found.
             })
         );
 
@@ -155,22 +165,23 @@ public class StringBuiltInFunctions {
                 new Parameter("totalLength", "NUMBER", ParameterMode.IN),
                 new Parameter("padStr", "STRING", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("LPAD", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("LPAD", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 3) {
-                    throw new RuntimeException("LPAD expects three arguments");
+                    listener.onFailure(new RuntimeException("LPAD expects three arguments"));
+                } else {
+                    String s = args.get(0).toString();
+                    int totalLength = ((Number) args.get(1)).intValue();
+                    String padStr = args.get(2).toString();
+                    StringBuilder sb = new StringBuilder();
+                    while (sb.length() + s.length() < totalLength) {
+                        sb.append(padStr);
+                    }
+                    String pad = sb.toString();
+                    if (pad.length() > totalLength - s.length()) {
+                        pad = pad.substring(0, totalLength - s.length());
+                    }
+                    listener.onResponse(pad + s);
                 }
-                String s = args.get(0).toString();
-                int totalLength = ((Number) args.get(1)).intValue();
-                String padStr = args.get(2).toString();
-                StringBuilder sb = new StringBuilder();
-                while (sb.length() + s.length() < totalLength) {
-                    sb.append(padStr);
-                }
-                String pad = sb.toString();
-                if (pad.length() > totalLength - s.length()) {
-                    pad = pad.substring(0, totalLength - s.length());
-                }
-                return pad + s;
             })
         );
 
@@ -181,18 +192,19 @@ public class StringBuiltInFunctions {
                 new Parameter("totalLength", "NUMBER", ParameterMode.IN),
                 new Parameter("padStr", "STRING", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("RPAD", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("RPAD", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 3) {
-                    throw new RuntimeException("RPAD expects three arguments");
+                    listener.onFailure(new RuntimeException("RPAD expects three arguments"));
+                } else {
+                    String s = args.get(0).toString();
+                    int totalLength = ((Number) args.get(1)).intValue();
+                    String padStr = args.get(2).toString();
+                    StringBuilder sb = new StringBuilder(s);
+                    while (sb.length() < totalLength) {
+                        sb.append(padStr);
+                    }
+                    listener.onResponse(sb.substring(0, totalLength));
                 }
-                String s = args.get(0).toString();
-                int totalLength = ((Number) args.get(1)).intValue();
-                String padStr = args.get(2).toString();
-                StringBuilder sb = new StringBuilder(s);
-                while (sb.length() < totalLength) {
-                    sb.append(padStr);
-                }
-                return sb.substring(0, totalLength);
             })
         );
 
@@ -202,14 +214,15 @@ public class StringBuiltInFunctions {
                 new Parameter("input", "STRING", ParameterMode.IN),
                 new Parameter("delimiter", "STRING", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("SPLIT", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("SPLIT", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 2) {
-                    throw new RuntimeException("SPLIT expects two arguments");
+                    listener.onFailure(new RuntimeException("SPLIT expects two arguments"));
+                } else {
+                    String s = args.get(0).toString();
+                    String delimiter = args.get(1).toString();
+                    String[] parts = s.split(Pattern.quote(delimiter));
+                    listener.onResponse(Arrays.asList(parts));
                 }
-                String s = args.get(0).toString();
-                String delimiter = args.get(1).toString();
-                String[] parts = s.split(Pattern.quote(delimiter));
-                return Arrays.asList(parts);
             })
         );
 
@@ -219,13 +232,12 @@ public class StringBuiltInFunctions {
                 new Parameter("left", "STRING", ParameterMode.IN),
                 new Parameter("right", "STRING", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("||", (List<Object> args) -> {
-                // You could choose to support more than two arguments,
-                // but here we expect exactly two.
+            new BuiltInFunctionDefinition("||", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 2) {
-                    throw new RuntimeException("|| expects exactly two arguments");
+                    listener.onFailure(new RuntimeException("|| expects exactly two arguments"));
+                } else {
+                    listener.onResponse(args.get(0).toString() + args.get(1).toString());
                 }
-                return args.get(0).toString() + args.get(1).toString();
             })
         );
 
@@ -236,14 +248,15 @@ public class StringBuiltInFunctions {
                 new Parameter("regex", "STRING", ParameterMode.IN),
                 new Parameter("replacement", "STRING", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("REGEXP_REPLACE", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("REGEXP_REPLACE", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 3) {
-                    throw new RuntimeException("REGEXP_REPLACE expects three arguments");
+                    listener.onFailure(new RuntimeException("REGEXP_REPLACE expects three arguments"));
+                } else {
+                    String s = args.get(0).toString();
+                    String regex = args.get(1).toString();
+                    String replacement = args.get(2).toString();
+                    listener.onResponse(s.replaceAll(regex, replacement));
                 }
-                String s = args.get(0).toString();
-                String regex = args.get(1).toString();
-                String replacement = args.get(2).toString();
-                return s.replaceAll(regex, replacement);
             })
         );
 
@@ -253,52 +266,56 @@ public class StringBuiltInFunctions {
                 new Parameter("input", "STRING", ParameterMode.IN),
                 new Parameter("regex", "STRING", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("REGEXP_SUBSTR", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("REGEXP_SUBSTR", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 2) {
-                    throw new RuntimeException("REGEXP_SUBSTR expects two arguments");
+                    listener.onFailure(new RuntimeException("REGEXP_SUBSTR expects two arguments"));
+                } else {
+                    String s = args.get(0).toString();
+                    String regex = args.get(1).toString();
+                    java.util.regex.Matcher matcher = Pattern.compile(regex).matcher(s);
+                    if (matcher.find()) {
+                        listener.onResponse(matcher.group());
+                    } else {
+                        listener.onResponse("");
+                    }
                 }
-                String s = args.get(0).toString();
-                String regex = args.get(1).toString();
-                java.util.regex.Matcher matcher = Pattern.compile(regex).matcher(s);
-                if (matcher.find()) {
-                    return matcher.group();
-                }
-                return "";
             })
         );
 
         // REVERSE: expects one STRING argument.
         context.declareFunction("REVERSE",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
-            new BuiltInFunctionDefinition("REVERSE", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("REVERSE", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 1) {
-                    throw new RuntimeException("REVERSE expects one argument");
+                    listener.onFailure(new RuntimeException("REVERSE expects one argument"));
+                } else {
+                    String s = args.get(0).toString();
+                    listener.onResponse(new StringBuilder(s).reverse().toString());
                 }
-                String s = args.get(0).toString();
-                return new StringBuilder(s).reverse().toString();
             })
         );
 
         // INITCAP: expects one STRING argument.
         context.declareFunction("INITCAP",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
-            new BuiltInFunctionDefinition("INITCAP", (List<Object> args) -> {
+            new BuiltInFunctionDefinition("INITCAP", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 1) {
-                    throw new RuntimeException("INITCAP expects one argument");
-                }
-                String s = args.get(0).toString().toLowerCase();
-                String[] words = s.split("\\s+");
-                StringBuilder sb = new StringBuilder();
-                for (String word : words) {
-                    if ( word.isEmpty() == false ) {
-                        sb.append(Character.toUpperCase(word.charAt(0)));
-                        if (word.length() > 1) {
-                            sb.append(word.substring(1));
+                    listener.onFailure(new RuntimeException("INITCAP expects one argument"));
+                } else {
+                    String s = args.get(0).toString().toLowerCase();
+                    String[] words = s.split("\\s+");
+                    StringBuilder sb = new StringBuilder();
+                    for (String word : words) {
+                        if (word.isEmpty() == false) {
+                            sb.append(Character.toUpperCase(word.charAt(0)));
+                            if (word.length() > 1) {
+                                sb.append(word.substring(1));
+                            }
+                            sb.append(" ");
                         }
-                        sb.append(" ");
                     }
+                    listener.onResponse(sb.toString().trim());
                 }
-                return sb.toString().trim();
             })
         );
     }

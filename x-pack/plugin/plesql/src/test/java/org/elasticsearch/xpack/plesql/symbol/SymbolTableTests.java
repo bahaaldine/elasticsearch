@@ -50,10 +50,14 @@ public class SymbolTableTests extends ESTestCase {
             new Parameter("b", "NUMBER", ParameterMode.IN)
         );
         // Create a synchronous built-in function wrapped in the new asynchronous API.
-        FunctionDefinition addFunc = new BuiltInFunctionDefinition("add", (List<Object> args) -> {
-            double a = ((Number) args.get(0)).doubleValue();
-            double b = ((Number) args.get(1)).doubleValue();
-            return a + b;
+        FunctionDefinition addFunc = new BuiltInFunctionDefinition("add", (List<Object> args, ActionListener<Object> listener) -> {
+            if (args.size() != 2) {
+                listener.onFailure(new RuntimeException("add expects two arguments"));
+            } else {
+                double a = ((Number) args.get(0)).doubleValue();
+                double b = ((Number) args.get(1)).doubleValue();
+                listener.onResponse(a + b);
+            }
         });
         // Declare the function in the context.
         context.declareFunction("add", addFunc);
@@ -97,14 +101,18 @@ public class SymbolTableTests extends ESTestCase {
             new Parameter("b", "NUMBER", ParameterMode.OUT),
             new Parameter("c", "NUMBER", ParameterMode.INOUT)
         );
-        FunctionDefinition mixFunc = new BuiltInFunctionDefinition("mixParams", (List<Object> args) -> {
-            double a = ((Number) args.get(0)).doubleValue();
-            double c = ((Number) args.get(2)).doubleValue();
-            double newC = c + a;
-            // Simulate an OUT parameter update by setting the variable in the context.
-            context.setVariable("b", a * 2);
-            context.setVariable("c", newC);
-            return a + newC;
+        FunctionDefinition mixFunc = new BuiltInFunctionDefinition("mixParams", (List<Object> args, ActionListener<Object> listener) -> {
+            if (args.size() != 3) {
+                listener.onFailure(new RuntimeException("mixParams expects three arguments"));
+            } else {
+                double a = ((Number) args.get(0)).doubleValue();
+                double c = ((Number) args.get(2)).doubleValue();
+                double newC = c + a;
+                // Simulate an OUT parameter update by setting the variable in the context.
+                context.setVariable("b", a * 2);
+                context.setVariable("c", newC);
+                listener.onResponse(a + newC);
+            }
         });
         context.declareFunction("mixParams", mixFunc);
         // Declare variables for OUT/INOUT.

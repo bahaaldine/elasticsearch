@@ -11,14 +11,13 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
-import org.elasticsearch.xpack.plesql.functions.interfaces.BuiltInFunction;
 
 import java.util.Collections;
 import java.util.List;
 
 public class BuiltInFunctionDefinition extends FunctionDefinition {
 
-    private final BuiltInFunction function;
+    private final AsyncBuiltInFunction function;
     private List<Parameter> parameters = Collections.emptyList();
 
     /**
@@ -28,7 +27,7 @@ public class BuiltInFunctionDefinition extends FunctionDefinition {
      * @param name     the function name
      * @param function the lambda that implements this built-in function
      */
-    public BuiltInFunctionDefinition(String name, BuiltInFunction function) {
+    public BuiltInFunctionDefinition(String name, AsyncBuiltInFunction function) {
         super(name, Collections.emptyList(), Collections.<PlEsqlProcedureParser.StatementContext>emptyList());
         this.function = function;
     }
@@ -41,8 +40,7 @@ public class BuiltInFunctionDefinition extends FunctionDefinition {
     @Override
     public void execute(List<Object> args, ActionListener<Object> listener) {
         try {
-            Object result = function.apply(args);
-            listener.onResponse(result);
+            function.apply(args, listener);
         } catch (Exception e) {
             listener.onFailure(e);
         }

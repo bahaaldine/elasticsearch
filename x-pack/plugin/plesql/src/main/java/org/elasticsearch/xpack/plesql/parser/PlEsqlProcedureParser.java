@@ -59,7 +59,7 @@ public class PlEsqlProcedureParser extends Parser {
 		EXTRACT_DAY=106, DATEDIFF=107, ARRAY_LENGTH=108, ARRAY_APPEND=109, ARRAY_PREPEND=110,
 		ARRAY_REMOVE=111, ARRAY_CONTAINS=112, ARRAY_DISTINCT=113, DOCUMENT_KEYS=114,
 		DOCUMENT_VALUES=115, DOCUMENT_GET=116, DOCUMENT_MERGE=117, DOCUMENT_REMOVE=118,
-		DOCUMENT_CONTAINS=119;
+		DOCUMENT_CONTAINS=119, ESQL_QUERY=120;
 	public static final int
 		RULE_procedure = 0, RULE_statement = 1, RULE_print_statement = 2, RULE_break_statement = 3,
 		RULE_return_statement = 4, RULE_expression_statement = 5, RULE_execute_statement = 6,
@@ -115,7 +115,7 @@ public class PlEsqlProcedureParser extends Parser {
 			"'DATEDIFF'", "'ARRAY_LENGTH'", "'ARRAY_APPEND'", "'ARRAY_PREPEND'",
 			"'ARRAY_REMOVE'", "'ARRAY_CONTAINS'", "'ARRAY_DISTINCT'", "'DOCUMENT_KEYS'",
 			"'DOCUMENT_VALUES'", "'DOCUMENT_GET'", "'DOCUMENT_MERGE'", "'DOCUMENT_REMOVE'",
-			"'DOCUMENT_CONTAINS'"
+			"'DOCUMENT_CONTAINS'", "'ESQL_QUERY'"
 		};
 	}
 	private static final String[] _LITERAL_NAMES = makeLiteralNames();
@@ -138,7 +138,7 @@ public class PlEsqlProcedureParser extends Parser {
 			"EXTRACT_DAY", "DATEDIFF", "ARRAY_LENGTH", "ARRAY_APPEND", "ARRAY_PREPEND",
 			"ARRAY_REMOVE", "ARRAY_CONTAINS", "ARRAY_DISTINCT", "DOCUMENT_KEYS",
 			"DOCUMENT_VALUES", "DOCUMENT_GET", "DOCUMENT_MERGE", "DOCUMENT_REMOVE",
-			"DOCUMENT_CONTAINS"
+			"DOCUMENT_CONTAINS", "ESQL_QUERY"
 		};
 	}
 	private static final String[] _SYMBOLIC_NAMES = makeSymbolicNames();
@@ -3767,7 +3767,7 @@ public class PlEsqlProcedureParser extends Parser {
 	}
 
 	public static final String _serializedATN =
-		"\u0004\u0001w\u01e6\u0002\u0000\u0007\u0000\u0002\u0001\u0007\u0001\u0002"+
+		"\u0004\u0001x\u01e6\u0002\u0000\u0007\u0000\u0002\u0001\u0007\u0001\u0002"+
 		"\u0002\u0007\u0002\u0002\u0003\u0007\u0003\u0002\u0004\u0007\u0004\u0002"+
 		"\u0005\u0007\u0005\u0002\u0006\u0007\u0006\u0002\u0007\u0007\u0007\u0002"+
 		"\b\u0007\b\u0002\t\u0007\t\u0002\n\u0007\n\u0002\u000b\u0007\u000b\u0002"+

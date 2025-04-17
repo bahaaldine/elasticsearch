@@ -9,9 +9,9 @@ package org.elasticsearch.xpack.plesql.functions.builtin.types;
 
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.functions.interfaces.BuiltInFunction;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
+import org.elasticsearch.action.ActionListener;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,15 +26,15 @@ public class ArrayBuiltInFunctions {
         // ARRAY_LENGTH: returns the length of an array.
         context.declareFunction("ARRAY_LENGTH",
             Collections.singletonList(new Parameter("array", "ARRAY", ParameterMode.IN)),
-            new BuiltInFunctionDefinition("ARRAY_LENGTH", (BuiltInFunction) (List<Object> args) -> {
+            new BuiltInFunctionDefinition("ARRAY_LENGTH", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 1) {
-                    throw new RuntimeException("ARRAY_LENGTH expects one argument");
+                    listener.onFailure(new RuntimeException("ARRAY_LENGTH expects one argument"));
                 }
                 if ( (args.get(0) instanceof List) == false ) {
-                    throw new RuntimeException("ARRAY_LENGTH expects an array argument");
+                    listener.onFailure(new RuntimeException("ARRAY_LENGTH expects an array argument"));
                 }
                 List<?> array = (List<?>) args.get(0);
-                return array.size();
+                listener.onResponse(array.size());
             })
         );
 
@@ -44,16 +44,16 @@ public class ArrayBuiltInFunctions {
                 new Parameter("array", "ARRAY", ParameterMode.IN),
                 new Parameter("element", "ANY", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("ARRAY_APPEND", (BuiltInFunction) (List<Object> args) -> {
+            new BuiltInFunctionDefinition("ARRAY_APPEND", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 2) {
-                    throw new RuntimeException("ARRAY_APPEND expects two arguments: an array and an element");
+                    listener.onFailure(new RuntimeException("ARRAY_APPEND expects two arguments: an array and an element"));
                 }
                 if ( (args.get(0) instanceof List) == false ) {
-                    throw new RuntimeException("ARRAY_APPEND expects the first argument to be an array");
+                    listener.onFailure(new RuntimeException("ARRAY_APPEND expects the first argument to be an array"));
                 }
                 List<Object> array = new ArrayList<>((List<?>) args.get(0));
                 array.add(args.get(1));
-                return array;
+                listener.onResponse(array);
             })
         );
 
@@ -63,17 +63,17 @@ public class ArrayBuiltInFunctions {
                 new Parameter("array", "ARRAY", ParameterMode.IN),
                 new Parameter("element", "ANY", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("ARRAY_PREPEND", (BuiltInFunction) (List<Object> args) -> {
+            new BuiltInFunctionDefinition("ARRAY_PREPEND", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 2) {
-                    throw new RuntimeException("ARRAY_PREPEND expects two arguments: an array and an element");
+                    listener.onFailure(new RuntimeException("ARRAY_PREPEND expects two arguments: an array and an element"));
                 }
-                if ( (args.get(0) instanceof List) == false ) {
-                    throw new RuntimeException("ARRAY_PREPEND expects the first argument to be an array");
+                if ((args.get(0) instanceof List) == false ) {
+                    listener.onFailure(new RuntimeException("ARRAY_PREPEND expects the first argument to be an array"));
                 }
                 List<Object> array = new ArrayList<>();
                 array.add(args.get(1));
                 array.addAll((List<?>) args.get(0));
-                return array;
+                listener.onResponse(array);
             })
         );
 
@@ -83,17 +83,17 @@ public class ArrayBuiltInFunctions {
                 new Parameter("array", "ARRAY", ParameterMode.IN),
                 new Parameter("element", "ANY", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("ARRAY_REMOVE", (BuiltInFunction) (List<Object> args) -> {
+            new BuiltInFunctionDefinition("ARRAY_REMOVE", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 2) {
-                    throw new RuntimeException("ARRAY_REMOVE expects two arguments: an array and an element to remove");
+                    listener.onFailure(new RuntimeException("ARRAY_REMOVE expects two arguments: an array and an element to remove"));
                 }
                 if ( (args.get(0) instanceof List) == false ) {
-                    throw new RuntimeException("ARRAY_REMOVE expects the first argument to be an array");
+                    listener.onFailure(new RuntimeException("ARRAY_REMOVE expects the first argument to be an array"));
                 }
                 List<Object> array = new ArrayList<>((List<?>) args.get(0));
                 Object toRemove = args.get(1);
                 array.removeIf(e -> e == null ? toRemove == null : e.equals(toRemove));
-                return array;
+                listener.onResponse(array);
             })
         );
 
@@ -103,28 +103,28 @@ public class ArrayBuiltInFunctions {
                 new Parameter("array", "ARRAY", ParameterMode.IN),
                 new Parameter("element", "ANY", ParameterMode.IN)
             ),
-            new BuiltInFunctionDefinition("ARRAY_CONTAINS", (BuiltInFunction) (List<Object> args) -> {
+            new BuiltInFunctionDefinition("ARRAY_CONTAINS", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 2) {
-                    throw new RuntimeException("ARRAY_CONTAINS expects two arguments: an array and an element");
+                    listener.onFailure(new RuntimeException("ARRAY_CONTAINS expects two arguments: an array and an element"));
                 }
                 if ( (args.get(0) instanceof List) == false ) {
-                    throw new RuntimeException("ARRAY_CONTAINS expects the first argument to be an array");
+                    listener.onFailure(new RuntimeException("ARRAY_CONTAINS expects the first argument to be an array"));
                 }
                 List<?> array = (List<?>) args.get(0);
                 Object element = args.get(1);
-                return array.contains(element);
+                listener.onResponse(array.contains(element));
             })
         );
 
         // ARRAY_DISTINCT: returns a new array with duplicate elements removed.
         context.declareFunction("ARRAY_DISTINCT",
             Collections.singletonList(new Parameter("array", "ARRAY", ParameterMode.IN)),
-            new BuiltInFunctionDefinition("ARRAY_DISTINCT", (BuiltInFunction) (List<Object> args) -> {
+            new BuiltInFunctionDefinition("ARRAY_DISTINCT", (List<Object> args, ActionListener<Object> listener) -> {
                 if (args.size() != 1) {
-                    throw new RuntimeException("ARRAY_DISTINCT expects one argument: an array");
+                    listener.onFailure(new RuntimeException("ARRAY_DISTINCT expects one argument: an array"));
                 }
                 if ( (args.get(0) instanceof List) == false ) {
-                    throw new RuntimeException("ARRAY_DISTINCT expects an array argument");
+                    listener.onFailure(new RuntimeException("ARRAY_DISTINCT expects an array argument"));
                 }
                 List<?> array = (List<?>) args.get(0);
                 Set<Object> seen = new HashSet<>();
@@ -134,7 +134,7 @@ public class ArrayBuiltInFunctions {
                         result.add(e);
                     }
                 }
-                return result;
+                listener.onResponse(result);
             })
         );
     }

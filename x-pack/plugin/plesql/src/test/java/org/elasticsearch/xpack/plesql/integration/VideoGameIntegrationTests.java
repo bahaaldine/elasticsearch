@@ -20,10 +20,12 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xcontent.XContentType;
 import org.elasticsearch.xpack.esql.plugin.EsqlPlugin;
 import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.functions.builtin.datasources.EsqlBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.types.ArrayBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.types.DocumentBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.types.NumberBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.types.StringBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -133,7 +135,8 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
         String proc = """
             PROCEDURE testEsqlQuery()
             BEGIN
-                EXECUTE result = (FROM videogames | WHERE title == "Video Game 195" | KEEP title, score);
+                DECLARE result ARRAY OF DOCUMENT;
+                SET result = ESQL_QUERY('FROM videogames | WHERE title == "Video Game 195" | KEEP title, score');
                 RETURN result;
             END PROCEDURE
             """;
@@ -147,13 +150,14 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
         try {
             // Initialize a new ExecutionContext and register built‑in functions.
             ExecutionContext context = new ExecutionContext();
+            ProcedureExecutor executor = new ProcedureExecutor(context, tp, client, tokens);
+
             StringBuiltInFunctions.registerAll(context);
             NumberBuiltInFunctions.registerAll(context);
             ArrayBuiltInFunctions.registerAll(context);
             DocumentBuiltInFunctions.registerAll(context);
+            EsqlBuiltInFunctions.registerAll(context,executor,client);
 
-            // Create the ProcedureExecutor using the local thread pool, client, and the token stream used above.
-            ProcedureExecutor executor = new ProcedureExecutor(context, tp, client, tokens);
             CountDownLatch latch = new CountDownLatch(1);
             executor.visitProcedureAsync(procCtx, new ActionListener<>() {
                 @Override
@@ -255,7 +259,7 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
                 DECLARE totalScore NUMBER = 0;
                 DECLARE validCount NUMBER = 0;
                 DECLARE arr ARRAY OF DOCUMENT;
-                EXECUTE arr = (FROM videogames | KEEP score);
+                SET arr = ESQL_QUERY('FROM videogames | KEEP score');
                 FOR doc IN arr LOOP
                     IF doc['score'] > 5 THEN
                         SET totalScore = totalScore + doc['score'];
@@ -277,13 +281,14 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
         try {
             // Create a new ExecutionContext for this procedure and register functions.
             ExecutionContext context = new ExecutionContext();
+            ProcedureExecutor executor = new ProcedureExecutor(context, tp, client, tokens);
+
             StringBuiltInFunctions.registerAll(context);
             NumberBuiltInFunctions.registerAll(context);
             ArrayBuiltInFunctions.registerAll(context);
             DocumentBuiltInFunctions.registerAll(context);
+            EsqlBuiltInFunctions.registerAll(context,executor,client);
 
-            // Use the same tokens as used for parsing the procedure.
-            ProcedureExecutor executor = new ProcedureExecutor(context, tp, client, tokens);
             CountDownLatch latch = new CountDownLatch(1);
             executor.visitProcedureAsync(procCtx, new ActionListener<>() {
                 @Override
