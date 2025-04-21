@@ -293,6 +293,12 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitSimplePrimaryExpression(PlEsqlProcedureParser.SimplePrimaryExpressionContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#varRef}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitVarRef(PlEsqlProcedureParser.VarRefContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#datatype}.
 	 * @param ctx the parse tree
 	 * @return the visitor result

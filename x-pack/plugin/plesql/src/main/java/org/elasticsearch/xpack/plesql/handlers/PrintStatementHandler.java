@@ -8,9 +8,9 @@ package org.elasticsearch.xpack.plesql.handlers;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
-import org.elasticsearch.xpack.plesql.ExpressionEvaluator;
+import org.elasticsearch.xpack.plesql.evaluators.ExpressionEvaluator;
 
 /**
  * Handler for PRINT statements.

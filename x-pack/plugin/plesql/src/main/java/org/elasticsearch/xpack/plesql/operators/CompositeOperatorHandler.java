@@ -11,10 +11,10 @@ import org.elasticsearch.xpack.plesql.operators.primitives.BinaryOperatorHandler
 
 import java.util.List;
 
-public class CompositeAdditionOperatorHandler implements BinaryOperatorHandler {
+public class CompositeOperatorHandler implements BinaryOperatorHandler {
     private final List<BinaryOperatorHandler> handlers;
 
-    public CompositeAdditionOperatorHandler(List<BinaryOperatorHandler> handlers) {
+    public CompositeOperatorHandler(List<BinaryOperatorHandler> handlers) {
         this.handlers = handlers;
     }
 

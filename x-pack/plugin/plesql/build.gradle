@@ -33,6 +33,8 @@ test {
 }
 
 dependencies {
+  compileOnly 'commons-logging:commons-logging:1.2'
+
   testImplementation "org.apache.logging.log4j:log4j-core:${versions.log4j}"
   testImplementation "org.apache.logging.log4j:log4j-api:${versions.log4j}"
 
@@ -40,7 +42,7 @@ dependencies {
   api project(path: xpackModule('mapper-version'))
 
   compileOnly project(':x-pack:plugin:esql')
-  implementation project(path: xpackModule('core'))
+  compileOnly project(path: xpackModule('core'))
 
   testImplementation project(':x-pack:plugin:esql-core')
 

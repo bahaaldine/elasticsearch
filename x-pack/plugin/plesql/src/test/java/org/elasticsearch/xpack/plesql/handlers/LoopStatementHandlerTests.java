@@ -13,14 +13,13 @@ import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.utils.TestUtils;
 import org.junit.Test;
 
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 public class LoopStatementHandlerTests extends ESTestCase {

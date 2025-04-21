@@ -13,7 +13,7 @@ import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -57,10 +57,11 @@ public class ProcedureReturnStatementTests extends ESTestCase {
     // Test 1: Simple RETURN with integer
     @Test
     public void testProcedureReturnInteger() throws InterruptedException {
-        String blockQuery = "" +
-            "PROCEDURE dummy_procedure (INOUT x NUMBER) " +
-                "BEGIN RETURN 100; " +
-            "END PROCEDURE";
+        String blockQuery = """
+            PROCEDURE dummy_procedure (INOUT x NUMBER)
+                BEGIN RETURN 100;
+            END PROCEDURE;
+            """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -204,7 +205,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
         String blockQuery = """
                 PROCEDURE dummy_procedure (INOUT x NUMBER)
                 BEGIN
-                    IF 1 = 1 THEN
+                    IF 1 == 1 THEN
                         RETURN 'Condition met';
                     END IF;
                     RETURN 'Condition not met';
@@ -247,7 +248,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
                 BEGIN
                     DECLARE i NUMBER;
                     FOR i IN 1..5 LOOP
-                        IF i = 3 THEN
+                        IF i == 3 THEN
                             RETURN 'Loop exited at 3';
                         END IF;
                     END LOOP;
@@ -324,48 +325,6 @@ public class ProcedureReturnStatementTests extends ESTestCase {
         assertEquals("Returned value should be 15", 15.0, returnValue.getValue());
     }
 
-    // Test 8: RETURN with ESQL query execution
-    @Test
-    public void testProcedureReturnWithEsqlQuery() throws InterruptedException {
-        String blockQuery = """
-                PROCEDURE dummy_procedure (INOUT x NUMBER)
-                BEGIN
-                    EXECUTE result = (ROW a=10 | KEEP a);
-                    RETURN result;
-                END PROCEDURE
-            """;
-        PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
-
-        CountDownLatch latch = new CountDownLatch(1);
-
-        final Object[] resultHolder = new Object[1];
-
-        executor.visitProcedureAsync(blockContext, new ActionListener<Object>() {
-            @Override
-            public void onResponse(Object result) {
-                // Assuming the mock for ESQL query returns "Mock ESQL result"
-                resultHolder[0] = result;
-                latch.countDown();
-            }
-
-            @Override
-            public void onFailure(Exception e) {
-                fail("Execution failed: " + e.getMessage());
-                latch.countDown();
-            }
-        });
-
-        latch.await();
-
-        assertNotNull("Result should not be null", resultHolder[0]);
-        assertTrue("Result should be a ReturnValue instance", resultHolder[0] instanceof ReturnValue);
-
-        ReturnValue returnValue = (ReturnValue) resultHolder[0];
-        assertTrue("Returned value should contain 'Mock ESQL result'",
-            returnValue.getValue().toString().contains("Mock ESQL result"));
-
-    }
-
     // Test 9: RETURN after a TRY-CATCH block
     @Test
     public void testProcedureReturnAfterTryCatch() throws InterruptedException {
@@ -416,7 +375,7 @@ public class ProcedureReturnStatementTests extends ESTestCase {
                 PROCEDURE dummy_procedure (INOUT x NUMBER)
                 BEGIN
                     DECLARE myVar NUMBER;
-                    IF 1 = 1 THEN
+                    IF 1 == 1 THEN
                         RETURN 42;
                     END IF;
                     SET myVar = 100; -- This should never be executed

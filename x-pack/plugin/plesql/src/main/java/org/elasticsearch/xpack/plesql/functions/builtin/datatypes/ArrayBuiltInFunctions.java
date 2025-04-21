@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-package org.elasticsearch.xpack.plesql.functions.builtin.types;
+package org.elasticsearch.xpack.plesql.functions.builtin.datatypes;
 
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;

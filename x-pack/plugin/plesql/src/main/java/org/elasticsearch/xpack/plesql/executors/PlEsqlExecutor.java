@@ -1,11 +1,18 @@
 /*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+/*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V.
  * under one or more contributor license agreements. Licensed under
  * the Elastic License 2.0; you may not use this file except in compliance
  * with the Elastic License 2.0.
  */
 
-package org.elasticsearch.xpack.plesql;
+package org.elasticsearch.xpack.plesql.executors;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -13,15 +20,16 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.injection.guice.Inject;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.plesql.functions.builtin.datasources.EsqlBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.handlers.ProcedureCallHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.ArrayBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.DateBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.NumberBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.StringBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.ArrayBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.DateBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.NumberBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.primitives.procedure.ProcedureDefinition;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 import org.elasticsearch.xpack.plesql.visitors.ProcedureDefinitionVisitor;
@@ -123,6 +131,7 @@ public class PlEsqlExecutor {
 
                 // 6. Create a ProcedureExecutor with the updated global context.
                 ProcedureExecutor procedureExecutor = new ProcedureExecutor(executionContext, threadPool, client, tokens);
+                EsqlBuiltInFunctions.registerAll(executionContext, procedureExecutor, client);
 
                 // 7. Set up a logging listener.
                 ActionListener<Object> execListener = ActionListenerUtils.withLogging(listener,

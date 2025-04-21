@@ -13,7 +13,7 @@ import org.elasticsearch.xcontent.NamedXContentRegistry;
 import org.elasticsearch.xcontent.XContentFactory;
 import org.elasticsearch.xcontent.XContentParser;
 import org.elasticsearch.xcontent.XContentType;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.PLESQLDataType;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
@@ -41,9 +41,6 @@ public class DeclareStatementHandler {
     private boolean isSupportedDataType(String varType) {
         // Normalize and trim the type string.
         String normalizedType = varType.trim().toUpperCase();
-
-        System.out.println("Normalized type :" + normalizedType );
-
         // If the type starts with "ARRAY", check for the "OF" clause.
         if (normalizedType.startsWith("ARRAY")) {
             // If the token comes in as "ARRAYOF..." without a space, insert the space.

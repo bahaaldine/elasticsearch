@@ -14,7 +14,7 @@ import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -68,7 +68,7 @@ public class IfStatementHandlerTests extends ESTestCase {
         String blockQuery = "" +
             "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
             "BEGIN " +
-                "DECLARE myVar NUMBER; IF 1 = 1 THEN SET myVar = 10; END IF " +
+                "DECLARE myVar NUMBER; IF 1 == 1 THEN SET myVar = 10; END IF " +
             "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -97,7 +97,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     public void testSimpleIfFalseCondition() throws InterruptedException {
         String blockQuery = "" +
             "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
-                "BEGIN DECLARE myVar NUMBER; IF 1 = 2 THEN SET myVar = 10; END IF " +
+                "BEGIN DECLARE myVar NUMBER; IF 1 == 2 THEN SET myVar = 10; END IF " +
             "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -126,7 +126,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     public void testIfElseStatement() throws InterruptedException {
         String blockQuery = "" +
             "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
-                "BEGIN DECLARE myVar NUMBER; IF 1 = 2 THEN SET myVar = 10; ELSE SET myVar = 20; END IF " +
+                "BEGIN DECLARE myVar NUMBER; IF 1 == 2 THEN SET myVar = 10; ELSE SET myVar = 20; END IF " +
             "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -157,9 +157,9 @@ public class IfStatementHandlerTests extends ESTestCase {
             "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
             "BEGIN " +
                 "DECLARE myVar NUMBER; " +
-                "IF 1 = 2 THEN " +
+                "IF 1 == 2 THEN " +
                     "SET myVar = 10; " +
-                "ELSEIF 1 = 1 THEN " +
+                "ELSEIF 1 == 1 THEN " +
                     "SET myVar = 20; " +
                 "ELSE " +
                     "SET myVar = 30; " +
@@ -195,7 +195,7 @@ public class IfStatementHandlerTests extends ESTestCase {
             "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
             "BEGIN " +
                 "DECLARE myVar NUMBER; " +
-                "IF 5 + 5 = 10 THEN SET myVar = 10; END IF;" +
+                "IF 5 + 5 == 10 THEN SET myVar = 10; END IF;" +
             "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -229,7 +229,7 @@ public class IfStatementHandlerTests extends ESTestCase {
     public void testNestedIfStatement() throws InterruptedException {
         String blockQuery = " " +
             "PROCEDURE myProcedure(IN a NUMBER, OUT b NUMBER, INOUT c NUMBER)" +
-                "BEGIN DECLARE myVar NUMBER; IF 1 = 1 THEN IF 2 = 2 THEN SET myVar = 10; END IF END IF " +
+                "BEGIN DECLARE myVar NUMBER; IF 1 == 1 THEN IF 2 == 2 THEN SET myVar = 10; END IF END IF " +
             "END PROCEDURE";
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 

@@ -13,12 +13,13 @@ import org.elasticsearch.xcontent.NamedXContentRegistry;
 import org.elasticsearch.xcontent.XContentFactory;
 import org.elasticsearch.xcontent.XContentParser;
 import org.elasticsearch.xcontent.XContentType;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 public class AssignmentStatementHandler {
     private final ProcedureExecutor executor;
@@ -34,37 +35,79 @@ public class AssignmentStatementHandler {
      * @param ctx The assignment statement context.
      * @param listener The listener to signal success/failure.
      */
-    public void handleAsync(PlEsqlProcedureParser.Assignment_statementContext ctx, ActionListener<Object> listener) {
-        // Retrieve the variable name
-        String varName = ctx.ID().getText();
+    public void handleAsync(PlEsqlProcedureParser.Assignment_statementContext ctx,
+                             ActionListener<Object> listener) {
+        // Extract the variable reference (ID plus optional bracket expressions)
+        PlEsqlProcedureParser.VarRefContext varRef = ctx.varRef();
+        String baseName = varRef.ID().getText();
+        List<PlEsqlProcedureParser.BracketExpressionContext> brackets = varRef.bracketExpression();
         PlEsqlProcedureParser.ExpressionContext expression = ctx.expression();
 
-        // Check that the variable has been declared.
-        if (executor.getContext().hasVariable(varName) == false) {
-            throw new RuntimeException("Variable '" + varName + "' is not declared.");
+        // Check that the base variable has been declared.
+        if (executor.getContext().hasVariable(baseName) == false) {
+            listener.onFailure(new RuntimeException("Variable '" + baseName + "' is not declared."));
+            return;
         }
 
-        ActionListener<Object> assignmentListener = new ActionListener<Object>() {
-            @Override
-            public void onResponse(Object value) {
-                try {
-                    Object coercedValue = coerceType(value, varName);
-                    executor.getContext().setVariable(varName, coercedValue);
+        // Listener to handle the evaluated RHS value
+        ActionListener<Object> valueListener = ActionListener.wrap(value -> {
+            try {
+                // Coerce to the declared type
+                Object coerced = coerceType(value, baseName);
+
+                if (brackets.isEmpty()) {
+                    // Simple assignment: var = value
+                    executor.getContext().setVariable(baseName, coerced);
+
                     listener.onResponse(null);
-                } catch (Exception e) {
-                    listener.onFailure(e);
+                } else {
+                    // Evaluate all bracket expressions sequentially
+                    evaluateBracketKeys(brackets, 0, new java.util.ArrayList<>(), ActionListener.wrap(keys -> {
+                        Object current = executor.getContext().getVariable(baseName);
+                        if ( (current instanceof java.util.Map) == false ) {
+                            listener.onFailure(new RuntimeException("Variable '" + baseName + "' is not a document."));
+                            return;
+                        }
+
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, Object> doc = (java.util.Map<String, Object>) current;
+
+                        // Walk through all keys except the last
+                        for (int i = 0; i < keys.size() - 1; i++) {
+                            String key = keys.get(i);
+                            Object nested = doc.get(key);
+                            if (nested == null) {
+                                nested = new java.util.LinkedHashMap<>();
+                                doc.put(key, nested);
+                            }
+                            if ( (nested instanceof java.util.Map) == false ) {
+                                listener.onFailure(new RuntimeException("Intermediate path is not a document at key: '" + key + "'"));
+                                return;
+                            }
+                            if (nested instanceof java.util.Map) {
+                                @SuppressWarnings("unchecked")
+                                java.util.Map<String, Object> nestedMap = (java.util.Map<String, Object>) nested;
+                                doc = nestedMap;
+                            } else {
+                                listener.onFailure(new RuntimeException("Intermediate path is not a document at key: '" + key + "'"));
+                                return;
+                            }
+                        }
+
+                        // Final assignment
+                        doc.put(keys.get(keys.size() - 1), coerced);
+                        listener.onResponse(null);
+                    }, listener::onFailure));
                 }
-            }
-            @Override
-            public void onFailure(Exception e) {
+            } catch (Exception e) {
                 listener.onFailure(e);
             }
-        };
+        }, listener::onFailure);
 
-        ActionListener<Object> assignmentLogger =
-            ActionListenerUtils.withLogging(assignmentListener, this.getClass().getName(), "AssignmentHandler: " + varName);
-
-        executor.evaluateExpressionAsync(expression, assignmentLogger);
+        // Wrap with logging and kick off the RHS evaluation
+        ActionListener<Object> loggedListener =
+            ActionListenerUtils.withLogging(valueListener, this.getClass().getName(), "Assignment: " + baseName);
+        executor.evaluateExpressionAsync(expression, loggedListener);
     }
 
     /**
@@ -99,5 +142,18 @@ public class AssignmentStatementHandler {
         }
         // For other types, no coercion is performed.
         return value;
+    }
+
+    private void evaluateBracketKeys(List<PlEsqlProcedureParser.BracketExpressionContext> brackets, int index,
+                                      List<String> keys, ActionListener<List<String>> listener) {
+        if (index == brackets.size()) {
+            listener.onResponse(keys);
+            return;
+        }
+        PlEsqlProcedureParser.BracketExpressionContext be = brackets.get(index);
+        executor.evaluateExpressionAsync(be.expression(), ActionListener.wrap(result -> {
+            keys.add(result == null ? null : result.toString());
+            evaluateBracketKeys(brackets, index + 1, keys, listener);
+        }, listener::onFailure));
     }
 }

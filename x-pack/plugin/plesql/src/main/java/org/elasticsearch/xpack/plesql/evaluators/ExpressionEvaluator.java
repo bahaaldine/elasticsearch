@@ -1,13 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
  * or more contributor license agreements. Licensed under the Elastic License
- * 2.0; you may not use this file except in compliance with the Elastic License 2.0.
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-package org.elasticsearch.xpack.plesql;
+package org.elasticsearch.xpack.plesql.evaluators;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.handlers.PrintStatementHandler;
 import org.elasticsearch.xpack.plesql.operators.primitives.BinaryOperatorHandler;
 import org.elasticsearch.xpack.plesql.operators.OperatorHandlerRegistry;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
@@ -15,6 +20,7 @@ import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -22,6 +28,7 @@ public class ExpressionEvaluator {
     private final ProcedureExecutor executor;
     private final ThreadPool threadPool;
     private final ExecutionContext context;
+    private static final Logger LOGGER = LogManager.getLogger(ExpressionEvaluator.class);
 
     public ExpressionEvaluator(ProcedureExecutor executor) {
         this.executor = executor;
@@ -148,111 +155,87 @@ public class ExpressionEvaluator {
     }
 
     private void evaluateEqualityExpressionAsync(PlEsqlProcedureParser.EqualityExpressionContext ctx, ActionListener<Object> listener) {
+        // Single operand: delegate to relational
         if (ctx.relationalExpression().size() == 1) {
             evaluateRelationalExpressionAsync(ctx.relationalExpression(0), listener);
-        } else {
-            ActionListener<Object> leftListener = new ActionListener<Object>() {
-                @Override
-                public void onResponse(Object leftResult) {
-                    ActionListener<Object> rightListener = new ActionListener<Object>() {
-                        @Override
-                        public void onResponse(Object rightResult) {
-                            String operator = ctx.getChild(1).getText();
-                            boolean result;
-                            try {
-                                double leftDouble = ((Number) leftResult).doubleValue();
-                                double rightDouble = ((Number) rightResult).doubleValue();
-                                switch (operator) {
-                                    case "=":
-                                        result = leftDouble == rightDouble;
-                                        break;
-                                    case "<>":
-                                        result = leftDouble != rightDouble;
-                                        break;
-                                    default:
-                                        listener.onFailure(new RuntimeException("Unknown equality operator: " + operator));
-                                        return;
-                                }
-                                listener.onResponse(result);
-                            } catch (ClassCastException e) {
-                                listener.onFailure(new RuntimeException("Relational operations require numeric operands."));
-                            }
-                        }
-                        @Override
-                        public void onFailure(Exception e) {
-                            listener.onFailure(e);
-                        }
-                    };
-                    ActionListener<Object> rightLogger = ActionListenerUtils.withLogging(rightListener, getClass().getName(),
-                        "Evaluate-Relational Expression (Right): " + ctx.relationalExpression(1));
-                    evaluateRelationalExpressionAsync(ctx.relationalExpression(1), rightLogger);
-                }
-                @Override
-                public void onFailure(Exception e) {
+            return;
+        }
+        LOGGER.info("Running on thread [{}]", Thread.currentThread().getName());
+        // Use operator registry for '==' and '<>'
+        String operator = ctx.getChild(1).getText();
+        OperatorHandlerRegistry registry = new OperatorHandlerRegistry();
+        BinaryOperatorHandler handler = registry.getHandler(operator);
+        // Evaluate both sides asynchronously using named listeners for clarity
+        final Object[] leftResultHolder = new Object[1];
+        ActionListener<Object> rightListener = new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object right) {
+                try {
+            if (leftResultHolder[0] == null || right == null) {
+                listener.onResponse(leftResultHolder[0] == right);
+            } else if (handler.isApplicable(leftResultHolder[0], right)) {
+                listener.onResponse(handler.apply(leftResultHolder[0], right));
+            } else {
+                listener.onFailure(new RuntimeException(
+                    "Operator '" + operator + "' not applicable for types: "
+                    + leftResultHolder[0].getClass().getSimpleName() + ", " + right.getClass().getSimpleName()));
+            }
+                } catch (Exception e) {
                     listener.onFailure(e);
                 }
-            };
-            ActionListener<Object> leftLogger = ActionListenerUtils.withLogging(leftListener, getClass().getName(),
-                "Evaluate-Relational Expression (Left): " + ctx.relationalExpression(0));
-            evaluateRelationalExpressionAsync(ctx.relationalExpression(0), leftLogger);
-        }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        };
+
+        ActionListener<Object> leftListener = new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object left) {
+                leftResultHolder[0] = left;
+                evaluateRelationalExpressionAsync(ctx.relationalExpression(1), rightListener);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        };
+
+        evaluateRelationalExpressionAsync(ctx.relationalExpression(0), leftListener);
     }
 
     private void evaluateRelationalExpressionAsync(PlEsqlProcedureParser.RelationalExpressionContext ctx, ActionListener<Object> listener) {
+        // Single operand: delegate to additive
         if (ctx.additiveExpression().size() == 1) {
             evaluateAdditiveExpressionAsync(ctx.additiveExpression(0), listener);
-        } else {
-            ActionListener<Object> leftListener = new ActionListener<Object>() {
-                @Override
-                public void onResponse(Object leftResult) {
-                    ActionListener<Object> rightListener = new ActionListener<Object>() {
-                        @Override
-                        public void onResponse(Object rightResult) {
-                            String operator = ctx.getChild(1).getText();
-                            boolean result;
-                            try {
-                                double leftDouble = ((Number) leftResult).doubleValue();
-                                double rightDouble = ((Number) rightResult).doubleValue();
-                                switch (operator) {
-                                    case "<":
-                                        result = leftDouble < rightDouble;
-                                        break;
-                                    case "<=":
-                                        result = leftDouble <= rightDouble;
-                                        break;
-                                    case ">":
-                                        result = leftDouble > rightDouble;
-                                        break;
-                                    case ">=":
-                                        result = leftDouble >= rightDouble;
-                                        break;
-                                    default:
-                                        listener.onFailure(new RuntimeException("Unknown relational operator: " + operator));
-                                        return;
-                                }
-                                listener.onResponse(result);
-                            } catch (Exception e) {
-                                listener.onFailure(new RuntimeException("Relational operations require numeric operands."));
-                            }
-                        }
-                        @Override
-                        public void onFailure(Exception e) {
-                            listener.onFailure(e);
-                        }
-                    };
-                    ActionListener<Object> rightLogger = ActionListenerUtils.withLogging(rightListener, getClass().getName(),
-                        "Evaluate-Additive Expression (Right): " + ctx.additiveExpression(1));
-                    evaluateAdditiveExpressionAsync(ctx.additiveExpression(1), rightLogger);
-                }
-                @Override
-                public void onFailure(Exception e) {
-                    listener.onFailure(e);
-                }
-            };
-            ActionListener<Object> leftLogger = ActionListenerUtils.withLogging(leftListener, getClass().getName(),
-                "Evaluate-Additive Expression (Left): " + ctx.additiveExpression(0));
-            evaluateAdditiveExpressionAsync(ctx.additiveExpression(0), leftLogger);
+            return;
         }
+        // Use operator registry for '<', '<=', '>', '>='
+        String operator = ctx.getChild(1).getText();
+        OperatorHandlerRegistry registry = new OperatorHandlerRegistry();
+        BinaryOperatorHandler handler = registry.getHandler(operator);
+        // Evaluate both sides asynchronously
+        evaluateAdditiveExpressionAsync(ctx.additiveExpression(0), ActionListener.wrap(
+            left -> evaluateAdditiveExpressionAsync(ctx.additiveExpression(1), ActionListener.wrap(
+                right -> {
+                    try {
+                        if (left == null || right == null) {
+                            listener.onResponse(false);
+                        } else if (handler.isApplicable(left, right)) {
+                            listener.onResponse(handler.apply(left, right));
+                        } else {
+                            listener.onFailure(new RuntimeException(
+                                "Operator '" + operator + "' not applicable for types: "
+                                + left.getClass().getSimpleName() + ", " + right.getClass().getSimpleName()));
+                        }
+                    } catch (Exception e) {
+                        listener.onFailure(e);
+                    }
+                }, listener::onFailure)),
+            listener::onFailure));
     }
 
     private void evaluateAdditiveExpressionAsync(PlEsqlProcedureParser.AdditiveExpressionContext ctx, ActionListener<Object> listener) {
@@ -335,42 +318,34 @@ public class ExpressionEvaluator {
             listener.onResponse(leftValue);
             return;
         }
+        // Compute using the operator registry for '*', '/', '%'
         PlEsqlProcedureParser.UnaryExprContext currentExpr = ctx.unaryExpr(index);
         String operator = ctx.getChild(2 * index - 1).getText();
-        ActionListener<Object> rightListener = new ActionListener<Object>() {
-            @Override
-            public void onResponse(Object rightValue) {
+        OperatorHandlerRegistry registry = new OperatorHandlerRegistry();
+        BinaryOperatorHandler handler = registry.getHandler(operator);
+        // Evaluate the right operand asynchronously
+        ActionListener<Object> rightListener = ActionListener.wrap(
+            rightValue -> {
                 try {
-                    double leftDouble = ((Number) leftValue).doubleValue();
-                    double rightDouble = ((Number) rightValue).doubleValue();
-                    double result;
-                    switch (operator) {
-                        case "*":
-                            result = leftDouble * rightDouble;
-                            break;
-                        case "/":
-                            if (rightDouble == 0) {
-                                listener.onFailure(new RuntimeException("Division by zero."));
-                                return;
-                            }
-                            result = leftDouble / rightDouble;
-                            break;
-                        default:
-                            listener.onFailure(new RuntimeException("Unknown multiplicative operator: " + operator));
-                            return;
+                    if (handler.isApplicable(leftValue, rightValue)) {
+                        Object result = handler.apply(leftValue, rightValue);
+                        evaluateMultiplicativeOperandsAsync(ctx, index + 1, result, listener);
+                    } else {
+                        listener.onFailure(new RuntimeException(
+                            "Operator '" + operator + "' not applicable for types: "
+                            + leftValue.getClass().getSimpleName() + ", "
+                            + (rightValue != null ? rightValue.getClass().getSimpleName() : "null")));
                     }
-                    evaluateMultiplicativeOperandsAsync(ctx, index + 1, result, listener);
                 } catch (Exception e) {
                     listener.onFailure(e);
                 }
-            }
-            @Override
-            public void onFailure(Exception e) {
-                listener.onFailure(e);
-            }
-        };
-        ActionListener<Object> rightLogger = ActionListenerUtils.withLogging(rightListener, getClass().getName(),
-            "Evaluate-Multiplicative Right Operand: " + currentExpr);
+            },
+            listener::onFailure
+        );
+        ActionListener<Object> rightLogger = ActionListenerUtils.withLogging(
+            rightListener, getClass().getName(),
+            "Evaluate-Multiplicative Right Operand: " + currentExpr
+        );
         evaluateUnaryExpressionAsync(currentExpr, rightLogger);
     }
 
@@ -460,18 +435,36 @@ public class ExpressionEvaluator {
             } else {
                 processResult.onResponse(new ArrayList<>());
             }
+        } else if (ctx.simplePrimaryExpression().documentLiteral() != null) {
+            // support empty document literal {}
+            PlEsqlProcedureParser.DocumentLiteralContext docCtx =
+                ctx.simplePrimaryExpression().documentLiteral();
+            if (docCtx.pairList() == null) {
+                // return an empty Map for {}
+                processResult.onResponse(new LinkedHashMap<String, Object>());
+            } else {
+                // you can later parse key:value pairs here
+                listener.onFailure(new RuntimeException(
+                    "Non‑empty document literals not supported yet: " + docCtx.getText()));
+            }
+            return;
+        } else if (ctx.simplePrimaryExpression().NULL() != null) {
+            processResult.onResponse(null);
         } else if (ctx.simplePrimaryExpression().ID() != null) {
-            String varName = ctx.simplePrimaryExpression().ID().getText();
-            if ( context.hasVariable(varName) == false ) {
-                listener.onFailure(new RuntimeException("Variable not declared: " + varName));
-                return;
+            String id = ctx.simplePrimaryExpression().ID().getText();
+            Object var = context.getVariable(id);
+            if (var == null) {
+                listener.onFailure(new RuntimeException("Variable not declared: " + id));
+            } else {
+                // if there are bracketExpressions, delegate into your recursive lookup
+                List<PlEsqlProcedureParser.BracketExpressionContext> brackets = ctx.bracketExpression();
+                if ( brackets != null && brackets.isEmpty() == false ) {
+                    evaluateDocumentFieldAccessRecursive(var, brackets, 0, listener);
+                } else {
+                    listener.onResponse(var);
+                }
             }
-            Object varValue = context.getVariable(varName);
-            if (varValue == null) {
-                listener.onFailure(new RuntimeException("Variable '" + varName + "' is not initialized."));
-                return;
-            }
-            processResult.onResponse(varValue);
+
         } else {
             listener.onFailure(new RuntimeException("Unsupported primary expression: " + ctx.getText()));
         }
@@ -479,10 +472,12 @@ public class ExpressionEvaluator {
 
     private void evaluateDocumentFieldAccessRecursive(Object current, List<PlEsqlProcedureParser.BracketExpressionContext> bracketExprs,
                                                       int index, ActionListener<Object> listener) {
+
         if (index >= bracketExprs.size()) {
             listener.onResponse(current);
             return;
         }
+
         evaluateExpressionAsync(bracketExprs.get(index).expression(), new ActionListener<Object>() {
             @Override
             public void onResponse(Object keyObj) {
@@ -494,9 +489,25 @@ public class ExpressionEvaluator {
                 if (current instanceof Map) {
                     Object newValue = ((Map<?, ?>) current).get(key);
                     evaluateDocumentFieldAccessRecursive(newValue, bracketExprs, index + 1, listener);
+                } else if (current instanceof List) {
+                    // list indexing by numeric key
+                    List<?> list = (List<?>) current;
+                    int idx;
+                    try {
+                        idx = ((Number) keyObj).intValue();
+                    } catch (ClassCastException e) {
+                        listener.onFailure(new RuntimeException("List index must be numeric, but got: " + keyObj));
+                        return;
+                    }
+                    if (idx < 0 || idx >= list.size()) {
+                        listener.onFailure(new RuntimeException("List index out of bounds: " + idx));
+                        return;
+                    }
+                    Object newValue = list.get(idx);
+                    evaluateDocumentFieldAccessRecursive(newValue, bracketExprs, index + 1, listener);
                 } else {
-                    listener.onFailure(new RuntimeException("Attempted to access field '" + key +
-                        "' on non-document type: " + (current != null ? current.getClass().getName() : "null")));
+                    listener.onFailure(new RuntimeException("Attempted to index into unsupported type: " +
+                        (current != null ? current.getClass().getName() : "null")));
                 }
             }
             @Override

@@ -13,7 +13,7 @@ import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -340,5 +340,31 @@ public class DeclareStatementHandlerTests extends ESTestCase {
             // Expected to catch a syntax error here.
             assertTrue(e.getMessage().contains("Syntax error"));
         }
+    }
+
+    // Test 13: Declare a DOCUMENT variable with an empty initializer
+    @Test
+    public void testDeclareDocumentVariableWithEmptyInit() throws InterruptedException {
+        String declareQuery = "DECLARE myVar DOCUMENT = {};";
+        PlEsqlProcedureParser.Declare_statementContext declareContext = parseDeclaration(declareQuery);
+        CountDownLatch latch = new CountDownLatch(1);
+        declareHandler.handleAsync(declareContext, new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                assertTrue("myVar should be declared", context.hasVariable("myVar"));
+                Object value = context.getVariable("myVar");
+                assertNotNull("myVar value should not be null", value);
+                assertTrue("myVar should be a Map", value instanceof java.util.Map);
+                java.util.Map<?,?> map = (java.util.Map<?,?>) value;
+                assertTrue("myVar map should be empty", map.isEmpty());
+                latch.countDown();
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("Document declaration with empty initializer failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 }

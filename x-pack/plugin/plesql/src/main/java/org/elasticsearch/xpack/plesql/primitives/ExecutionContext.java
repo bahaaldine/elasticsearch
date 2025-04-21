@@ -148,11 +148,9 @@ public class ExecutionContext {
      */
     public void printAllVariables() {
         if (variables.isEmpty()) {
-            System.out.println("No variables declared.");
             return;
         }
 
-        System.out.println("All Variables:");
         for (Map.Entry<String, VariableDefinition> entry : variables.entrySet()) {
             System.out.println(entry.getKey() + " = " + entry.getValue());
         }
@@ -226,7 +224,6 @@ public class ExecutionContext {
      * @throws RuntimeException If the function is already defined in the global context.
      */
     public void declareFunction(String name, FunctionDefinition function) {
-        System.out.println("Declaring function '" + name + "' with new definition: " + function);
         if (parentContext == null) {
             if (functions.containsKey(name)) {
                 throw new RuntimeException("Function '" + name + "' is already defined in the global context.");
@@ -253,7 +250,6 @@ public class ExecutionContext {
      * @throws RuntimeException if a function with the given name is already defined in the global context.
      */
     public void declareFunction(String name, List<Parameter> parameters, FunctionDefinition function) {
-        System.out.println("Declaring function '" + name + "' with new definition: " + function);
         if (parentContext == null) {
             if (functions.containsKey(name)) {
                 throw new RuntimeException("Function '" + name + "' is already defined in the global context.");
@@ -340,6 +336,5 @@ public class ExecutionContext {
     public void clear() {
         variables.clear();
         functions.clear();
-        System.out.println("Cleared all variables and functions from the current context.");
     }
 }

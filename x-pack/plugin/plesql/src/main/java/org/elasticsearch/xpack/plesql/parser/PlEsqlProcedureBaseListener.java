@@ -575,6 +575,18 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterVarRef(PlEsqlProcedureParser.VarRefContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitVarRef(PlEsqlProcedureParser.VarRefContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterDatatype(PlEsqlProcedureParser.DatatypeContext ctx) { }
 	/**
 	 * {@inheritDoc}

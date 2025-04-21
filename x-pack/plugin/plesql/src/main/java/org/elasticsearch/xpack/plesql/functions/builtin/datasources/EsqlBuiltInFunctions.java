@@ -18,7 +18,7 @@ import org.elasticsearch.xpack.core.esql.action.EsqlQueryRequest;
 import org.elasticsearch.xpack.core.esql.action.EsqlQueryResponse;
 import org.elasticsearch.xpack.core.esql.action.EsqlQueryRequestBuilder;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;

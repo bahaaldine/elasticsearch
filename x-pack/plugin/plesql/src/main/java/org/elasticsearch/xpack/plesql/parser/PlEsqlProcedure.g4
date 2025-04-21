@@ -22,6 +22,7 @@ EXECUTE: 'EXECUTE';
 DECLARE: 'DECLARE';
 SET: 'SET';
 FOR: 'FOR';
+NULL: [Nn][Uu][Ll][Ll];
 
 // Reminder: In is used both in loops and in parameters
 PROCEDURE: 'PROCEDURE';
@@ -64,7 +65,8 @@ GREATER_EQUAL: '>=';
 LESS_EQUAL: '<=';
 OR: 'OR';
 AND: 'AND';
-EQUAL: '=';
+    EQ: '==';             // equality operator
+    ASSIGN: '=';          // assignment operator
 
 // Range Operator
 DOT_DOT: '..';
@@ -205,7 +207,7 @@ execute_statement
     ;
 
 variable_assignment
-    : ID EQUAL
+    : ID ASSIGN
     ;
 
 esql_query_content
@@ -221,11 +223,11 @@ variable_declaration_list
     ;
 
 variable_declaration
-    : ID datatype (EQUAL expression)?
+    : ID datatype (ASSIGN expression)?
     ;
 
 assignment_statement
-    : SET ID EQUAL expression SEMICOLON
+    : SET varRef ASSIGN expression SEMICOLON
     ;
 
 if_statement
@@ -314,7 +316,7 @@ logicalAndExpression
     ;
 
 equalityExpression
-    : relationalExpression ((EQUAL | NOT_EQUAL) relationalExpression)*
+    : relationalExpression ((EQ    | NOT_EQUAL) relationalExpression)*
     ;
 
 relationalExpression
@@ -371,6 +373,11 @@ simplePrimaryExpression
     | arrayLiteral
     | documentLiteral
     | ID
+    | NULL
+    ;
+
+varRef
+    : ID bracketExpression*
     ;
 
 datatype

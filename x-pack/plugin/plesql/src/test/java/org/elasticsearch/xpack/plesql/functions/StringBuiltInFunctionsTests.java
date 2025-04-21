@@ -19,9 +19,8 @@ import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.NumberBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.StringBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -297,7 +296,7 @@ public class StringBuiltInFunctionsTests extends ESTestCase {
     public void testConcat() throws Exception {
         BuiltInFunctionDefinition concatFn = context.getBuiltInFunction("||");
         CountDownLatch latch = new CountDownLatch(1);
-        concatFn.execute(Arrays.asList("hello", " ", "world"), new ActionListener<Object>() {
+        concatFn.execute(Arrays.asList("hello ", "world"), new ActionListener<Object>() {
             @Override
             public void onResponse(Object result) {
                 assertEquals("hello world", result);

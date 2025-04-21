@@ -9,7 +9,7 @@ package org.elasticsearch.xpack.plesql.handlers;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;

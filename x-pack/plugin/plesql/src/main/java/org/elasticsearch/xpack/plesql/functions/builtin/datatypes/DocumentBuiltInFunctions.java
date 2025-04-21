@@ -5,13 +5,12 @@
  * 2.0.
  */
 
-package org.elasticsearch.xpack.plesql.functions.builtin.types;
+package org.elasticsearch.xpack.plesql.functions.builtin.datatypes;
 
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
-import org.elasticsearch.xpack.plesql.functions.interfaces.BuiltInFunction;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 
 import java.util.ArrayList;

@@ -8,7 +8,7 @@
 package org.elasticsearch.xpack.plesql.handlers;
 
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.procedure.ProcedureDefinition;
 import org.elasticsearch.xpack.plesql.functions.Parameter;

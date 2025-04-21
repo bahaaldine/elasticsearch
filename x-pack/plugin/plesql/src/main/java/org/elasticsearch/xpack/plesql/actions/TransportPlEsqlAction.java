@@ -17,8 +17,7 @@ import org.elasticsearch.logging.Logger;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.transport.TransportService;
-import org.elasticsearch.xpack.plesql.PlEsqlExecutor;
-import org.elasticsearch.xpack.plesql.handlers.ExecuteStatementHandler;
+import org.elasticsearch.xpack.plesql.executors.PlEsqlExecutor;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 
 

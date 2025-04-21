@@ -94,7 +94,7 @@ fi
 # Step 6: Enable DEBUG logging in log4j2.properties
 if [ -f "${LOG_CONFIG_FILE}" ]; then
   echo "Setting Elasticsearch log level to DEBUG..."
-  sed -i '' 's/^rootLogger.level = .*/rootLogger.level = debug/' "${LOG_CONFIG_FILE}"
+  sed -i '' 's/^rootLogger.level = .*/rootLogger.level = info/' "${LOG_CONFIG_FILE}"
 else
   echo "Error: log4j2.properties file not found!"
   cleanup
@@ -103,6 +103,8 @@ fi
 
 # Step 7: Start Elasticsearch
 echo "Starting Elasticsearch..."
+# Enable remote debugging on port 5005 (no suspend)
+export ES_JAVA_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
 ./${ES_DIR}/bin/elasticsearch -d
 
 # Step 8: Wait for Elasticsearch to start

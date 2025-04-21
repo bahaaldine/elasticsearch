@@ -13,19 +13,19 @@ import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.internal.Client;
+import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xcontent.XContentType;
 import org.elasticsearch.xpack.esql.plugin.EsqlPlugin;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.functions.builtin.datasources.EsqlBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.ArrayBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.DocumentBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.NumberBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.StringBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.ArrayBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.DocumentBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.NumberBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -38,13 +38,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 @ESIntegTestCase.ClusterScope(scope = ESIntegTestCase.Scope.TEST, numDataNodes = 1)
 public class VideoGameIntegrationTests extends ESIntegTestCase {
 
-    // We do not override setUp() here so that ESIntegTestCase starts the cluster as usual.
-    // We will retrieve the client and create local resources directly in the tests.
+    private ExecutionContext context;
+    private ProcedureExecutor executor;
+    private ThreadPool threadPool;
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
@@ -57,6 +59,28 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
         // plugins.add(YourOtherPlugin.class);
         return plugins;
     }
+
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
+        context = new ExecutionContext();
+        threadPool = new TestThreadPool("test") {
+            public Executor executor(ThreadPool.Names name) {
+                return EsExecutors.DIRECT_EXECUTOR_SERVICE;  // Runs everything on the same thread
+            }
+        };
+        Client mockClient = null; // Keeping client null since our tests do not use real querying
+        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString("")); // empty source
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        executor = new ProcedureExecutor(context, threadPool, mockClient, tokens);
+    }
+
+    @Override
+    public void tearDown() throws Exception {
+        terminate(threadPool);
+        super.tearDown();
+    }
+
 
     /**
      * Populates the "videogames" index with 1,000 generated 1990s video game records.
@@ -146,11 +170,10 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
         var procCtx = parser.procedure();
 
         // Create a local thread pool using TestThreadPool.
-        ThreadPool tp = new TestThreadPool("testPool");
         try {
             // Initialize a new ExecutionContext and register built‑in functions.
             ExecutionContext context = new ExecutionContext();
-            ProcedureExecutor executor = new ProcedureExecutor(context, tp, client, tokens);
+            ProcedureExecutor executor = new ProcedureExecutor(context, threadPool, client, tokens);
 
             StringBuiltInFunctions.registerAll(context);
             NumberBuiltInFunctions.registerAll(context);
@@ -204,7 +227,7 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
             });
             assertTrue("Procedure did not complete in time", latch.await(10, TimeUnit.SECONDS));
         } finally {
-            tp.shutdown();
+            threadPool.shutdown();
         }
     }
 
@@ -277,11 +300,10 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
         PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
         var procCtx = parser.procedure();
 
-        ThreadPool tp = new TestThreadPool("testPool");
         try {
             // Create a new ExecutionContext for this procedure and register functions.
             ExecutionContext context = new ExecutionContext();
-            ProcedureExecutor executor = new ProcedureExecutor(context, tp, client, tokens);
+            ProcedureExecutor executor = new ProcedureExecutor(context, threadPool, client, tokens);
 
             StringBuiltInFunctions.registerAll(context);
             NumberBuiltInFunctions.registerAll(context);
@@ -317,7 +339,7 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
             });
             assertTrue("Procedure did not complete in time", latch.await(10, TimeUnit.SECONDS));
         } finally {
-            tp.shutdown();
+            threadPool.shutdown();
         }
     }
 
@@ -333,35 +355,53 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
         String proc = """
             PROCEDURE computeBestDeveloper()
             BEGIN
+                -- Step 1: Initialize counters and a document to hold aggregate stats
                 DECLARE totalScore NUMBER = 0;
                 DECLARE validCount NUMBER = 0;
-                DECLARE stats DOCUMENT;
+                DECLARE stats DOCUMENT = {};
                 DECLARE games ARRAY OF DOCUMENT;
-                EXECUTE games = ( FROM videogames | KEEP developer, score );
+
+                -- Step 2: Query video games, keeping developer and score only
+                SET games = ESQL_QUERY('FROM videogames | KEEP developer, score');
+
+                -- Temporary holder for individual dev stats
+                DECLARE dev STRING;
+                DECLARE tempStats DOCUMENT = {};
+
+                -- Step 3: Loop over each game and accumulate score/count per developer
                 FOR game IN games LOOP
-                    DECLARE dev STRING;
                     SET dev = game['developer'];
                     IF stats[dev] == null THEN
-                        SET stats[dev] = {"sum": game['score'], "count": 1};
+                        SET tempStats["sum"] = game['score'];
+                        SET tempStats["count"] = 1;
+                        SET stats[dev] = tempStats;
                     ELSE
                         SET stats[dev]["sum"] = stats[dev]["sum"] + game['score'];
                         SET stats[dev]["count"] = stats[dev]["count"] + 1;
                     END IF;
                 END LOOP;
+
+                -- Step 4: Determine the best developer based on average score
                 DECLARE bestDev STRING = "";
                 DECLARE bestAvg NUMBER = 0;
+                DECLARE devStats DOCUMENT;
+                DECLARE avg NUMBER;
+
                 FOR key IN DOCUMENT_KEYS(stats) LOOP
-                    DECLARE devStats DOCUMENT;
                     SET devStats = DOCUMENT_GET(stats, key);
-                    DECLARE avg NUMBER;
                     SET avg = devStats["sum"] / devStats["count"];
                     IF avg > bestAvg THEN
                         SET bestAvg = avg;
                         SET bestDev = key;
                     END IF;
-                ENDLOOP;
-                RETURN {"developer": bestDev, "average_score": bestAvg};
-            END PROCEDURE
+                END LOOP;
+
+                -- Step 5: Construct result document and return
+                DECLARE result DOCUMENT = {};
+                SET result["developer"] = bestDev;
+                SET result["average_score"] = bestAvg;
+                RETURN result;
+            ENDPROCEDURE
             """;
         PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(proc));
         CommonTokenStream tokens = new CommonTokenStream(lexer);
@@ -371,12 +411,14 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
         ThreadPool tp = new TestThreadPool("testPool");
         try {
             ExecutionContext context = new ExecutionContext();
+            ProcedureExecutor executor = new ProcedureExecutor(context, tp, client, tokens);
+
             StringBuiltInFunctions.registerAll(context);
             NumberBuiltInFunctions.registerAll(context);
             ArrayBuiltInFunctions.registerAll(context);
             DocumentBuiltInFunctions.registerAll(context);
+            EsqlBuiltInFunctions.registerAll(context,executor,client);
 
-            ProcedureExecutor executor = new ProcedureExecutor(context, tp, client, tokens);
             CountDownLatch latch = new CountDownLatch(1);
             executor.visitProcedureAsync(procCtx, new ActionListener<>() {
                 @Override

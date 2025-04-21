@@ -24,7 +24,7 @@ import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.rest.RestController;
 import org.elasticsearch.rest.RestHandler;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.PlEsqlExecutor;
+import org.elasticsearch.xpack.plesql.executors.PlEsqlExecutor;
 import org.elasticsearch.xpack.plesql.actions.PlEsqlAction;
 import org.elasticsearch.xpack.plesql.actions.RestPlEsqlAction;
 import org.elasticsearch.xpack.plesql.actions.TransportPlEsqlAction;

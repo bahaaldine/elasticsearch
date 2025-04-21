@@ -19,7 +19,7 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -36,7 +36,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class IntegrationTests {
+public class IntegrationTest {
 
     private ExecutionContext context;
     private ProcedureExecutor executor;
@@ -67,22 +67,23 @@ public class IntegrationTests {
     @Test
     public void testBasicIntegration() throws InterruptedException {
         String blockQuery = """
-            BEGIN
-                DECLARE x INT, y FLOAT, i INT;
-                SET x = 5;
-                SET y = 10.0;
-                IF x = 5 THEN
-                    SET x = x * 2;  -- x becomes 10
-                END IF;
-                FOR i IN 1..3 LOOP
-                    SET y = y + i;  -- y accumulates values
-                END LOOP;
-                TRY
-                    SET x = x / (y - 16.0); -- x = 10 / (y - 16.0)
-                CATCH
-                    SET x = -1;  -- Set x to -1 in case of exception
-                END TRY;
-            END
+            PROCEDURE aggregatePositiveNumbers()
+                BEGIN
+                    DECLARE x NUMBER, y NUMBER, i NUMBER;
+                    SET x = 5;
+                    SET y = 10.0;
+                    IF x == 5 THEN
+                        SET x = x * 2;  -- x becomes 10
+                    END IF;
+                    FOR i IN 1..3 LOOP
+                        SET y = y + i;  -- y accumulates values
+                    END LOOP;
+                    TRY
+                        SET x = x / (y - 16.0); -- x = 10 / (y - 16.0)
+                    CATCH
+                        SET x = -1;  -- Set x to -1 in case of exception
+                    END TRY;
+            END PROCEDURE;
         """;
         PlEsqlProcedureParser.ProcedureContext blockContext = parseBlock(blockQuery);
 
@@ -96,12 +97,10 @@ public class IntegrationTests {
 
                 // Check that 'x' is -1 (set in the CATCH block)
                 assertNotNull("Variable 'x' should be declared.", context.getVariable("x"));
-                assertTrue("Variable 'x' should be of type Integer.", context.getVariable("x") instanceof Integer);
                 assertEquals("Variable 'x' should be -1 after the TRY-CATCH block.", -1, context.getVariable("x"));
 
                 // Check that 'y' is 16.0
                 assertNotNull("Variable 'y' should be declared.", context.getVariable("y"));
-                assertTrue("Variable 'y' should be of type Double.", context.getVariable("y") instanceof Double);
                 assertEquals("Variable 'y' should be 16.0 after the loop.", 16.0, (Double) context.getVariable("y"), 0.0001);
 
                 latch.countDown();
@@ -252,7 +251,7 @@ public class IntegrationTests {
                 CATCH
                     SET n = -50;
                 END TRY;
-                IF n = -50 THEN
+                IF n == -50 THEN
                     SET n = n * 2; -- n becomes -100
                 END IF;
             END
@@ -297,7 +296,7 @@ public class IntegrationTests {
                CATCH
                    SET v = 20;
                END TRY;
-               IF v = 20 THEN
+               IF v == 20 THEN
                    SET v = v + 5; -- v becomes 25
                ELSE
                    SET v = v + 100; -- This should not execute

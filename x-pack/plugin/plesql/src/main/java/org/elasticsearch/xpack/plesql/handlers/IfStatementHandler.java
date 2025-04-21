@@ -9,7 +9,7 @@
 package org.elasticsearch.xpack.plesql.handlers;
 
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.exceptions.BreakException;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
@@ -40,8 +40,6 @@ public class IfStatementHandler {
      * @param listener The ActionListener to handle asynchronous callbacks.
      */
     public void handleAsync(PlEsqlProcedureParser.If_statementContext ctx, ActionListener<Object> listener) {
-        System.out.println(" Handling IF statement. " + ctx.condition().getText() );
-
         ActionListener<Object> ifStatementListener = new ActionListener<Object>() {
             @Override
             public void onResponse(Object conditionResult) {

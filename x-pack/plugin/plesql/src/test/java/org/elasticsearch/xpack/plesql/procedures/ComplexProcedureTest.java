@@ -15,11 +15,11 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.ProcedureExecutor;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.ArrayBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.DocumentBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.NumberBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.functions.builtin.types.StringBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.ArrayBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.DocumentBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.NumberBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -34,7 +34,7 @@ import org.junit.Test;
  * These tests validate that procedures with arrays, conditional logic,
  * and TRY/CATCH exception handling operate as expected.
  */
-public class ComplexProcedureTests extends ESTestCase {
+public class ComplexProcedureTest extends ESTestCase {
 
     private ExecutionContext context;
     private ProcedureExecutor executor;

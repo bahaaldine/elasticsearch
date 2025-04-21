@@ -180,6 +180,5 @@ public class SymbolTable {
     public void clear() {
         variables.clear();
         functions.clear();
-        System.out.println("Cleared all variables and functions from the current context.");
     }
 }
