@@ -424,6 +424,16 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 */
 	void exitDocumentLiteral(PlEsqlProcedureParser.DocumentLiteralContext ctx);
 	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#documentField}.
+	 * @param ctx the parse tree
+	 */
+	void enterDocumentField(PlEsqlProcedureParser.DocumentFieldContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#documentField}.
+	 * @param ctx the parse tree
+	 */
+	void exitDocumentField(PlEsqlProcedureParser.DocumentFieldContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#pairList}.
 	 * @param ctx the parse tree
 	 */

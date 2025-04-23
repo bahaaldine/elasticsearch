@@ -558,4 +558,40 @@ public class AssignmentStatementHandlerTests extends ESTestCase {
         });
         latch.await();
     }
+    // NEW Test 16: Declare a DOCUMENT variable and assign a document literal
+    @Test
+    public void testDeclareAndAssignDocumentLiteral() throws InterruptedException {
+        String declareQuery = "DECLARE myDoc DOCUMENT;";
+        String assignQuery = "SET myDoc = {\"title\":\"My Test\",\"rating\":5};";
+        CountDownLatch latch = new CountDownLatch(1);
+        declareHandler.handleAsync(parseDeclaration(declareQuery), new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object unused) {
+                assignmentHandler.handleAsync(parseAssignment(assignQuery), new ActionListener<Object>() {
+                    @Override
+                    public void onResponse(Object unused) {
+                        Object value = context.getVariable("myDoc");
+                        assertNotNull("myDoc should not be null", value);
+                        assertTrue("myDoc should be a Map", value instanceof java.util.Map);
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, Object> map = (java.util.Map<String, Object>) value;
+                        assertEquals("My Test", map.get("title"));
+                        assertEquals(5.0, ((Number) map.get("rating")).doubleValue(), 0.001);
+                        latch.countDown();
+                    }
+                    @Override
+                    public void onFailure(Exception e) {
+                        fail("Document literal assignment failed: " + e.getMessage());
+                        latch.countDown();
+                    }
+                });
+            }
+            @Override
+            public void onFailure(Exception e) {
+                fail("Document declaration failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+        latch.await();
+    }
 }

@@ -515,6 +515,18 @@ public class PlEsqlProcedureBaseListener implements PlEsqlProcedureListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterDocumentField(PlEsqlProcedureParser.DocumentFieldContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitDocumentField(PlEsqlProcedureParser.DocumentFieldContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterPairList(PlEsqlProcedureParser.PairListContext ctx) { }
 	/**
 	 * {@inheritDoc}

@@ -311,6 +311,13 @@ public class PlEsqlProcedureBaseVisitor<T> extends AbstractParseTreeVisitor<T> i
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
+	@Override public T visitDocumentField(PlEsqlProcedureParser.DocumentFieldContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
 	@Override public T visitPairList(PlEsqlProcedureParser.PairListContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}

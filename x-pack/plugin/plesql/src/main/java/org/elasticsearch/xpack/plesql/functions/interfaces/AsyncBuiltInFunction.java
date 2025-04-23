@@ -8,10 +8,8 @@
 package org.elasticsearch.xpack.plesql.functions.interfaces;
 
 import org.elasticsearch.action.ActionListener;
-
 import java.util.List;
 
-@FunctionalInterface
 public interface AsyncBuiltInFunction {
-    Object execute(List<Object> args, ActionListener<Object> listener);
+    void apply(List<Object> args, ActionListener<Object> listener);
 }

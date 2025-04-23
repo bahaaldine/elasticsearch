@@ -12,7 +12,6 @@ import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
-import org.elasticsearch.xpack.plesql.handlers.PrintStatementHandler;
 import org.elasticsearch.xpack.plesql.operators.primitives.BinaryOperatorHandler;
 import org.elasticsearch.xpack.plesql.operators.OperatorHandlerRegistry;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
@@ -23,6 +22,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ExpressionEvaluator {
     private final ProcedureExecutor executor;
@@ -436,17 +437,8 @@ public class ExpressionEvaluator {
                 processResult.onResponse(new ArrayList<>());
             }
         } else if (ctx.simplePrimaryExpression().documentLiteral() != null) {
-            // support empty document literal {}
-            PlEsqlProcedureParser.DocumentLiteralContext docCtx =
-                ctx.simplePrimaryExpression().documentLiteral();
-            if (docCtx.pairList() == null) {
-                // return an empty Map for {}
-                processResult.onResponse(new LinkedHashMap<String, Object>());
-            } else {
-                // you can later parse key:value pairs here
-                listener.onFailure(new RuntimeException(
-                    "Non‑empty document literals not supported yet: " + docCtx.getText()));
-            }
+            PlEsqlProcedureParser.DocumentLiteralContext docCtx = ctx.simplePrimaryExpression().documentLiteral();
+            evaluateDocumentLiteralAsync(docCtx, processResult);
             return;
         } else if (ctx.simplePrimaryExpression().NULL() != null) {
             processResult.onResponse(null);
@@ -540,56 +532,38 @@ public class ExpressionEvaluator {
         });
     }
 
-    public void evaluateConditionAsync(PlEsqlProcedureParser.ConditionContext ctx, ActionListener<Object> listener) {
-        if (ctx.expression() != null) {
-            ActionListener<Object> condListener = new ActionListener<Object>() {
-                @Override
-                public void onResponse(Object result) {
-                    if (result instanceof Boolean) {
-                        listener.onResponse(result);
-                    } else {
-                        listener.onFailure(new RuntimeException("Condition does not evaluate to a boolean: " + ctx.getText()));
-                    }
-                }
-                @Override
-                public void onFailure(Exception e) {
-                    listener.onFailure(e);
-                }
-            };
+    public void evaluateDocumentLiteralAsync(PlEsqlProcedureParser.DocumentLiteralContext ctx, ActionListener<Object> listener) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        List<PlEsqlProcedureParser.DocumentFieldContext> fields = ctx.documentField();
 
-            ActionListener<Object> condLogger = ActionListenerUtils.withLogging(condListener, getClass().getName(),
-                "Evaluate-Condition: " + ctx.expression());
-            evaluateExpressionAsync(ctx.expression(), condLogger);
-        } else {
-            listener.onFailure(new RuntimeException("Unsupported condition: " + ctx.getText()));
-        }
-    }
-
-    public void evaluateArgumentsAsync(List<PlEsqlProcedureParser.ExpressionContext> argContexts, ActionListener<List<Object>> listener) {
-        List<Object> argValues = new ArrayList<>();
-        evaluateArgumentAsync(argContexts, 0, argValues, listener);
-    }
-
-    private void evaluateArgumentAsync(List<PlEsqlProcedureParser.ExpressionContext> argContexts,
-                                       int index, List<Object> argValues, ActionListener<List<Object>> listener) {
-        if (index >= argContexts.size()) {
-            listener.onResponse(argValues);
+        if (fields.isEmpty()) {
+            listener.onResponse(result);  // return empty document
             return;
         }
-        ActionListener<Object> argListener = new ActionListener<Object>() {
-            @Override
-            public void onResponse(Object value) {
-                argValues.add(value);
-                evaluateArgumentAsync(argContexts, index + 1, argValues, listener);
-            }
-            @Override
-            public void onFailure(Exception e) {
-                listener.onFailure(e);
-            }
-        };
-        ActionListener<Object> argLogger = ActionListenerUtils.withLogging(argListener, getClass().getName(),
-            "Eval-Argument: " + argContexts.get(index));
-        evaluateExpressionAsync(argContexts.get(index), argLogger);
+
+        AtomicInteger remaining = new AtomicInteger(fields.size());
+        AtomicBoolean failed = new AtomicBoolean(false);
+
+        for (PlEsqlProcedureParser.DocumentFieldContext fieldCtx : fields) {
+            String fieldName = stripQuotes(fieldCtx.STRING().getText());
+            evaluateExpressionAsync(fieldCtx.expression(), ActionListener.wrap(
+                value -> {
+                    result.put(fieldName, value);
+                    if (remaining.decrementAndGet() == 0 && failed.get() == false ) {
+                        listener.onResponse(result);
+                    }
+                },
+                e -> {
+                    if (failed.compareAndSet(false, true)) {
+                        listener.onFailure(e);
+                    }
+                }
+            ));
+        }
+    }
+
+    private String stripQuotes(String quotedString) {
+        return quotedString.substring(1, quotedString.length() - 1); // remove surrounding quotes
     }
 
     private boolean toBoolean(Object obj) {

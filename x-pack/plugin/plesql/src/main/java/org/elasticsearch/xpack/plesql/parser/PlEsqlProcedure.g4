@@ -160,6 +160,7 @@ DOCUMENT_CONTAINS: 'DOCUMENT_CONTAINS';
 
 // Datasource
 ESQL_QUERY: 'ESQL_QUERY';
+INDEX_DOCUMENT: 'INDEX_DOCUMENT';
 
 // =======================
 // Parser Rules
@@ -345,7 +346,10 @@ expressionList
     ;
 
 documentLiteral
-    : '{' pairList? '}'
+    : '{' (documentField (',' documentField)*)? '}'
+    ;
+documentField
+    : STRING ':' expression
     ;
 
 pairList

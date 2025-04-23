@@ -263,6 +263,12 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitDocumentLiteral(PlEsqlProcedureParser.DocumentLiteralContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#documentField}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDocumentField(PlEsqlProcedureParser.DocumentFieldContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#pairList}.
 	 * @param ctx the parse tree
 	 * @return the visitor result

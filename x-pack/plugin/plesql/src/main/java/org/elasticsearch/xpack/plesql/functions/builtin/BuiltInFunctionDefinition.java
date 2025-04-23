@@ -9,6 +9,7 @@ package org.elasticsearch.xpack.plesql.functions.builtin;
 
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.interfaces.AsyncBuiltInFunction;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 

@@ -50,13 +50,8 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        // Start with the plugins from the super class.
         List<Class<? extends Plugin>> plugins = new ArrayList<>(super.nodePlugins());
-        // Add your ESQL plugin to the list.
         plugins.add(EsqlPlugin.class);
-        // If your module requires any additional plugins that are normally loaded in production,
-        // add them here as well. For example:
-        // plugins.add(YourOtherPlugin.class);
         return plugins;
     }
 

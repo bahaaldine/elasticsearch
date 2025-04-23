@@ -298,50 +298,63 @@ public class FunctionDefinitionHandler {
 
     /**
      * Determines if the provided data type is supported.
-     * Updated to support NUMBER, STRING, DATE, DOCUMENT, and ARRAY.
+     * Updated to support NUMBER, STRING, DATE, DOCUMENT, ARRAY, ANY, and ARRAY OF {@literal <TYPE>}.
      *
      * @param dataType The data type as a string.
      * @return true if supported; false otherwise.
      */
     private boolean isSupportedDataType(String dataType) {
-        switch (dataType.toUpperCase()) {
-            case "NUMBER":
-            case "STRING":
-            case "DATE":
-            case "DOCUMENT":
-            case "ARRAY":
-                return true;
-            default:
-                return false;
+        if (dataType == null) return false;
+        if (dataType.equalsIgnoreCase("NUMBER") ||
+            dataType.equalsIgnoreCase("STRING") ||
+            dataType.equalsIgnoreCase("DATE") ||
+            dataType.equalsIgnoreCase("DOCUMENT") ||
+            dataType.equalsIgnoreCase("ARRAY") ||
+            dataType.equalsIgnoreCase("ANY")) {
+            return true;
         }
+        // Allow ARRAY OF ...
+        if (dataType.toUpperCase().startsWith("ARRAY OF ")) {
+            String elementType = dataType.substring("ARRAY OF ".length()).trim().toUpperCase();
+            return isSupportedDataType(elementType);
+        }
+        return false;
     }
 
     /**
      * Validates if the given value is compatible with the expected data type.
+     * Now supports ARRAY OF {@literal <TYPE>} recursively.
      *
      * @param dataType The expected data type.
      * @param value    The value to check.
      * @return true if the value is compatible; false otherwise.
      */
     private boolean isArgumentTypeCompatible(String dataType, Object value) {
-        if (value == null) {
+        if (value == null) return true;
+
+        String upperType = dataType.toUpperCase();
+
+        if (upperType.startsWith("ARRAY OF ")) {
+            if ( (value instanceof List<?>) == false ) return false;
+            List<?> list = (List<?>) value;
+
+            String elementType = upperType.substring("ARRAY OF ".length()).trim();
+            for (Object elem : list) {
+                if ( isArgumentTypeCompatible(elementType, elem) == false ) {
+                    return false;
+                }
+            }
             return true;
         }
-        switch (dataType.toUpperCase()) {
-            case "NUMBER":
-                return value instanceof Double || value instanceof Integer;
-            case "STRING":
-                return value instanceof String;
-            case "DATE":
-                return value instanceof java.util.Date;
-            case "DOCUMENT":
-                return value instanceof java.util.Map;
-            case "ARRAY":
-                return value instanceof java.util.List;
-            case "ANY":
-                return true;
-            default:
-                return false;
-        }
+
+        return switch (upperType) {
+            case "NUMBER" -> value instanceof Number;
+            case "STRING" -> value instanceof String;
+            case "DATE" -> value instanceof java.util.Date;
+            case "DOCUMENT" -> value instanceof java.util.Map;
+            case "ARRAY" -> value instanceof List<?>;
+            case "ANY" -> true;
+            default -> false;
+        };
     }
 }
