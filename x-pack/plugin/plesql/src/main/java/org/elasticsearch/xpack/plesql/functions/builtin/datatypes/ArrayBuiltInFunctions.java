@@ -7,7 +7,10 @@
 
 package org.elasticsearch.xpack.plesql.functions.builtin.datatypes;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
+import org.elasticsearch.xpack.plesql.functions.builtin.datasources.ESFunctions;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
@@ -21,8 +24,11 @@ import java.util.List;
 import java.util.Set;
 
 public class ArrayBuiltInFunctions {
+    private static final Logger LOGGER = LogManager.getLogger(ArrayBuiltInFunctions.class);
 
     public static void registerAll(ExecutionContext context) {
+        LOGGER.info("Registering Array built-in functions");
+
         // ARRAY_LENGTH: returns the length of an array.
         context.declareFunction("ARRAY_LENGTH",
             Collections.singletonList(new Parameter("array", "ARRAY", ParameterMode.IN)),

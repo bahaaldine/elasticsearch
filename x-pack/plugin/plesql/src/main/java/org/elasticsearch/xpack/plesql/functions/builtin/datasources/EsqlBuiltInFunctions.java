@@ -48,6 +48,8 @@ public class EsqlBuiltInFunctions {
      * and returns the normalized result (i.e. a List of Maps, in this example).
      */
     public static void registerAll(ExecutionContext context, ProcedureExecutor executor, Client client) {
+        LOGGER.info("Registering ESQL built-in functions");
+
         // Register ESQL_QUERY as a built-in function.
         // It expects a single STRING parameter named "query".
         context.declareFunction("ESQL_QUERY",

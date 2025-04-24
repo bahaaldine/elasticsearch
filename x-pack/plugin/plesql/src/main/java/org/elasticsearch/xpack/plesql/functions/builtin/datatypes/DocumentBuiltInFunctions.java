@@ -7,6 +7,8 @@
 
 package org.elasticsearch.xpack.plesql.functions.builtin.datatypes;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
@@ -59,8 +61,10 @@ import java.util.Map;
  * @see org.elasticsearch.xpack.plesql.functions.ParameterMode
  */
 public class DocumentBuiltInFunctions {
+    private static final Logger LOGGER = LogManager.getLogger(DocumentBuiltInFunctions.class);
 
     public static void registerAll(ExecutionContext context) {
+        LOGGER.info("Registering Document built-in functions");
         // In DocumentBuiltInFunctions.java
 
 // DOCUMENT_KEYS: returns the list of keys in a document.

@@ -6,6 +6,8 @@
  */
 package org.elasticsearch.xpack.plesql.functions.builtin.datatypes;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
@@ -17,8 +19,10 @@ import java.util.Collections;
 import java.util.List;
 
 public class NumberBuiltInFunctions {
+    private static final Logger LOGGER = LogManager.getLogger(NumberBuiltInFunctions.class);
 
     public static void registerAll(ExecutionContext context) {
+        LOGGER.info("Registering Number built-in functions");
 
         // ABS: returns the absolute value of a number.
         context.declareFunction("ABS",

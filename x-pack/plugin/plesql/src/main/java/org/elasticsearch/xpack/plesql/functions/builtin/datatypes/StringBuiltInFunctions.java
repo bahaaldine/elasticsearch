@@ -7,6 +7,8 @@
 
 package org.elasticsearch.xpack.plesql.functions.builtin.datatypes;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
@@ -22,8 +24,11 @@ import java.util.regex.Pattern;
  * Registers all built‑in functions (mostly string functions) in the given ExecutionContext.
  */
 public class StringBuiltInFunctions {
+    private static final Logger LOGGER = LogManager.getLogger(StringBuiltInFunctions.class);
 
     public static void registerAll(ExecutionContext context) {
+        LOGGER.info("Registering String built-in functions");
+
         // LENGTH: expects one argument of type STRING.
         context.declareFunction("LENGTH",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),

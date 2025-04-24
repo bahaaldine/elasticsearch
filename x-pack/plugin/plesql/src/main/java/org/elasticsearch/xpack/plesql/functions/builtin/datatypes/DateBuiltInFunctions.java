@@ -6,6 +6,8 @@
  */
 package org.elasticsearch.xpack.plesql.functions.builtin.datatypes;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
@@ -18,8 +20,10 @@ import java.util.Date;
 import java.util.List;
 
 public class DateBuiltInFunctions {
+    private static final Logger LOGGER = LogManager.getLogger(DateBuiltInFunctions.class);
 
     public static void registerAll(ExecutionContext context) {
+        LOGGER.info("Registering Date built-in functions");
         // CURRENT_DATE: returns current date with time zeroed.
         context.declareFunction("CURRENT_DATE",
             Collections.emptyList(),

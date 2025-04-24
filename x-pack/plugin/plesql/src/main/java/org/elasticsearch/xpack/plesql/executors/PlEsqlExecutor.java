@@ -137,6 +137,7 @@ public class PlEsqlExecutor {
                 ESFunctions.registerUpdateDocumentFunction(executionContext, client);
                 ESFunctions.registerIndexBulkFunction(executionContext, client);
                 ESFunctions.registerIndexDocumentFunction(executionContext, client);
+                ESFunctions.registerRefreshIndexFunction(executionContext, client);
 
                 // 7. Set up a logging listener.
                 ActionListener<Object> execListener = ActionListenerUtils.withLogging(listener,
