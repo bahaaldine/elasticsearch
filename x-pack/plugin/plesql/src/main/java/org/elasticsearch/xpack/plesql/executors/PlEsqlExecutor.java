@@ -20,6 +20,7 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.injection.guice.Inject;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.plesql.functions.builtin.datasources.ESFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datasources.EsqlBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.handlers.ProcedureCallHandler;
@@ -132,6 +133,10 @@ public class PlEsqlExecutor {
                 // 6. Create a ProcedureExecutor with the updated global context.
                 ProcedureExecutor procedureExecutor = new ProcedureExecutor(executionContext, threadPool, client, tokens);
                 EsqlBuiltInFunctions.registerAll(executionContext, procedureExecutor, client);
+                ESFunctions.registerGetDocumentFunction(executionContext, client);
+                ESFunctions.registerUpdateDocumentFunction(executionContext, client);
+                ESFunctions.registerIndexBulkFunction(executionContext, client);
+                ESFunctions.registerIndexDocumentFunction(executionContext, client);
 
                 // 7. Set up a logging listener.
                 ActionListener<Object> execListener = ActionListenerUtils.withLogging(listener,

@@ -18,6 +18,7 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.esql.plugin.EsqlPlugin;
 import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.functions.builtin.datasources.ESFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datasources.EsqlBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
@@ -239,6 +240,113 @@ public class ESFunctionsTests extends ESIntegTestCase {
             public void onFailure(Exception e) {
                 assertThat(e, instanceOf(RuntimeException.class));
                 assertThat(e.getMessage(), startsWith("Type mismatch for parameter 'document'. Expected 'DOCUMENT'"));
+                latch.countDown();
+            }
+        });
+
+        assertTrue("Procedure did not complete in time", latch.await(10, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testUpdateDocumentReturnsResponse() throws Exception {
+        String proc = """
+            PROCEDURE testUpdate()
+            BEGIN
+                DECLARE response DOCUMENT = INDEX_DOCUMENT("esfunctions_index", {"title": "Test Title"});
+
+                UPDATE_DOCUMENT("esfunctions_index", response["id"], {"title": "Updated Title"});
+
+                REFRESH_INDEX("esfunctions_index");
+
+                PRINT response["id"];
+
+                RETURN ESQL_QUERY('FROM esfunctions_index METADATA _id | WHERE _id=="' || response["id"] || '"');
+            END PROCEDURE
+        """;
+
+        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(
+            new CommonTokenStream(new PlEsqlProcedureLexer(CharStreams.fromString(proc))));
+        CountDownLatch latch = new CountDownLatch(1);
+
+        Client client = client();
+        ProcedureExecutor executor = new ProcedureExecutor(context, threadPool, client, tokens);
+        ESFunctions.registerIndexDocumentFunction(context, client);
+        ESFunctions.registerUpdateDocumentFunction(context, client);
+        ESFunctions.registerGetDocumentFunction(context, client);
+        ESFunctions.registerRefreshIndexFunction(context, client);
+        EsqlBuiltInFunctions.registerAll(context, executor, client);
+
+        executor.visitProcedureAsync(parser.procedure(), new ActionListener<>() {
+            @Override
+            public void onResponse(Object result) {
+                Object value = (result instanceof ReturnValue) ? ((ReturnValue) result).getValue() : result;
+
+                System.out.println("VALUE : " + value);
+
+                assertNotNull("ESQL query result should not be null", value);
+                assertThat("Expected result to be a List", value, instanceOf(List.class));
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> list = (List<Map<String, Object>>) value;
+                assertFalse("Result list should not be empty", list.isEmpty());
+
+                Map<String, Object> doc = list.get(0);
+                assertEquals("Updated Title", doc.get("title"));
+
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Execution failed: " + e.getMessage());
+                latch.countDown();
+            }
+        });
+
+        assertTrue("Procedure did not complete in time", latch.await(10, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testGetDocumentReturnsDocument() throws Exception {
+        String proc = """
+            PROCEDURE testGetDocument()
+            BEGIN
+                DECLARE doc DOCUMENT = {"title": "Initial Title"};
+                DECLARE response DOCUMENT = INDEX_DOCUMENT("esfunctions_index", doc);
+                DECLARE docId STRING = response["id"];
+
+                DECLARE retrieved DOCUMENT = GET_DOCUMENT("esfunctions_index", docId);
+                RETURN retrieved;
+            END PROCEDURE
+        """;
+
+        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(
+            new CommonTokenStream(new PlEsqlProcedureLexer(CharStreams.fromString(proc))));
+        CountDownLatch latch = new CountDownLatch(1);
+
+        Client client = client();
+        ProcedureExecutor executor = new ProcedureExecutor(context, threadPool, client, tokens);
+        ESFunctions.registerIndexDocumentFunction(context, client);
+        ESFunctions.registerGetDocumentFunction(context, client);
+
+        executor.visitProcedureAsync(parser.procedure(), new ActionListener<>() {
+            @Override
+            public void onResponse(Object result) {
+                Object value = (result instanceof ReturnValue) ? ((ReturnValue) result).getValue() : result;
+
+                System.out.println("GET VALUE : " + value);
+
+                assertNotNull("GET_DOCUMENT result should not be null", value);
+                assertThat("Expected GET_DOCUMENT result to be a Map", value, instanceOf(Map.class));
+                @SuppressWarnings("unchecked")
+                Map<String, Object> doc = (Map<String, Object>) value;
+                assertEquals("Initial Title", doc.get("title"));
+
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("GET_DOCUMENT execution failed: " + e.getMessage());
                 latch.countDown();
             }
         });

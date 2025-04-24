@@ -169,12 +169,24 @@ public class EsqlBuiltInFunctions {
      * Modify this implementation based on your actual search requirements.
      */
     private static SearchRequest buildSearchRequest(String content) {
-        String indexName = "retro_arcade_games"; // Default index (adjust as needed)
+        String indexName = extractIndexName(content); // Dynamically extract the index from the query
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         sourceBuilder.query(QueryBuilders.simpleQueryStringQuery(content));
         SearchRequest request = new SearchRequest(indexName);
         request.source(sourceBuilder);
         return request;
+    }
+
+    private static String extractIndexName(String query) {
+        String lower = query.toLowerCase(java.util.Locale.ROOT);
+        if (lower.startsWith("from ")) {
+            int end = lower.indexOf(' ', 5); // space after index name
+            if (end == -1) {
+                return query.substring(5).trim(); // only index name present
+            }
+            return query.substring(5, end).trim(); // index name followed by other clauses
+        }
+        throw new IllegalArgumentException("Could not extract index name from query: " + query);
     }
 
     /**

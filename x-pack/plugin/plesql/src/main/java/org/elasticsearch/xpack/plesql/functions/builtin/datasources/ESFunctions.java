@@ -84,4 +84,86 @@ public class ESFunctions  {
             })
         );
     }
+
+
+    public static void registerUpdateDocumentFunction(ExecutionContext context, Client client) {
+        LOGGER.info("Registering UPDATE_DOCUMENT function");
+
+        context.declareFunction("UPDATE_DOCUMENT",
+            List.of(
+                new Parameter("indexName", "STRING", ParameterMode.IN),
+                new Parameter("id", "STRING", ParameterMode.IN),
+                new Parameter("document", "DOCUMENT", ParameterMode.IN)
+            ),
+            new BuiltInFunctionDefinition("UPDATE_DOCUMENT", (args, listener) -> {
+                String indexName = (String) args.get(0);
+                String id = (String) args.get(1);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> doc = (Map<String, Object>) args.get(2);
+
+                client.prepareUpdate(indexName, id).setDoc(doc).execute(ActionListener.wrap(
+                    resp -> {
+                        Map<String, Object> resultMap = Map.of(
+                            "id", resp.getId(),
+                            "index", resp.getIndex(),
+                            "result", resp.getResult().getLowercase()
+                        );
+                        listener.onResponse(resultMap);
+                    },
+                    listener::onFailure
+                ));
+            })
+        );
+    }
+
+    public static void registerGetDocumentFunction(ExecutionContext context, Client client) {
+        LOGGER.info("Registering GET_DOCUMENT function");
+
+        context.declareFunction("GET_DOCUMENT",
+            List.of(
+                new Parameter("indexName", "STRING", ParameterMode.IN),
+                new Parameter("id", "STRING", ParameterMode.IN)
+            ),
+            new BuiltInFunctionDefinition("GET_DOCUMENT", (args, listener) -> {
+                String indexName = (String) args.get(0);
+                String id = (String) args.get(1);
+                client.prepareGet(indexName, id).execute(ActionListener.wrap(
+                    resp -> {
+                        if (resp.isExists()) {
+                            listener.onResponse(resp.getSource());
+                        } else {
+                            listener.onResponse(null);
+                        }
+                    },
+                    listener::onFailure
+                ));
+            })
+        );
+    }
+
+    public static void registerRefreshIndexFunction(ExecutionContext context, Client client) {
+        LOGGER.info("Registering REFRESH_INDEX function");
+
+        context.declareFunction("REFRESH_INDEX",
+            List.of(
+                new Parameter("indexName", "STRING", ParameterMode.IN)
+            ),
+            new BuiltInFunctionDefinition("REFRESH_INDEX", (args, listener) -> {
+                String indexName = (String) args.get(0);
+
+                client.admin().indices().prepareRefresh(indexName).execute(ActionListener.wrap(
+                    resp -> {
+                        Map<String, Object> resultMap = Map.of(
+                            "shards", resp.getTotalShards(),
+                            "successful", resp.getSuccessfulShards(),
+                            "failed", resp.getFailedShards()
+                        );
+                        listener.onResponse(resultMap);
+                    },
+                    listener::onFailure
+                ));
+            })
+        );
+    }
 }
+
