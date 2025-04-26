@@ -17,7 +17,7 @@ apply plugin: 'elasticsearch.publish'
 esplugin {
   name 'x-pack-plesql'
   description 'A plugin to handle PL|ES|QL queries'
-  classname 'org.elasticsearch.xpack.plesql.plugin.PlEsqlPlugin'
+  classname 'org.elasticsearch.xpack.plesql.PlEsqlPlugin'
   extendedPlugins = ['x-pack-core']
 }
 

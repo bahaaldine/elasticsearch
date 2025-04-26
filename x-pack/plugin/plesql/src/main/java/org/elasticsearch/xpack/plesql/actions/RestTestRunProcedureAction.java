@@ -1,3 +1,10 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
 package org.elasticsearch.xpack.plesql.actions;
 
 import org.elasticsearch.action.ActionListener;
@@ -21,28 +28,28 @@ import java.util.Map;
 import static org.elasticsearch.rest.RestRequest.Method.POST;
 
 /**
- * Example RestPlEsqlAction that handles an asynchronous PL|ESQL request.
+ * Example RestTestRunProcedureAction that handles an asynchronous PL|ESQL request.
  */
-public class RestPlEsqlAction extends BaseRestHandler {
+public class RestTestRunProcedureAction extends BaseRestHandler {
 
-    private static final Logger LOGGER = LogManager.getLogger(RestPlEsqlAction.class);
+    private static final Logger LOGGER = LogManager.getLogger(RestTestRunProcedureAction.class);
 
     private final PlEsqlExecutor plEsqlExecutor;
 
-    public RestPlEsqlAction(PlEsqlExecutor plEsqlExecutor) {
+    public RestTestRunProcedureAction(PlEsqlExecutor plEsqlExecutor) {
         this.plEsqlExecutor = plEsqlExecutor;
     }
 
     @Override
     public List<Route> routes() {
         return List.of(
-            Route.builder(POST, "/_query/plesql").build()
+            Route.builder(POST, "/_query/plesql/test").build()
         );
     }
 
     @Override
     public String getName() {
-        return "pl_esql_execute_procedure";
+        return "pl_esql_test_run_procedure";
     }
 
     @Override
@@ -70,6 +77,7 @@ public class RestPlEsqlAction extends BaseRestHandler {
 
         // parse 'plEsqlQuery' from body, etc.
         final String finalQuery = plEsqlQuery;
+        LOGGER.info("Running procedure " + finalQuery);
 
         return channel -> {
             // call the async method
@@ -77,7 +85,6 @@ public class RestPlEsqlAction extends BaseRestHandler {
                 @Override
                 public void onResponse(Object result) {
                     try {
-                        // Always log with placeholders
                         LOGGER.debug("Object instance type: {}", result.getClass().getName());
 
                         // If 'result' is a ReturnValue, extract the .getValue() from it

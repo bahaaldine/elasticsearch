@@ -4,7 +4,7 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-package org.elasticsearch.xpack.plesql.plugin;
+package org.elasticsearch.xpack.plesql;
 
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionResponse;
@@ -24,9 +24,12 @@ import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.rest.RestController;
 import org.elasticsearch.rest.RestHandler;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.plesql.actions.RestCreateProcedureAction;
+import org.elasticsearch.xpack.plesql.actions.RestDeleteProcedureAction;
+import org.elasticsearch.xpack.plesql.actions.RestRunProcedureByIdAction;
+import org.elasticsearch.xpack.plesql.actions.RestTestRunProcedureAction;
 import org.elasticsearch.xpack.plesql.executors.PlEsqlExecutor;
 import org.elasticsearch.xpack.plesql.actions.PlEsqlAction;
-import org.elasticsearch.xpack.plesql.actions.RestPlEsqlAction;
 import org.elasticsearch.xpack.plesql.actions.TransportPlEsqlAction;
 
 import java.util.Collection;
@@ -71,7 +74,10 @@ public class PlEsqlPlugin extends Plugin implements ActionPlugin {
         Predicate<NodeFeature> clusterSupportsFeature
     ) {
         return List.of(
-            new RestPlEsqlAction(plEsqlExecutor)
+            new RestTestRunProcedureAction(plEsqlExecutor),
+            new RestCreateProcedureAction(plEsqlExecutor),
+            new RestDeleteProcedureAction(plEsqlExecutor),
+            new RestRunProcedureByIdAction(plEsqlExecutor)
         );
     }
 

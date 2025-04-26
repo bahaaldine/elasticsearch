@@ -17,6 +17,8 @@ package org.elasticsearch.xpack.plesql.executors;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
+import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
 import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.injection.guice.Inject;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -35,9 +37,11 @@ import org.elasticsearch.xpack.plesql.primitives.procedure.ProcedureDefinition;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 import org.elasticsearch.xpack.plesql.visitors.ProcedureDefinitionVisitor;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 public class PlEsqlExecutor {
 
@@ -204,5 +208,72 @@ public class PlEsqlExecutor {
             return args;
         }
         return new ArrayList<>();
+    }
+
+    /**
+     * Asynchronously stores the procedure text into a dedicated Elasticsearch index.
+     *
+     * @param id            The document ID to use for the procedure.
+     * @param procedureText The procedure text to store.
+     * @param listener      The ActionListener to notify on completion or error.
+     */
+
+    public void storeProcedureAsync(String id, String procedureText, ActionListener<Object> listener) throws IOException {
+        String indexName = ".plesql_procedures";
+
+        GetIndexRequest request = new GetIndexRequest().indices(indexName);
+
+        client.admin().indices().getIndex(request, ActionListener.wrap(
+            getIndexResponse -> {
+                // If index exists, index the document
+                indexProcedureDocument(id, procedureText, listener);
+            },
+            error -> {
+                if (error.getMessage().contains("index_not_found_exception")) {
+                    // Index does not exist -> Create it
+                    CreateIndexRequest createRequest = new CreateIndexRequest(indexName);
+                    client.admin().indices().create(createRequest, ActionListener.wrap(
+                        createResponse -> {
+                            indexProcedureDocument(id, procedureText, listener);
+                        },
+                        listener::onFailure
+                    ));
+                } else {
+                    listener.onFailure(error);
+                }
+            }
+        ));
+    }
+
+    private void indexProcedureDocument(String id, String procedureText, ActionListener<Object> listener) {
+        client.prepareIndex(".plesql_procedures")
+            .setId(id)
+            .setSource(java.util.Map.of("procedure", procedureText))
+            .execute(ActionListener.wrap(
+                resp -> {
+                    Map<String, Object> resultMap = Map.of(
+                        "id", resp.getId(),
+                        "index", resp.getIndex(),
+                        "result", resp.getResult().getLowercase()
+                    );
+                    listener.onResponse(resultMap);
+                },
+                listener::onFailure
+            ));
+    }
+
+    public void deleteProcedureAsync(String id, ActionListener<Object> acknowledged) {
+        client.prepareDelete(".plesql_procedures", id)
+            .execute(ActionListener.wrap(
+                resp -> {
+                    Map<String, Object> resultMap = Map.of(
+                        "id", resp.getId(),
+                        "index", resp.getIndex(),
+                        "result", resp.getResult().getLowercase()
+                    );
+                    acknowledged.onResponse(resultMap);
+                },
+                acknowledged::onFailure
+            ));
     }
 }
