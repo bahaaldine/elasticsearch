@@ -1,4 +1,3 @@
-
 /*
  * Copyright Elasticsearch B.V.
  * under one or more contributor license agreements. Licensed under the Elastic
@@ -6,11 +5,12 @@
  * License 2.0.
  */
 
-package org.elasticsearch.xpack.plesql.primitives;
+package org.elasticsearch.xpack.plesql.context;
 
 import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
+import org.elasticsearch.xpack.plesql.primitives.VariableDefinition;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,6 +27,7 @@ public class ExecutionContext {
     private final Map<String, VariableDefinition> variables;
     private final Map<String, FunctionDefinition> functions;
     private final ExecutionContext parentContext;  // Reference to parent context
+    private Map<String, Object> procedureArguments;
 
     /**
      * Constructs a global ExecutionContext with no parent.
@@ -35,6 +36,7 @@ public class ExecutionContext {
         this.variables = new HashMap<>();
         this.functions = new HashMap<>();
         this.parentContext = null;
+        this.procedureArguments = new HashMap<>();
     }
 
     /**
@@ -46,6 +48,7 @@ public class ExecutionContext {
         this.variables = new HashMap<>();
         this.functions = new HashMap<>();
         this.parentContext = parentContext;
+        this.procedureArguments = new HashMap<>();
     }
 
     // -------------------------
@@ -336,5 +339,41 @@ public class ExecutionContext {
     public void clear() {
         variables.clear();
         functions.clear();
+    }
+
+    /**
+     * Sets the arguments passed to the procedure.
+     *
+     * @param args a Map of argument names to their values.
+     */
+    public void setProcedureArguments(Map<String, Object> args) {
+        this.procedureArguments.clear();
+        if (args != null) {
+            this.procedureArguments.putAll(args);
+        }
+    }
+
+    /**
+     * Retrieves the map of all procedure arguments.
+     *
+     * @return a Map of argument names to their values.
+     */
+    public Map<String, Object> getProcedureArguments() {
+        return Collections.unmodifiableMap(procedureArguments);
+    }
+
+    /**
+     * Retrieves a single argument by name.
+     *
+     * @param name the name of the argument.
+     * @return the argument value.
+     * @throws RuntimeException if the argument is not found.
+     */
+    public Object getArgumentValue(String name) {
+        if (procedureArguments.containsKey(name)) {
+            return procedureArguments.get(name);
+        } else {
+            throw new RuntimeException("Argument '" + name + "' is not defined for the procedure.");
+        }
     }
 }

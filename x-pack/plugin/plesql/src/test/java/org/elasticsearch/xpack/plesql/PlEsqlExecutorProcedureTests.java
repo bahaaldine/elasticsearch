@@ -18,7 +18,7 @@ import org.elasticsearch.xpack.plesql.handlers.ProcedureCallHandler;
 import org.elasticsearch.xpack.plesql.visitors.ProcedureDefinitionVisitor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.ArrayBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.DateBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.NumberBuiltInFunctions;

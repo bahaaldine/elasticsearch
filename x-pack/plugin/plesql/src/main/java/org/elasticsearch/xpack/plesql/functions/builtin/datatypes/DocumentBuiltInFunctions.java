@@ -13,7 +13,7 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,7 +55,7 @@ import java.util.Map;
  *   DocumentBuiltInFunctions.registerAll(context);
  * </pre>
  *
- * @see org.elasticsearch.xpack.plesql.primitives.ExecutionContext
+ * @see ExecutionContext
  * @see BuiltInFunctionDefinition
  * @see org.elasticsearch.xpack.plesql.functions.Parameter
  * @see org.elasticsearch.xpack.plesql.functions.ParameterMode

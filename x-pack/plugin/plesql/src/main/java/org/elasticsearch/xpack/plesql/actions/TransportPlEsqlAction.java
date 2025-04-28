@@ -35,7 +35,7 @@ public class TransportPlEsqlAction extends HandledTransportAction<PlEsqlQueryReq
 
     @Override
     protected void doExecute(Task task, PlEsqlQueryRequest request, ActionListener<PlEsqlQueryResponse> listener) {
-        plEsqlExecutor.executeProcedure(request.getQuery(), new ActionListener<>() {
+        plEsqlExecutor.executeProcedure(request.getQuery(), request.getArguments(), new ActionListener<>() {
             @Override
             public void onResponse(Object result) {
 
@@ -46,8 +46,7 @@ public class TransportPlEsqlAction extends HandledTransportAction<PlEsqlQueryReq
                     finalValue = ((ReturnValue) result).getValue();
                 }
 
-                // Build response with local constructor (no IO thrown)
-                PlEsqlQueryResponse response = new PlEsqlQueryResponse(finalValue.toString(), RestStatus.OK);
+                PlEsqlQueryResponse response = new PlEsqlQueryResponse(finalValue == null ? null : finalValue.toString(), RestStatus.OK);
                 listener.onResponse(response);
             }
 

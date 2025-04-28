@@ -23,7 +23,7 @@ import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
 import org.junit.Test;
 

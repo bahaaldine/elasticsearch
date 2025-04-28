@@ -19,6 +19,7 @@ import org.elasticsearch.rest.RestResponse;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.xcontent.XContentBuilder;
 import org.elasticsearch.xcontent.XContentFactory;
+import org.elasticsearch.xcontent.XContentParser;
 import org.elasticsearch.xpack.plesql.executors.PlEsqlExecutor;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 
@@ -60,15 +61,26 @@ public class RestRunProcedureByIdAction extends BaseRestHandler {
             throw new IllegalArgumentException("Procedure ID must be provided in the URL path");
         }
 
-        LOGGER.info("Fetching procedure with ID: " + procedureId);
+        LOGGER.info("Fetching procedure with ID: {}", procedureId);
+
+        // Parse request body as a Map if present
+        Map<String, Object> procedureArgs = Map.of();
+        if (request.hasContentOrSourceParam()) {
+            try (XContentParser parser = request.contentParser()) {
+                procedureArgs = parser.map();
+            }
+        }
+
+        Map<String, Object> finalProcedureArgs = procedureArgs; // because of lambda scope
+
+        LOGGER.info("Procedure arguments {}", finalProcedureArgs);
 
         GetRequest getRequest = new GetRequest(".plesql_procedures", procedureId);
 
         return channel -> client.get(getRequest, new ActionListener<>() {
             @Override
             public void onResponse(GetResponse getResponse) {
-                if ( getResponse.isExists() == false ) {
-                    LOGGER.warn("Procedure [{}] does not exist", procedureId);
+                if (getResponse.isExists() == false) {
                     try {
                         XContentBuilder builder = XContentFactory.jsonBuilder();
                         builder.startObject()
@@ -84,7 +96,6 @@ public class RestRunProcedureByIdAction extends BaseRestHandler {
                 Map<String, Object> source = getResponse.getSourceAsMap();
                 Object procedureContentObj = source.get("procedure");
                 if (procedureContentObj == null) {
-                    LOGGER.warn("Procedure content missing for ID [{}]", procedureId);
                     try {
                         XContentBuilder builder = XContentFactory.jsonBuilder();
                         builder.startObject()
@@ -100,39 +111,18 @@ public class RestRunProcedureByIdAction extends BaseRestHandler {
                 String procedureContent = procedureContentObj.toString();
                 LOGGER.info("Executing procedure [{}]: {}", procedureId, procedureContent);
 
-                plEsqlExecutor.executeProcedure(procedureContent, new ActionListener<>() {
+                plEsqlExecutor.executeProcedure(procedureContent, finalProcedureArgs, new ActionListener<>() {
                     @Override
                     public void onResponse(Object result) {
                         try {
-                            LOGGER.debug("Object instance type: {}", result.getClass().getName());
-
-                            Object finalValue = result;
-                            if (result instanceof ReturnValue) {
-                                LOGGER.debug("This is a ReturnValue, extracting getValue()");
-                                finalValue = ((ReturnValue) result).getValue();
-                            }
-
-                            LOGGER.debug("Actual finalValue after extraction: {}", finalValue);
+                            Object finalValue = (result instanceof ReturnValue) ? ((ReturnValue) result).getValue() : result;
 
                             XContentBuilder builder = XContentFactory.jsonBuilder();
                             builder.startObject();
-
-                            if (finalValue == null) {
-                                builder.nullField("result");
-                            } else if (finalValue instanceof String) {
-                                builder.field("result", (String) finalValue);
-                            } else if (finalValue instanceof Map) {
-                                builder.field("result", finalValue);
-                            } else if (finalValue instanceof List) {
-                                builder.field("result", finalValue);
-                            } else {
-                                builder.field("result", finalValue.toString());
-                            }
-
+                            builder.field("result", finalValue);
                             builder.endObject();
 
                             channel.sendResponse(new RestResponse(RestStatus.OK, builder));
-
                         } catch (Exception e) {
                             channel.sendResponse(new RestResponse(RestStatus.INTERNAL_SERVER_ERROR, e.getMessage()));
                         }
@@ -147,7 +137,6 @@ public class RestRunProcedureByIdAction extends BaseRestHandler {
 
             @Override
             public void onFailure(Exception e) {
-                LOGGER.error("Failed to fetch procedure [{}]: {}", procedureId, e.getMessage());
                 channel.sendResponse(new RestResponse(RestStatus.INTERNAL_SERVER_ERROR, e.getMessage()));
             }
         });

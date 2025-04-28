@@ -28,7 +28,7 @@ import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.NumberBuiltInF
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import org.junit.Test;
 

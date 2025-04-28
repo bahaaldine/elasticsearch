@@ -28,7 +28,7 @@ import org.elasticsearch.xpack.core.esql.action.EsqlQueryResponse;
 import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.core.esql.action.ColumnInfo;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 import org.elasticsearch.xpack.plesql.utils.PersistUtil;
 

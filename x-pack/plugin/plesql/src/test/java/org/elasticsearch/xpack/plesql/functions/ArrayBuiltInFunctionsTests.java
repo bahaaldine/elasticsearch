@@ -21,7 +21,7 @@ import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.junit.Test;
 
 import java.util.Arrays;

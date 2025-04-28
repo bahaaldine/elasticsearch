@@ -14,7 +14,7 @@ import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 
 import java.util.List;
 import java.util.Map;

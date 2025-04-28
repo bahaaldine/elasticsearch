@@ -1,11 +1,4 @@
 /*
- * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0; you may not use this file except in compliance with the Elastic License
- * 2.0.
- */
-
-/*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V.
  * under one or more contributor license agreements. Licensed under
  * the Elastic License 2.0; you may not use this file except in compliance
@@ -18,6 +11,8 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.client.internal.Client;
+import org.elasticsearch.logging.LogManager;
+import org.elasticsearch.logging.Logger;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.evaluators.ExpressionEvaluator;
 import org.elasticsearch.xpack.plesql.exceptions.BreakException;
@@ -32,14 +27,13 @@ import org.elasticsearch.xpack.plesql.handlers.ThrowStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.TryCatchStatementHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureBaseVisitor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-
 /**
  * The ProcedureExecutor class is responsible for executing parsed procedural SQL statements.
  * It extends the PlEsqlProcedureBaseVisitor to traverse the parse tree and execute corresponding actions.
@@ -47,6 +41,8 @@ import java.util.List;
  * Note that expression evaluation has been refactored into a dedicated ExpressionEvaluator.
  */
 public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
+
+    private static final Logger LOGGER = LogManager.getLogger(ProcedureExecutor.class);
 
     private ExecutionContext context;
     private final ThreadPool threadPool;
@@ -142,40 +138,10 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     }
 
     /**
-     * Synchronously visits the entire procedure.
-     * Since execution is asynchronous, this method returns immediately.
-     *
-     * @param ctx The ProcedureContext representing the entire procedure.
-     * @return null (execution is asynchronous).
-     */
-    @Override
-    public Object visitProcedure(PlEsqlProcedureParser.ProcedureContext ctx) {
-        ActionListener<Object> visitProcedureListener = new ActionListener<Object>() {
-            @Override
-            public void onResponse(Object result) {
-                // Execution completed successfully.
-            }
-            @Override
-            public void onFailure(Exception e) {
-                // Handle execution error.
-            }
-        };
-
-        ActionListener<Object> visitProcedureLogger = ActionListenerUtils.withLogging(
-            visitProcedureListener,
-            this.getClass().getName(),
-            "Visit-Procedure: " + ctx.getText()
-        );
-
-        visitProcedureAsync(ctx, visitProcedureLogger);
-        return null; // Return immediately as execution is asynchronous.
-    }
-
-    /**
      * Initiates asynchronous execution of the procedure.
+     * Accepts optional arguments to bind to procedure parameters.
      */
-    private void executeProcedureAsync(PlEsqlProcedureParser.ProcedureContext ctx, ActionListener<Object> listener) {
-        // Execute statements asynchronously.
+    public void executeProcedureAsync(PlEsqlProcedureParser.ProcedureContext ctx, ActionListener<Object> listener) {
         executeStatementsAsync(ctx.statement(), 0, listener);
     }
 
@@ -224,6 +190,9 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
      * @param listener The ActionListener for asynchronous callbacks.
      */
     public void visitStatementAsync(PlEsqlProcedureParser.StatementContext ctx, ActionListener<Object> listener) {
+
+        LOGGER.info("Context statement {}", ctx.getText() );
+
         if (ctx.declare_statement() != null) {
             declareHandler.handleAsync(ctx.declare_statement(), listener);
         } else if (ctx.assignment_statement() != null) {

@@ -9,8 +9,6 @@ package org.elasticsearch.xpack.plesql.primitives;
 
 public enum PLESQLDataType {
     INT,
-    FLOAT,
-    DOUBLE,
     STRING,
     DATE,
     NUMBER,

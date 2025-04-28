@@ -11,9 +11,7 @@ import org.elasticsearch.client.Request;
 import org.elasticsearch.client.Response;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
-import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.common.bytes.BytesArray;
-import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.rest.RestStatus;
@@ -22,7 +20,6 @@ import org.elasticsearch.xcontent.XContentType;
 import org.elasticsearch.xpack.esql.plugin.EsqlPlugin;
 import org.junit.Test;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -153,7 +150,7 @@ public class PlEsqlRestApiIntegrationTests extends ESIntegTestCase {
         String procedureId = "test_proc_run_by_id";
         String procedureBody = """
             {
-              "procedure": "PROCEDURE testRunById() BEGIN RETURN 'executed'; END PROCEDURE"
+              "procedure": "PROCEDURE testRunById(p1 STRING) BEGIN RETURN p1; END PROCEDURE"
             }
             """;
 
@@ -163,8 +160,16 @@ public class PlEsqlRestApiIntegrationTests extends ESIntegTestCase {
         Response putResponse = restClient.performRequest(putRequest);
         assertEquals(RestStatus.OK.getStatus(), putResponse.getStatusLine().getStatusCode());
 
-        // Then, execute the procedure by ID
+        // Then, execute the procedure by ID with parameters
+        String execRequestBody = """
+            {
+              "params": {
+                "p1": "executed"
+              }
+            }
+            """;
         Request execRequest = new Request("POST", "/_query/plesql/procedure/" + procedureId + "/_execute");
+        execRequest.setJsonEntity(execRequestBody);
         Response execResponse = restClient.performRequest(execRequest);
 
         assertEquals(RestStatus.OK.getStatus(), execResponse.getStatusLine().getStatusCode());
@@ -175,5 +180,102 @@ public class PlEsqlRestApiIntegrationTests extends ESIntegTestCase {
             new BytesArray(execResponse.getEntity().getContent().readAllBytes()), true, XContentType.JSON
         ).v2();
         assertEquals("executed", responseMap.get("result"));
+    }
+
+    @Test
+    public void testRunProcedureByIdWithMultipleParams() throws Exception {
+        RestClientBuilder builder = RestClient.builder(
+            new HttpHost("localhost", Integer.parseInt(System.getProperty("tests.rest.cluster.port", "9200")), "http")
+        );
+        restClient = builder.build();
+
+        assertNotNull("RestClient must not be null", restClient);
+
+        String procedureId = "test_proc_sum";
+        String procedureBody = """
+        {
+          "procedure": "PROCEDURE addNumbers(a NUMBER, b NUMBER) BEGIN RETURN a + b; END PROCEDURE"
+        }
+        """;
+
+        // Store the procedure
+        Request putRequest = new Request("PUT", "/_query/plesql/procedure/" + procedureId);
+        putRequest.setJsonEntity(procedureBody);
+        Response putResponse = restClient.performRequest(putRequest);
+        assertEquals(RestStatus.OK.getStatus(), putResponse.getStatusLine().getStatusCode());
+
+        // Execute the procedure by ID with two parameters
+        String execRequestBody = """
+        {
+          "params": {
+            "a": 7,
+            "b": 5
+          }
+        }
+        """;
+        Request execRequest = new Request("POST", "/_query/plesql/procedure/" + procedureId + "/_execute");
+        execRequest.setJsonEntity(execRequestBody);
+        Response execResponse = restClient.performRequest(execRequest);
+
+        assertEquals(RestStatus.OK.getStatus(), execResponse.getStatusLine().getStatusCode());
+        assertNotNull("Execution response should not be null", execResponse);
+        assertEquals("/_query/plesql/procedure/" + procedureId + "/_execute", execResponse.getRequestLine().getUri());
+
+        Map<String, Object> responseMap = XContentHelper.convertToMap(
+            new BytesArray(execResponse.getEntity().getContent().readAllBytes()), true, XContentType.JSON
+        ).v2();
+        assertEquals(12, ((Number) responseMap.get("result")).intValue());
+    }
+
+    @Test
+    public void testRunProcedureByIdWithDocumentsAndLoop() throws Exception {
+        RestClientBuilder builder = RestClient.builder(
+            new HttpHost("localhost",
+                Integer.parseInt(System.getProperty("tests.rest.cluster.port", "9200")), "http")
+        );
+        restClient = builder.build();
+
+        assertNotNull("RestClient must not be null", restClient);
+
+        String procedureId = "test_proc_sum_high_scores";
+        String procedureBody = """
+        {
+          "procedure": "PROCEDURE sumHighScores(scores ARRAY OF DOCUMENT) BEGIN DECLARE total NUMBER = 0; FOR doc IN scores LOOP IF doc['score'] > 5 THEN SET total = total + doc['score']; END IF; END LOOP; RETURN total; END PROCEDURE"
+        }
+        """;
+
+        // Store the procedure
+        Request putRequest = new Request("PUT", "/_query/plesql/procedure/" + procedureId);
+        putRequest.setJsonEntity(procedureBody);
+        Response putResponse = restClient.performRequest(putRequest);
+        assertEquals(RestStatus.OK.getStatus(), putResponse.getStatusLine().getStatusCode());
+
+        // Now execute with some scores
+        String execRequestBody = """
+        {
+          "params": {
+            "scores": [
+              {"score": 3},
+              {"score": 7},
+              {"score": 9},
+              {"score": 4},
+              {"score": 10}
+            ]
+          }
+        }
+        """;
+        Request execRequest = new Request("POST", "/_query/plesql/procedure/" + procedureId + "/_execute");
+        execRequest.setJsonEntity(execRequestBody);
+        Response execResponse = restClient.performRequest(execRequest);
+
+        assertEquals(RestStatus.OK.getStatus(), execResponse.getStatusLine().getStatusCode());
+        assertNotNull("Execution response should not be null", execResponse);
+
+        Map<String, Object> responseMap = XContentHelper.convertToMap(
+            new BytesArray(execResponse.getEntity().getContent().readAllBytes()), true, XContentType.JSON
+        ).v2();
+
+        // Only scores > 5 are summed: 7 + 9 + 10 = 26
+        assertEquals(26, ((Number) responseMap.get("result")).intValue());
     }
 }

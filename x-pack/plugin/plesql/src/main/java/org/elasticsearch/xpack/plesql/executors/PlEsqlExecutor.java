@@ -1,11 +1,4 @@
 /*
- * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0; you may not use this file except in compliance with the Elastic License
- * 2.0.
- */
-
-/*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V.
  * under one or more contributor license agreements. Licensed under
  * the Elastic License 2.0; you may not use this file except in compliance
@@ -21,14 +14,17 @@ import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
 import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.injection.guice.Inject;
+import org.elasticsearch.logging.LogManager;
+import org.elasticsearch.logging.Logger;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.plesql.actions.RestRunProcedureByIdAction;
 import org.elasticsearch.xpack.plesql.functions.builtin.datasources.ESFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datasources.EsqlBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
 import org.elasticsearch.xpack.plesql.handlers.ProcedureCallHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.ArrayBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.DateBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.NumberBuiltInFunctions;
@@ -39,7 +35,6 @@ import org.elasticsearch.xpack.plesql.visitors.ProcedureDefinitionVisitor;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -47,6 +42,8 @@ public class PlEsqlExecutor {
 
     private final ThreadPool threadPool;
     private final Client client;
+
+    private static final Logger LOGGER = LogManager.getLogger(PlEsqlExecutor.class);
 
     @Inject
     public PlEsqlExecutor(ThreadPool threadPool, Client client) {
@@ -69,10 +66,10 @@ public class PlEsqlExecutor {
      * @param procedureText The PLESQL procedure text.
      * @param listener      The ActionListener to notify when execution is complete.
      */
-    public void executeProcedure(String procedureText, ActionListener<Object> listener) {
+    public void executeProcedure(String procedureText, Map<String, Object> args, ActionListener<Object> listener) {
         threadPool.generic().execute(() -> {
             try {
-                // 1. Parse the procedure block using the 'procedure' rule.
+                // 1. Parse the procedure
                 PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(procedureText));
                 CommonTokenStream tokens = new CommonTokenStream(lexer);
                 PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
@@ -80,61 +77,68 @@ public class PlEsqlExecutor {
                 parser.addErrorListener(new PlEsqlErrorListener());
                 PlEsqlProcedureParser.ProcedureContext procCtx = parser.procedure();
 
-                // 2. Create a fresh global ExecutionContext.
+                // 2. Create a fresh global ExecutionContext
                 ExecutionContext executionContext = new ExecutionContext();
 
-                // 3. Register built-in functions.
+                List<PlEsqlProcedureParser.ParameterContext> parameterContexts =
+                    procCtx.parameter_list() != null ? procCtx.parameter_list().parameter() : List.of();
+
+                if (parameterContexts.isEmpty() == false) {
+                    if (args == null) {
+                        throw new IllegalArgumentException("Procedure expects arguments but none were provided");
+                    }
+                    if (parameterContexts.size() != ((Map<?, ?>) args.get("params")).size()) {
+                        throw new IllegalArgumentException("Mismatch between declared parameters and provided arguments");
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> params = (Map<String, Object>) args.get("params");
+
+                    for (var param : parameterContexts) {
+                        String paramName = param.ID().getText();
+                        String paramType = param.datatype().getText().toUpperCase(java.util.Locale.ROOT);
+                        Object value = params.get(paramName);
+                        executionContext.declareVariable(paramName, paramType);
+                        executionContext.setVariable(paramName, value);
+                    }
+                }
+
+                // 3. Register built-in functions
                 StringBuiltInFunctions.registerAll(executionContext);
                 NumberBuiltInFunctions.registerAll(executionContext);
                 ArrayBuiltInFunctions.registerAll(executionContext);
                 DateBuiltInFunctions.registerAll(executionContext);
 
-                // 4. Visit the procedure block to find and register procedure definitions.
+                // 4. Visit procedure block to register procedure definitions
                 ProcedureDefinitionVisitor procDefVisitor = new ProcedureDefinitionVisitor(executionContext);
                 for (PlEsqlProcedureParser.StatementContext stmtCtx : procCtx.statement()) {
-                    // If the statement is a procedure definition, its first token is "PROCEDURE".
                     if (stmtCtx.getChildCount() > 0 && "PROCEDURE".equalsIgnoreCase(stmtCtx.getChild(0).getText())) {
                         procDefVisitor.visit(stmtCtx);
                     }
                 }
 
-                // 5. Preprocess the procedure block to update the context for any procedure calls.
-                // Here we iterate through all statements and for any that are procedure calls,
-                // we synchronously process them using the ProcedureCallHandler.
-                ProcedureCallHandler procCallHandler = new ProcedureCallHandler(new ProcedureExecutor(executionContext,
-                    threadPool, client, tokens));
+                // 5. Preprocess procedure block for procedure calls
+                ProcedureCallHandler procCallHandler = new ProcedureCallHandler(
+                    new ProcedureExecutor(executionContext, threadPool, client, tokens));
                 List<PlEsqlProcedureParser.StatementContext> executableStatements = new ArrayList<>();
-                for (Iterator<PlEsqlProcedureParser.StatementContext> it = procCtx.statement().iterator(); it.hasNext(); ) {
-                    PlEsqlProcedureParser.StatementContext stmt = it.next();
+                for (var stmt : procCtx.statement()) {
                     if (isProcedureCall(stmt, executionContext)) {
-                        // Extract the procedure call details (procedure name, arguments) and process it.
-                        // Here we call a synchronous version of the procedure call handler.
                         procCallHandler.executeProcedureCallAsync(
-                            // This handler method should use your handler signature:
-                            // (String procedureName, List<Object> arguments, ActionListener<Void> listener)
                             extractProcedureName(stmt),
                             extractProcedureArguments(stmt),
-                            new ActionListener<Void>() {
-                                @Override
-                                public void onResponse(Void aVoid) {
-                                    // Successfully updated the global context.
-                                }
-                                @Override
-                                public void onFailure(Exception e) {
-                                    // Log or handle error if needed.
-                                }
-                            }
+                            ActionListener.wrap(
+                                v -> {},
+                                e -> {}
+                            )
                         );
-                        // Optionally, do not include this statement in executableStatements.
                     } else {
                         executableStatements.add(stmt);
                     }
                 }
-                // Replace the statement list in procCtx with only executable statements.
                 procCtx.statement().clear();
                 procCtx.statement().addAll(executableStatements);
 
-                // 6. Create a ProcedureExecutor with the updated global context.
+                // 6. Register additional built-in functions (Esql, ESFunctions)
                 ProcedureExecutor procedureExecutor = new ProcedureExecutor(executionContext, threadPool, client, tokens);
                 EsqlBuiltInFunctions.registerAll(executionContext, procedureExecutor, client);
                 ESFunctions.registerGetDocumentFunction(executionContext, client);
@@ -143,10 +147,11 @@ public class PlEsqlExecutor {
                 ESFunctions.registerIndexDocumentFunction(executionContext, client);
                 ESFunctions.registerRefreshIndexFunction(executionContext, client);
 
-                // 7. Set up a logging listener.
+                // 7. Set up logging listener
                 ActionListener<Object> execListener = ActionListenerUtils.withLogging(listener,
                     this.getClass().getName(), "ExecutePLESQLProcedure-" + procedureText);
-                // 8. Execute the procedure block asynchronously.
+
+                // 8. Execute the procedure asynchronously
                 procedureExecutor.visitProcedureAsync(procCtx, execListener);
 
             } catch (Exception e) {
@@ -221,20 +226,34 @@ public class PlEsqlExecutor {
     public void storeProcedureAsync(String id, String procedureText, ActionListener<Object> listener) throws IOException {
         String indexName = ".plesql_procedures";
 
-        GetIndexRequest request = new GetIndexRequest().indices(indexName);
+        // Parse the procedure to extract parameters
+        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(procedureText));
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
+        parser.removeErrorListeners();
+        parser.addErrorListener(new PlEsqlErrorListener());
+        PlEsqlProcedureParser.ProcedureContext procCtx = parser.procedure();
 
+        List<Map<String, Object>> parameters = new ArrayList<>();
+        if (procCtx != null && procCtx.parameter_list() != null) {
+            for (var paramCtx : procCtx.parameter_list().parameter()) {
+                String paramName = paramCtx.ID().getText();
+                String paramType = paramCtx.datatype().getText().toUpperCase();
+                parameters.add(Map.of("name", paramName, "type", paramType));
+            }
+        }
+
+        GetIndexRequest request = new GetIndexRequest().indices(indexName);
         client.admin().indices().getIndex(request, ActionListener.wrap(
             getIndexResponse -> {
-                // If index exists, index the document
-                indexProcedureDocument(id, procedureText, listener);
+                indexProcedureDocument(id, procedureText, parameters, listener);
             },
             error -> {
                 if (error.getMessage().contains("index_not_found_exception")) {
-                    // Index does not exist -> Create it
                     CreateIndexRequest createRequest = new CreateIndexRequest(indexName);
                     client.admin().indices().create(createRequest, ActionListener.wrap(
                         createResponse -> {
-                            indexProcedureDocument(id, procedureText, listener);
+                            indexProcedureDocument(id, procedureText, parameters, listener);
                         },
                         listener::onFailure
                     ));
@@ -245,10 +264,14 @@ public class PlEsqlExecutor {
         ));
     }
 
-    private void indexProcedureDocument(String id, String procedureText, ActionListener<Object> listener) {
+    private void indexProcedureDocument(String id, String procedureText, List<Map<String,
+        Object>> parameters, ActionListener<Object> listener) {
         client.prepareIndex(".plesql_procedures")
             .setId(id)
-            .setSource(java.util.Map.of("procedure", procedureText))
+            .setSource(Map.of(
+                "procedure", procedureText,
+                "parameters", parameters
+            ))
             .execute(ActionListener.wrap(
                 resp -> {
                     Map<String, Object> resultMap = Map.of(

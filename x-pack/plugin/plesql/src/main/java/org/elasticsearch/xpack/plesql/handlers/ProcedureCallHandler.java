@@ -9,7 +9,7 @@ package org.elasticsearch.xpack.plesql.handlers;
 
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.primitives.procedure.ProcedureDefinition;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
@@ -38,13 +38,13 @@ public class ProcedureCallHandler {
         // Retrieve the procedure definition (assumed to be stored as a ProcedureDefinition).
         ProcedureDefinition procDef = (ProcedureDefinition) executor.getContext().getFunction(procedureName);
         if (procDef == null) {
-            listener.onFailure(new RuntimeException("Procedure '" + procedureName + "' is not defined."));
+            listener.onFailure(new IllegalArgumentException("Procedure '" + procedureName + "' is not defined."));
             return;
         }
 
         List<Parameter> parameters = procDef.getParameters();
         if (parameters.size() != arguments.size()) {
-            listener.onFailure(new RuntimeException("Procedure '" + procedureName + "' expects " + parameters.size() +
+            listener.onFailure(new IllegalArgumentException("Procedure '" + procedureName + "' expects " + parameters.size() +
                 " arguments, but " + arguments.size() + " were provided."));
             return;
         }
@@ -63,7 +63,7 @@ public class ProcedureCallHandler {
 
             // Validate the argument type.
             if ( isArgumentTypeCompatible(paramType, argValue) == false ) {
-                listener.onFailure(new RuntimeException("Type mismatch for parameter '" + paramName +
+                listener.onFailure(new IllegalArgumentException("Type mismatch for parameter '" + paramName +
                         "'. Expected '" + paramType + "', but got '" +
                         (argValue != null ? argValue.getClass().getSimpleName() : "null") + "'."));
                 return;
@@ -153,7 +153,12 @@ public class ProcedureCallHandler {
                 return value instanceof Number;
             case "STRING":
                 return value instanceof String;
-            // Extend for other types such as DATE, DOCUMENT, ARRAY, etc.
+            case "DATE":
+                return value instanceof java.time.Instant;
+            case "DOCUMENT":
+                return value instanceof java.util.Map;
+            case "ARRAY":
+                return value instanceof java.util.List;
             default:
                 return false;
         }

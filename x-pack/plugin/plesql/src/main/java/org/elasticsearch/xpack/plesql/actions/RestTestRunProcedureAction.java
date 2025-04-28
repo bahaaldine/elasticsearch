@@ -24,6 +24,7 @@ import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 import static org.elasticsearch.rest.RestRequest.Method.POST;
 
@@ -60,13 +61,18 @@ public class RestTestRunProcedureAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         String plEsqlQuery = null;
+        Map<String, Object> args = null;
 
         XContentParser.Token token = parser.nextToken();
         while (token != null) {
-            if ( token == XContentParser.Token.FIELD_NAME && "query".equals(parser.currentName()) ) {
+            if (token == XContentParser.Token.FIELD_NAME) {
+                String fieldName = parser.currentName();
                 parser.nextToken();
-                plEsqlQuery = parser.text();
-                break;
+                if ("query".equals(fieldName)) {
+                    plEsqlQuery = parser.text();
+                } else if ("args".equals(fieldName)) {
+                    args = parser.map();
+                }
             }
             token = parser.nextToken();
         }
@@ -75,13 +81,17 @@ public class RestTestRunProcedureAction extends BaseRestHandler {
             throw new IllegalArgumentException("Field [query] must be provided in the body");
         }
 
-        // parse 'plEsqlQuery' from body, etc.
+        if (args == null) {
+            args = new HashMap<>();
+        }
+
         final String finalQuery = plEsqlQuery;
-        LOGGER.info("Running procedure " + finalQuery);
+        final Map<String, Object> finalArgs = args;
+        LOGGER.info("Running procedure {}, with args {}", finalQuery, finalArgs);
 
         return channel -> {
             // call the async method
-            plEsqlExecutor.executeProcedure(finalQuery, new ActionListener<>() {
+            plEsqlExecutor.executeProcedure(finalQuery, finalArgs, new ActionListener<>() {
                 @Override
                 public void onResponse(Object result) {
                     try {

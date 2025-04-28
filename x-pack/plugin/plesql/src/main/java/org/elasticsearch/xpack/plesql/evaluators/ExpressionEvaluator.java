@@ -15,7 +15,7 @@ import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.operators.primitives.BinaryOperatorHandler;
 import org.elasticsearch.xpack.plesql.operators.OperatorHandlerRegistry;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
-import org.elasticsearch.xpack.plesql.primitives.ExecutionContext;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
@@ -408,6 +408,8 @@ public class ExpressionEvaluator {
                 listener.onFailure(e);
             }
         };
+
+        LOGGER.info("Evaluating primary expression for {} ", ctx.getText());
 
         if (ctx.simplePrimaryExpression().LPAREN() != null && ctx.simplePrimaryExpression().RPAREN() != null) {
             evaluateExpressionAsync(ctx.simplePrimaryExpression().expression(), processResult);
