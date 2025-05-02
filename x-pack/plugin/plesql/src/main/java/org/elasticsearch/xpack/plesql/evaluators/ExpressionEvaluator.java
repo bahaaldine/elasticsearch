@@ -413,12 +413,15 @@ public class ExpressionEvaluator {
 
         if (ctx.simplePrimaryExpression().LPAREN() != null && ctx.simplePrimaryExpression().RPAREN() != null) {
             evaluateExpressionAsync(ctx.simplePrimaryExpression().expression(), processResult);
-        } else if (ctx.simplePrimaryExpression().function_call() != null) {
+        } else if (ctx.simplePrimaryExpression().call_procedure_statement() != null) {
+            // Delegate function call evaluation to the executor's function call handler.
+            executor.visitCallProcedureAsync(ctx.simplePrimaryExpression().call_procedure_statement(), processResult);
+        }  else if (ctx.simplePrimaryExpression().function_call() != null) {
             // Delegate function call evaluation to the executor's function call handler.
             executor.visitFunctionCallAsync(ctx.simplePrimaryExpression().function_call(), processResult);
         } else if (ctx.simplePrimaryExpression().INT() != null) {
             try {
-                processResult.onResponse(Double.valueOf(ctx.simplePrimaryExpression().INT().getText()));
+                processResult.onResponse(Integer.valueOf(ctx.simplePrimaryExpression().INT().getText()));
             } catch (NumberFormatException e) {
                 listener.onFailure(new RuntimeException("Invalid integer literal: " + ctx.simplePrimaryExpression().INT().getText()));
             }

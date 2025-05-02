@@ -7,16 +7,22 @@
 
 package org.elasticsearch.xpack.plesql.executors;
 
+import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.get.GetRequest;
+import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.logging.LogManager;
 import org.elasticsearch.logging.Logger;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.evaluators.ExpressionEvaluator;
 import org.elasticsearch.xpack.plesql.exceptions.BreakException;
+import org.elasticsearch.xpack.plesql.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.ParameterMode;
 import org.elasticsearch.xpack.plesql.handlers.AssignmentStatementHandler;
+import org.elasticsearch.xpack.plesql.handlers.CallProcedureStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.DeclareStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.ExecuteStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.FunctionDefinitionHandler;
@@ -26,14 +32,18 @@ import org.elasticsearch.xpack.plesql.handlers.PrintStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.ThrowStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.TryCatchStatementHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureBaseVisitor;
+import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
+import org.elasticsearch.xpack.plesql.procedure.StoredProcedureDefinition;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
 /**
  * The ProcedureExecutor class is responsible for executing parsed procedural SQL statements.
  * It extends the PlEsqlProcedureBaseVisitor to traverse the parse tree and execute corresponding actions.
@@ -57,6 +67,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     private final ThrowStatementHandler throwHandler;
     private final ExecuteStatementHandler executeHandler;
     private final PrintStatementHandler printStatementHandler;
+    private final CallProcedureStatementHandler callProcedureStatementHandler;
+    private final Client client;
 
     private final CommonTokenStream tokenStream;
 
@@ -84,9 +96,11 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         this.tryCatchHandler = new TryCatchStatementHandler(this);
         this.throwHandler = new ThrowStatementHandler(this);
         this.printStatementHandler = new PrintStatementHandler(this);
+        this.callProcedureStatementHandler = new CallProcedureStatementHandler(this);
         this.tokenStream = tokenStream;
         // Initialize ExpressionEvaluator with this executor instance.
         this.expressionEvaluator = new ExpressionEvaluator(this);
+        this.client = client;
     }
 
     /**
@@ -211,6 +225,8 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
             executeHandler.handleAsync(ctx.execute_statement(), listener);
         } else if (ctx.print_statement() != null) {
             printStatementHandler.execute(ctx.print_statement(), listener);
+        }  else if (ctx.call_procedure_statement() != null) {
+            callProcedureStatementHandler.handleAsync(ctx.call_procedure_statement(), listener);
         } else if (ctx.return_statement() != null) {
             visitReturn_statementAsync(ctx.return_statement(), listener);
         } else if (ctx.break_statement() != null) {
@@ -367,6 +383,41 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         evaluateArgumentsAsync(argContexts, funcCallLogger);
     }
 
+    public void visitCallProcedureAsync(PlEsqlProcedureParser.Call_procedure_statementContext ctx, ActionListener<Object> listener) {
+
+        ActionListener<Object> callProcedureListener = new ActionListener<Object>() {
+            @Override
+            public void onResponse(Object result) {
+                listener.onResponse(result);
+            }
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        };
+
+        ActionListener<Object> callProcedureLogger = ActionListenerUtils.withLogging(callProcedureListener, this.getClass().getName(),
+            "Call-Procedure: " + ctx.getText() );
+
+        callProcedureStatementHandler.handleAsync(ctx, callProcedureLogger);
+    }
+
+    /**
+     * Get the procedure executor client
+     * @return Client
+     */
+    public Client getClient() {
+        return this.client;
+    }
+
+    /**
+     * Get the token stream
+     * @return CommonTokenStream
+     */
+    public CommonTokenStream getTokenStream() {
+        return this.tokenStream;
+    }
+
     /**
      * Evaluates a list of arguments asynchronously.
      *
@@ -420,5 +471,49 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
      */
     private void executeAsync(Runnable runnable) {
         threadPool.generic().execute(runnable);
+    }
+
+    public void getProcedureAsync(String procedureName, ActionListener<FunctionDefinition> listener) {
+        GetRequest getRequest = new GetRequest(".plesql_procedures", procedureName);
+
+        this.client.get(getRequest, new ActionListener<>() {
+            @Override
+            public void onResponse(GetResponse response) {
+                if (response.isExists()) {
+                    try {
+                        Map<String, Object> source = response.getSourceAsMap();
+                        String name = response.getId();
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> rawParams = (List<Map<String, Object>>) source.get("parameters");
+                        List<Parameter> parameters = rawParams.stream()
+                            .map(param -> new Parameter(
+                                (String) param.get("name"),
+                                (String) param.get("type"),
+                                ParameterMode.IN))
+                            .toList();
+
+                        String procedureText = (String) source.get("procedure");
+                        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(procedureText));
+                        CommonTokenStream tokens = new CommonTokenStream(lexer);
+                        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
+                        PlEsqlProcedureParser.ProcedureContext procCtx = parser.procedure();
+                        List<PlEsqlProcedureParser.StatementContext> body = procCtx.statement();;
+
+                        // Just create a FunctionDefinition directly
+                        StoredProcedureDefinition function = new StoredProcedureDefinition(name, parameters, body);
+                        listener.onResponse(function);
+                    } catch (Exception e) {
+                        listener.onFailure(e);
+                    }
+                } else {
+                    listener.onResponse(null); // Procedure not found
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
     }
 }

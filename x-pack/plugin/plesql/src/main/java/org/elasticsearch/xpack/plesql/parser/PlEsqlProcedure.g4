@@ -24,7 +24,7 @@ SET: 'SET';
 FOR: 'FOR';
 NULL: [Nn][Uu][Ll][Ll];
 
-// Reminder: In is used both in loops and in parameters
+CALL_PROCEDURE: 'CALL_PROCEDURE';
 PROCEDURE: 'PROCEDURE';
 IN: 'IN';
 OUT: 'OUT';
@@ -181,10 +181,15 @@ statement
     | try_catch_statement
     | function_definition
     | function_call_statement
+    | call_procedure_statement
     | return_statement
     | break_statement
     | expression_statement
     | SEMICOLON
+    ;
+
+call_procedure_statement
+    : CALL_PROCEDURE ID LPAREN (argument_list)? RPAREN
     ;
 
 print_statement
@@ -370,6 +375,7 @@ bracketExpression
 
 simplePrimaryExpression
     : LPAREN expression RPAREN
+    | call_procedure_statement
     | function_call
     | INT
     | FLOAT

@@ -34,13 +34,13 @@ public final class ActionListenerUtils {
         return new ActionListener<>() {
             @Override
             public void onResponse(T response) {
-                LOGGER.debug("[{" + className + "}{" + operation + "}] onResponse: " + response);
+                LOGGER.info("[{" + className + "}{" + operation + "}] onResponse: " + response);
                 delegate.onResponse(response);
             }
 
             @Override
             public void onFailure(Exception e) {
-                LOGGER.debug("[{"+ operation +"}] onFailure: " + e.getMessage());
+                LOGGER.info("[{"+ operation +"}] onFailure: " + e.getMessage());
                 delegate.onFailure(e);
             }
         };

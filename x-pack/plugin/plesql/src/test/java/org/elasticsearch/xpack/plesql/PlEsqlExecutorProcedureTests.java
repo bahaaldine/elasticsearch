@@ -13,8 +13,8 @@ import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.executors.PlEsqlExecutor;
 import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.handlers.CallProcedureStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
-import org.elasticsearch.xpack.plesql.handlers.ProcedureCallHandler;
 import org.elasticsearch.xpack.plesql.visitors.ProcedureDefinitionVisitor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
@@ -27,9 +27,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 import static org.junit.Assert.assertEquals;
@@ -98,17 +95,20 @@ public class PlEsqlExecutorProcedureTests {
         globalContext.declareVariable("c", "NUMBER");
         globalContext.setVariable("c", 10);
 
-        // Create a ProcedureExecutor and a ProcedureCallHandler.
         ProcedureExecutor procExecutor = new ProcedureExecutor(globalContext, threadPool,
             null, new CommonTokenStream(new PlEsqlProcedureLexer(CharStreams.fromString(procDefText))));
-        ProcedureCallHandler procCallHandler = new ProcedureCallHandler(procExecutor);
+        CallProcedureStatementHandler procCallHandler = new CallProcedureStatementHandler(procExecutor);
 
-        // Call the procedure with arguments: IN a=5, OUT b=null, INOUT c=10.
-        List<Object> arguments = Arrays.asList(5.0, null, 10.0);
+        String callText = "CALL_PROCEDURE update_values(5.0, null, 10.0)";
+        PlEsqlProcedureLexer callLexer = new PlEsqlProcedureLexer(CharStreams.fromString(callText));
+        CommonTokenStream callTokens = new CommonTokenStream(callLexer);
+        PlEsqlProcedureParser callParser = new PlEsqlProcedureParser(callTokens);
+        PlEsqlProcedureParser.Call_procedure_statementContext callCtx = callParser.call_procedure_statement();
+
         CountDownLatch latch = new CountDownLatch(1);
-        procCallHandler.executeProcedureCallAsync("update_values", arguments, new ActionListener<Void>() {
+        procCallHandler.handleAsync(callCtx, new ActionListener<Object>() {
             @Override
-            public void onResponse(Void v) {
+            public void onResponse(Object v) {
                 Object bVal = globalContext.getVariable("b");
                 Object cVal = globalContext.getVariable("c");
                 assertNotNull(bVal);
@@ -150,14 +150,18 @@ public class PlEsqlExecutorProcedureTests {
         // Create executor and call handler.
         ProcedureExecutor procExecutor = new ProcedureExecutor(globalContext, threadPool, null,
             new CommonTokenStream(new PlEsqlProcedureLexer(CharStreams.fromString(procDefText))));
-        ProcedureCallHandler procCallHandler = new ProcedureCallHandler(procExecutor);
+        CallProcedureStatementHandler procCallHandler = new CallProcedureStatementHandler(procExecutor);
 
         // For OUT parameter, pass null.
-        List<Object> arguments = Collections.singletonList(null);
+        String callText = "CALL_PROCEDURE set_constant(null)";
+        PlEsqlProcedureLexer callLexer = new PlEsqlProcedureLexer(CharStreams.fromString(callText));
+        CommonTokenStream callTokens = new CommonTokenStream(callLexer);
+        PlEsqlProcedureParser callParser = new PlEsqlProcedureParser(callTokens);
+        PlEsqlProcedureParser.Call_procedure_statementContext callCtx = callParser.call_procedure_statement();
         CountDownLatch latch = new CountDownLatch(1);
-        procCallHandler.executeProcedureCallAsync("set_constant", arguments, new ActionListener<Void>() {
+        procCallHandler.handleAsync(callCtx, new ActionListener<Object>() {
             @Override
-            public void onResponse(Void v) {
+            public void onResponse(Object v) {
                 Object xVal = globalContext.getVariable("x");
                 assertNotNull(xVal);
                 assertEquals(42.0, Double.parseDouble(xVal.toString()), 0.001);
@@ -197,14 +201,18 @@ public class PlEsqlExecutorProcedureTests {
         // Create executor and call handler.
         ProcedureExecutor procExecutor = new ProcedureExecutor(globalContext, threadPool, null,
             new CommonTokenStream(new PlEsqlProcedureLexer(CharStreams.fromString(procDefText))));
-        ProcedureCallHandler procCallHandler = new ProcedureCallHandler(procExecutor);
+        CallProcedureStatementHandler procCallHandler = new CallProcedureStatementHandler(procExecutor);
 
         // For INOUT, pass the initial value.
-        List<Object> arguments = Collections.singletonList(5.0);
+        String callText = "CALL_PROCEDURE increment(5.0)";
+        PlEsqlProcedureLexer callLexer = new PlEsqlProcedureLexer(CharStreams.fromString(callText));
+        CommonTokenStream callTokens = new CommonTokenStream(callLexer);
+        PlEsqlProcedureParser callParser = new PlEsqlProcedureParser(callTokens);
+        PlEsqlProcedureParser.Call_procedure_statementContext callCtx = callParser.call_procedure_statement();
         CountDownLatch latch = new CountDownLatch(1);
-        procCallHandler.executeProcedureCallAsync("increment", arguments, new ActionListener<Void>() {
+        procCallHandler.handleAsync(callCtx, new ActionListener<Object>() {
             @Override
-            public void onResponse(Void v) {
+            public void onResponse(Object v) {
                 Object xVal = globalContext.getVariable("x");
                 assertNotNull(xVal);
                 assertEquals(6.0, Double.parseDouble(xVal.toString()), 0.001);
@@ -239,14 +247,18 @@ public class PlEsqlExecutorProcedureTests {
 
         ProcedureExecutor procExecutor = new ProcedureExecutor(globalContext, threadPool, null,
             new CommonTokenStream(new PlEsqlProcedureLexer(CharStreams.fromString(procDefText))));
-        ProcedureCallHandler procCallHandler = new ProcedureCallHandler(procExecutor);
+        CallProcedureStatementHandler procCallHandler = new CallProcedureStatementHandler(procExecutor);
 
         // Call with one argument instead of two.
-        List<Object> arguments = Collections.singletonList(5.0);
+        String callText = "CALL_PROCEDURE dummy_proc(5.0)";
+        PlEsqlProcedureLexer callLexer = new PlEsqlProcedureLexer(CharStreams.fromString(callText));
+        CommonTokenStream callTokens = new CommonTokenStream(callLexer);
+        PlEsqlProcedureParser callParser = new PlEsqlProcedureParser(callTokens);
+        PlEsqlProcedureParser.Call_procedure_statementContext callCtx = callParser.call_procedure_statement();
         CountDownLatch latch = new CountDownLatch(1);
-        procCallHandler.executeProcedureCallAsync("dummy_proc", arguments, new ActionListener<Void>() {
+        procCallHandler.handleAsync(callCtx, new ActionListener<Object>() {
             @Override
-            public void onResponse(Void v) {
+            public void onResponse(Object v) {
                 fail("Expected a mismatched argument count error.");
                 latch.countDown();
             }
@@ -279,14 +291,18 @@ public class PlEsqlExecutorProcedureTests {
 
         ProcedureExecutor procExecutor = new ProcedureExecutor(globalContext, threadPool, null,
             new CommonTokenStream(new PlEsqlProcedureLexer(CharStreams.fromString(procDefText))));
-        ProcedureCallHandler procCallHandler = new ProcedureCallHandler(procExecutor);
+        CallProcedureStatementHandler procCallHandler = new CallProcedureStatementHandler(procExecutor);
 
         // Call with a string instead of a number.
-        List<Object> arguments = Collections.singletonList("not a number");
+        String callText = "CALL_PROCEDURE type_test('not a number')";
+        PlEsqlProcedureLexer callLexer = new PlEsqlProcedureLexer(CharStreams.fromString(callText));
+        CommonTokenStream callTokens = new CommonTokenStream(callLexer);
+        PlEsqlProcedureParser callParser = new PlEsqlProcedureParser(callTokens);
+        PlEsqlProcedureParser.Call_procedure_statementContext callCtx = callParser.call_procedure_statement();
         CountDownLatch latch = new CountDownLatch(1);
-        procCallHandler.executeProcedureCallAsync("type_test", arguments, new ActionListener<Void>() {
+        procCallHandler.handleAsync(callCtx, new ActionListener<Object>() {
             @Override
-            public void onResponse(Void v) {
+            public void onResponse(Object v) {
                 fail("Expected a type mismatch error.");
                 latch.countDown();
             }
@@ -324,13 +340,17 @@ public class PlEsqlExecutorProcedureTests {
 
         ProcedureExecutor procExecutor = new ProcedureExecutor(globalContext, threadPool, null,
             new CommonTokenStream(new PlEsqlProcedureLexer(CharStreams.fromString(procDefText))));
-        ProcedureCallHandler procCallHandler = new ProcedureCallHandler(procExecutor);
+        CallProcedureStatementHandler procCallHandler = new CallProcedureStatementHandler(procExecutor);
 
-        List<Object> arguments = Collections.singletonList(10.0);
+        String callText = "CALL_PROCEDURE error_proc(10.0)";
+        PlEsqlProcedureLexer callLexer = new PlEsqlProcedureLexer(CharStreams.fromString(callText));
+        CommonTokenStream callTokens = new CommonTokenStream(callLexer);
+        PlEsqlProcedureParser callParser = new PlEsqlProcedureParser(callTokens);
+        PlEsqlProcedureParser.Call_procedure_statementContext callCtx = callParser.call_procedure_statement();
         CountDownLatch latch = new CountDownLatch(1);
-        procCallHandler.executeProcedureCallAsync("error_proc", arguments, new ActionListener<Void>() {
+        procCallHandler.handleAsync(callCtx, new ActionListener<Object>() {
             @Override
-            public void onResponse(Void v) {
+            public void onResponse(Object v) {
                 fail("Expected an error to be thrown.");
                 latch.countDown();
             }

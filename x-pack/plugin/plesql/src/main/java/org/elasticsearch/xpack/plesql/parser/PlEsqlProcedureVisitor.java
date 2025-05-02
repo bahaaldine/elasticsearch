@@ -29,6 +29,12 @@ public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitStatement(PlEsqlProcedureParser.StatementContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#call_procedure_statement}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitCall_procedure_statement(PlEsqlProcedureParser.Call_procedure_statementContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#print_statement}.
 	 * @param ctx the parse tree
 	 * @return the visitor result

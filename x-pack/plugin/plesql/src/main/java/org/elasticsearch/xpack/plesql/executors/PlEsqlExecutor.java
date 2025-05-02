@@ -9,19 +9,19 @@ package org.elasticsearch.xpack.plesql.executors;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
 import org.elasticsearch.client.internal.Client;
+import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.injection.guice.Inject;
 import org.elasticsearch.logging.LogManager;
 import org.elasticsearch.logging.Logger;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.actions.RestRunProcedureByIdAction;
 import org.elasticsearch.xpack.plesql.functions.builtin.datasources.ESFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datasources.EsqlBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.handlers.PlEsqlErrorListener;
-import org.elasticsearch.xpack.plesql.handlers.ProcedureCallHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.context.ExecutionContext;
@@ -29,7 +29,7 @@ import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.ArrayBuiltInFu
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.DateBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.NumberBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.StringBuiltInFunctions;
-import org.elasticsearch.xpack.plesql.primitives.procedure.ProcedureDefinition;
+import org.elasticsearch.xpack.plesql.procedure.ProcedureDefinition;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 import org.elasticsearch.xpack.plesql.visitors.ProcedureDefinitionVisitor;
 
@@ -103,12 +103,6 @@ public class PlEsqlExecutor {
                     }
                 }
 
-                // 3. Register built-in functions
-                StringBuiltInFunctions.registerAll(executionContext);
-                NumberBuiltInFunctions.registerAll(executionContext);
-                ArrayBuiltInFunctions.registerAll(executionContext);
-                DateBuiltInFunctions.registerAll(executionContext);
-
                 // 4. Visit procedure block to register procedure definitions
                 ProcedureDefinitionVisitor procDefVisitor = new ProcedureDefinitionVisitor(executionContext);
                 for (PlEsqlProcedureParser.StatementContext stmtCtx : procCtx.statement()) {
@@ -116,27 +110,6 @@ public class PlEsqlExecutor {
                         procDefVisitor.visit(stmtCtx);
                     }
                 }
-
-                // 5. Preprocess procedure block for procedure calls
-                ProcedureCallHandler procCallHandler = new ProcedureCallHandler(
-                    new ProcedureExecutor(executionContext, threadPool, client, tokens));
-                List<PlEsqlProcedureParser.StatementContext> executableStatements = new ArrayList<>();
-                for (var stmt : procCtx.statement()) {
-                    if (isProcedureCall(stmt, executionContext)) {
-                        procCallHandler.executeProcedureCallAsync(
-                            extractProcedureName(stmt),
-                            extractProcedureArguments(stmt),
-                            ActionListener.wrap(
-                                v -> {},
-                                e -> {}
-                            )
-                        );
-                    } else {
-                        executableStatements.add(stmt);
-                    }
-                }
-                procCtx.statement().clear();
-                procCtx.statement().addAll(executableStatements);
 
                 // 6. Register additional built-in functions (Esql, ESFunctions)
                 ProcedureExecutor procedureExecutor = new ProcedureExecutor(executionContext, threadPool, client, tokens);
@@ -146,6 +119,10 @@ public class PlEsqlExecutor {
                 ESFunctions.registerIndexBulkFunction(executionContext, client);
                 ESFunctions.registerIndexDocumentFunction(executionContext, client);
                 ESFunctions.registerRefreshIndexFunction(executionContext, client);
+                StringBuiltInFunctions.registerAll(executionContext);
+                NumberBuiltInFunctions.registerAll(executionContext);
+                ArrayBuiltInFunctions.registerAll(executionContext);
+                DateBuiltInFunctions.registerAll(executionContext);
 
                 // 7. Set up logging listener
                 ActionListener<Object> execListener = ActionListenerUtils.withLogging(listener,
@@ -226,6 +203,8 @@ public class PlEsqlExecutor {
     public void storeProcedureAsync(String id, String procedureText, ActionListener<Object> listener) throws IOException {
         String indexName = ".plesql_procedures";
 
+        LOGGER.info( "Storing procedure {}", procedureText );
+
         // Parse the procedure to extract parameters
         PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(procedureText));
         CommonTokenStream tokens = new CommonTokenStream(lexer);
@@ -249,12 +228,11 @@ public class PlEsqlExecutor {
                 indexProcedureDocument(id, procedureText, parameters, listener);
             },
             error -> {
-                if (error.getMessage().contains("index_not_found_exception")) {
+                if (ExceptionsHelper.unwrapCause(error) instanceof IndexNotFoundException) {
+                    LOGGER.info( "Index {} does not exist, creating it ...", indexName );
                     CreateIndexRequest createRequest = new CreateIndexRequest(indexName);
                     client.admin().indices().create(createRequest, ActionListener.wrap(
-                        createResponse -> {
-                            indexProcedureDocument(id, procedureText, parameters, listener);
-                        },
+                        createResponse -> indexProcedureDocument(id, procedureText, parameters, listener),
                         listener::onFailure
                     ));
                 } else {

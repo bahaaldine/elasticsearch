@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-package org.elasticsearch.xpack.plesql.primitives.procedure;
+package org.elasticsearch.xpack.plesql.procedure;
 
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
