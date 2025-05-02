@@ -18,6 +18,11 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.executors.PlEsqlExecutor;
 import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
+import org.elasticsearch.xpack.plesql.functions.builtin.datasources.EsqlBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.ArrayBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.DocumentBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.NumberBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
@@ -126,6 +131,87 @@ public class CallProcedureStatementHandlerTests extends ESIntegTestCase {
         } finally {
             threadPool.shutdown();
         }
+
+        assertTrue("Timeout waiting for procedure call", callLatch.await(10, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testProcedureWithConditionalLogicAndNestedCalls() throws Exception {
+        LOGGER.info("Starting testProcedureWithConditionalLogicAndNestedCalls");
+
+        String isEvenProc = """
+            PROCEDURE isEven(n NUMBER)
+            BEGIN
+              RETURN MOD(n,2) == 0;
+            END PROCEDURE;
+            """;
+
+        Client client = client();
+        PlEsqlExecutor plEsqlExecutor = new PlEsqlExecutor(threadPool, client);
+        CountDownLatch storeLatch = new CountDownLatch(1);
+        plEsqlExecutor.storeProcedureAsync("isEven", isEvenProc, ActionListener.wrap(
+            success -> storeLatch.countDown(),
+            e -> {
+                fail("Failed to store isEven procedure: " + e.getMessage());
+                storeLatch.countDown();
+            }
+        ));
+        assertTrue("Timeout storing isEven", storeLatch.await(10, TimeUnit.SECONDS));
+
+        String wrapperProc = """
+            PROCEDURE sumIfEven()
+            BEGIN
+              DECLARE a NUMBER;
+              DECLARE b NUMBER;
+              DECLARE sum NUMBER;
+              DECLARE even BOOLEAN;
+
+              SET a = 2;
+              SET b = 4;
+              SET sum = a + b;
+              SET even = CALL_PROCEDURE isEven(sum);
+
+              IF even THEN
+                RETURN sum;
+              ELSE
+                RETURN -1;
+              END IF;
+            END PROCEDURE;
+            """;
+
+        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(wrapperProc));
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
+        var procCtx = parser.procedure();
+
+        CountDownLatch callLatch = new CountDownLatch(1);
+
+
+        // Initialize a new ExecutionContext and register built‑in functions.
+        ExecutionContext context = new ExecutionContext();
+        ProcedureExecutor executor = new ProcedureExecutor(context, threadPool, client, tokens);
+
+        StringBuiltInFunctions.registerAll(context);
+        NumberBuiltInFunctions.registerAll(context);
+        ArrayBuiltInFunctions.registerAll(context);
+        DocumentBuiltInFunctions.registerAll(context);
+        EsqlBuiltInFunctions.registerAll(context,executor,client);
+
+        executor.visitProcedureAsync(procCtx, new ActionListener<>() {
+            @Override
+            public void onResponse(Object result) {
+                Object raw = (result instanceof ReturnValue rv) ? rv.getValue() : result;
+                double value = Double.parseDouble(raw.toString());
+                assertEquals("Expected result is 6 (even sum)", 6.0, value, 0.00001);
+                callLatch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Procedure call failed: " + e.getMessage());
+                callLatch.countDown();
+            }
+        });
 
         assertTrue("Timeout waiting for procedure call", callLatch.await(10, TimeUnit.SECONDS));
     }
