@@ -12,7 +12,13 @@ import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.executors.ProcedureExecutor;
 import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.builtin.datasources.EsqlBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.ArrayBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.DocumentBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.NumberBuiltInFunctions;
+import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.StringBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
+import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
 import java.util.ArrayList;
@@ -46,8 +52,6 @@ public class CallProcedureStatementHandler {
                             return;
                         }
 
-                        System.out.println("Procedure " + procedure.getName());
-
                         List<Parameter> paramNames = procedure.getParameters();
                         if (paramNames.size() != arguments.size()) {
                             listener.onFailure(
@@ -62,12 +66,22 @@ public class CallProcedureStatementHandler {
                             childContext.setVariable(paramNames.get(i).getName(), arguments.get(i));
                         }
 
+                        StringBuiltInFunctions.registerAll(childContext);
+                        NumberBuiltInFunctions.registerAll(childContext);
+                        ArrayBuiltInFunctions.registerAll(childContext);
+                        DocumentBuiltInFunctions.registerAll(childContext);
+                        EsqlBuiltInFunctions.registerAll(childContext,executor,executor.getClient());
+
                         new ProcedureExecutor(childContext, executor.getThreadPool(), executor.getClient(), executor.getTokenStream())
                             .executeStatementsAsync(procedure.getBody(), 0, new ActionListener<Object>() {
 
                                 @Override
                                 public void onResponse(Object o) {
-                                    listener.onResponse(o);
+                                    if ( o instanceof ReturnValue ) {
+                                        listener.onResponse(((ReturnValue) o).getValue());
+                                    } else {
+                                        listener.onResponse(o);
+                                    }
                                 }
 
                                 @Override

@@ -110,12 +110,9 @@ public class CallProcedureStatementHandlerTests extends ESIntegTestCase {
                     LOGGER.info("Procedure called");
                     if ( result instanceof ReturnValue ) {
                         assertNotNull("Result should not be null", result);
-                        ReturnValue outerReturnValue = ((ReturnValue) result);
-                        if ( outerReturnValue.getValue() instanceof  ReturnValue ) {
-                            ReturnValue innerReturnValue = ((ReturnValue) outerReturnValue.getValue());
-                            double sum = Double.parseDouble( ( innerReturnValue.getValue()).toString() );
-                            assertEquals("Sum should be 12", 12.0, sum, 0.00001);
-                        }
+                        ReturnValue returnedValue = ((ReturnValue) result);
+                        double sum = Double.parseDouble( ( returnedValue.getValue()).toString() );
+                        assertEquals("Sum should be 12", 12.0, sum, 0.00001);
                     } else {
                         fail();
                     }

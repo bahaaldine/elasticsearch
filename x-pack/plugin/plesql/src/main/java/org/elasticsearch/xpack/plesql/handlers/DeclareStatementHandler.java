@@ -63,6 +63,7 @@ public class DeclareStatementHandler {
                 return ( type == PLESQLDataType.NUMBER
                     || type == PLESQLDataType.STRING
                     || type == PLESQLDataType.DATE
+                    || type == PLESQLDataType.BOOLEAN
                     || type == PLESQLDataType.DOCUMENT);
             } catch (IllegalArgumentException e) {
                 return false;
