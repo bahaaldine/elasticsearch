@@ -52,6 +52,7 @@ DATE_TYPE: 'DATE';
 NUMBER_TYPE: 'NUMBER';
 DOCUMENT_TYPE: 'DOCUMENT';
 ARRAY_TYPE: 'ARRAY';
+BOOLEAN_TYPE: 'BOOLEAN';
 
 // Operators
 PLUS: '+';
@@ -81,13 +82,13 @@ COLON: ':';
 SEMICOLON: ';';
 
 // Literals
+BOOLEAN: 'true' | 'false';
 FLOAT: [0-9]+ '.' [0-9]+;
 INT: [0-9]+;
 STRING
     : ('\'' ( ~('\'' | '\\') | '\\' . )* '\''
     | '"' ( ~('"' | '\\') | '\\' . )* '"')
     ;
-
 // Identifier
 ID: [a-zA-Z_][a-zA-Z_0-9]*;
 
@@ -380,6 +381,7 @@ simplePrimaryExpression
     | INT
     | FLOAT
     | STRING
+    | BOOLEAN
     | arrayLiteral
     | documentLiteral
     | ID
@@ -397,11 +399,12 @@ datatype
     | DATE_TYPE
     | NUMBER_TYPE
     | DOCUMENT_TYPE
+    | BOOLEAN_TYPE
     | array_datatype
     ;
 
 array_datatype
-    : ARRAY_TYPE 'OF' (NUMBER_TYPE | STRING_TYPE | DOCUMENT_TYPE | DATE_TYPE | ARRAY_TYPE )
+    : ARRAY_TYPE 'OF' (NUMBER_TYPE | STRING_TYPE | DOCUMENT_TYPE | DATE_TYPE | BOOLEAN_TYPE | ARRAY_TYPE )
     ;
 
 persist_clause

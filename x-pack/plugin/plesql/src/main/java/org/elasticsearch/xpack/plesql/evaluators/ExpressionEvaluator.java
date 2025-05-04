@@ -435,6 +435,9 @@ public class ExpressionEvaluator {
             String text = ctx.simplePrimaryExpression().STRING().getText();
             String processedString = text.substring(1, text.length() - 1).replace("\\'", "'");
             processResult.onResponse(processedString);
+        } else if (ctx.simplePrimaryExpression().BOOLEAN() != null) {
+            String boolText = ctx.simplePrimaryExpression().BOOLEAN().getText();
+            processResult.onResponse(Boolean.parseBoolean(boolText));
         } else if (ctx.simplePrimaryExpression().arrayLiteral() != null) {
             if (ctx.simplePrimaryExpression().arrayLiteral().expressionList() != null) {
                 evaluateExpressionList(ctx.simplePrimaryExpression().arrayLiteral().expressionList().expression(), processResult);

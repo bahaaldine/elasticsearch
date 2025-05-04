@@ -14,5 +14,6 @@ public enum PLESQLDataType {
     NUMBER,
     DOCUMENT,
     ANY,
-    ARRAY;
+    ARRAY,
+    BOOLEAN;
 }
