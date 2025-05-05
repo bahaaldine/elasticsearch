@@ -206,6 +206,7 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     public void visitStatementAsync(PlEsqlProcedureParser.StatementContext ctx, ActionListener<Object> listener) {
 
         LOGGER.info("Context statement {}", ctx.getText() );
+        LOGGER.info("Context variables {}", this.context.getVariables() );
 
         if (ctx.declare_statement() != null) {
             declareHandler.handleAsync(ctx.declare_statement(), listener);

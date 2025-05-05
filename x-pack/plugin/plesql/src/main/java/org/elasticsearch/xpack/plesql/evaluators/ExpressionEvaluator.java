@@ -454,7 +454,7 @@ public class ExpressionEvaluator {
             String id = ctx.simplePrimaryExpression().ID().getText();
             Object var = context.getVariable(id);
             if (var == null) {
-                listener.onFailure(new RuntimeException("Variable not declared: " + id));
+                listener.onFailure(new RuntimeException("Variable not defined: " + id));
             } else {
                 // if there are bracketExpressions, delegate into your recursive lookup
                 List<PlEsqlProcedureParser.BracketExpressionContext> brackets = ctx.bracketExpression();

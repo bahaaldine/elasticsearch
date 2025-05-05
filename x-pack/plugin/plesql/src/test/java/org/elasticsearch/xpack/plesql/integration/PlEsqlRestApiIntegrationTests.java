@@ -278,4 +278,42 @@ public class PlEsqlRestApiIntegrationTests extends ESIntegTestCase {
         // Only scores > 5 are summed: 7 + 9 + 10 = 26
         assertEquals(26, ((Number) responseMap.get("result")).intValue());
     }
+
+    @Test
+    public void testGetStoredProcedure() throws Exception {
+        RestClientBuilder builder = RestClient.builder(
+            new HttpHost("localhost", Integer.parseInt(System.getProperty("tests.rest.cluster.port", "9200")), "http")
+        );
+        restClient = builder.build();
+
+        assertNotNull("RestClient must not be null", restClient);
+
+        String procedureId = "test_proc_get";
+        String procedureBody = """
+            {
+              "procedure": "PROCEDURE getTest() BEGIN RETURN 'retrieved'; END PROCEDURE"
+            }
+            """;
+
+        // First, store the procedure
+        Request putRequest = new Request("PUT", "/_query/plesql/procedure/" + procedureId);
+        putRequest.setJsonEntity(procedureBody);
+        Response putResponse = restClient.performRequest(putRequest);
+        assertEquals(RestStatus.OK.getStatus(), putResponse.getStatusLine().getStatusCode());
+
+        // Now retrieve the stored procedure
+        Request getRequest = new Request("GET", "/_query/plesql/procedure/" + procedureId);
+        Response getResponse = restClient.performRequest(getRequest);
+        assertEquals(RestStatus.OK.getStatus(), getResponse.getStatusLine().getStatusCode());
+        assertNotNull("Get response should not be null", getResponse);
+        assertEquals("/_query/plesql/procedure/" + procedureId, getResponse.getRequestLine().getUri());
+
+        Map<String, Object> responseMap = XContentHelper.convertToMap(
+            new BytesArray(getResponse.getEntity().getContent().readAllBytes()), true, XContentType.JSON
+        ).v2();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> source = (Map<String, Object>) responseMap.get("_source");
+        assertEquals("PROCEDURE getTest() BEGIN RETURN 'retrieved'; END PROCEDURE", source.get("procedure"));
+    }
 }

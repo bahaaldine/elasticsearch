@@ -1,0 +1,27 @@
+{
+  "plesql.get_procedure": {
+    "documentation": {
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/master/plesql-get-procedure-api.html",
+      "description": "Retrieves a stored PL/ESQL procedure by ID"
+    },
+    "stability": "stable",
+    "visibility": "public",
+    "headers": {
+      "accept": ["application/json"]
+    },
+    "url": {
+      "paths": [
+        {
+          "path": "/_query/plesql/procedure/{procedure_id}",
+          "methods": ["GET"],
+          "parts": {
+            "procedure_id": {
+              "type": "string",
+              "description": "The ID of the procedure to retrieve"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

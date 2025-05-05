@@ -26,6 +26,7 @@ import org.elasticsearch.rest.RestHandler;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.plesql.actions.RestCreateProcedureAction;
 import org.elasticsearch.xpack.plesql.actions.RestDeleteProcedureAction;
+import org.elasticsearch.xpack.plesql.actions.RestGetProcedureAction;
 import org.elasticsearch.xpack.plesql.actions.RestRunProcedureByIdAction;
 import org.elasticsearch.xpack.plesql.actions.RestTestRunProcedureAction;
 import org.elasticsearch.xpack.plesql.executors.PlEsqlExecutor;
@@ -77,7 +78,8 @@ public class PlEsqlPlugin extends Plugin implements ActionPlugin {
             new RestTestRunProcedureAction(plEsqlExecutor),
             new RestCreateProcedureAction(plEsqlExecutor),
             new RestDeleteProcedureAction(plEsqlExecutor),
-            new RestRunProcedureByIdAction(plEsqlExecutor)
+            new RestRunProcedureByIdAction(plEsqlExecutor),
+            new RestGetProcedureAction(plEsqlExecutor)
         );
     }
 

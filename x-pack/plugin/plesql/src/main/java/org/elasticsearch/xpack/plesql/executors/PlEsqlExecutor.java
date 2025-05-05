@@ -277,4 +277,25 @@ public class PlEsqlExecutor {
                 acknowledged::onFailure
             ));
     }
+
+    /**
+     * Asynchronously retrieves a stored procedure by ID from the .plesql_procedures index.
+     *
+     * @param id       The procedure document ID.
+     * @param listener The ActionListener to notify with the procedure source or null if not found.
+     */
+    public void getProcedureAsync(String id, ActionListener<Map<String, Object>> listener) {
+        client.prepareGet(".plesql_procedures", id)
+            .execute(ActionListener.wrap(
+                resp -> {
+                    if (resp.isExists()) {
+                        listener.onResponse(resp.getSource());
+                    } else {
+                        listener.onResponse(null);
+                    }
+                },
+                listener::onFailure
+            ));
+    }
 }
+
