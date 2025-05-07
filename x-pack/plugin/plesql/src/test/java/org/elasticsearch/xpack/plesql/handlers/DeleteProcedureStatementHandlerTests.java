@@ -1,7 +1,12 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
 package org.elasticsearch.xpack.plesql.handlers;
 
-import org.antlr.v4.runtime.CharStreams;
-import org.antlr.v4.runtime.CommonTokenStream;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.logging.LogManager;
@@ -9,12 +14,10 @@ import org.elasticsearch.logging.Logger;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.executors.PlEsqlExecutor;
-import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
-import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.junit.Test;
 
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -47,16 +50,8 @@ public class DeleteProcedureStatementHandlerTests extends ESIntegTestCase {
         assertTrue("Timeout storing procedure", storeLatch.await(10, TimeUnit.SECONDS));
 
         String deleteStmt = "DELETE PROCEDURE deleteMe;";
-        PlEsqlProcedureLexer lexer = new PlEsqlProcedureLexer(CharStreams.fromString(deleteStmt));
-        CommonTokenStream tokens = new CommonTokenStream(lexer);
-        PlEsqlProcedureParser parser = new PlEsqlProcedureParser(tokens);
-        var deleteCtx = parser.delete_procedure_statement();
-
-        ExecutionContext context = new ExecutionContext();
-        DeleteProcedureStatementHandler handler = new DeleteProcedureStatementHandler(context, plEsqlExecutor);
-
         CountDownLatch deleteLatch = new CountDownLatch(1);
-        handler.handleAsync(deleteCtx, ActionListener.wrap(
+        plEsqlExecutor.executeProcedure(deleteStmt, Map.of(), ActionListener.wrap(
             success -> {
                 LOGGER.info("Successfully deleted procedure");
                 deleteLatch.countDown();

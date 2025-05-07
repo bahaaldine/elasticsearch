@@ -107,24 +107,45 @@ public class PlEsqlExecutor {
                                     procCtx.parameter_list() != null ? procCtx.parameter_list().parameter() : List.of();
 
                                 if (parameterContexts.isEmpty() == false) {
-                                    if (args == null) {
+                                    // Parse call arguments directly from the call_procedure_statement
+                                    List<PlEsqlProcedureParser.ExpressionContext> callArgs =
+                                        programContext.call_procedure_statement().argument_list() != null
+                                            ? programContext.call_procedure_statement().argument_list().expression()
+                                            : List.of();
+
+                                    if (parameterContexts.size() != callArgs.size()) {
                                         listener.onFailure(
-                                            new IllegalArgumentException("Procedure expects arguments but none were provided"));
-                                        return;
-                                    }
-                                    if (parameterContexts.size() != ((Map<?, ?>) args.get("params")).size()) {
-                                        listener.onFailure(
-                                            new IllegalArgumentException("Mismatch between declared parameters and provided arguments"));
+                                            new IllegalArgumentException("Mismatch between declared parameters and call arguments"));
                                         return;
                                     }
 
-                                    @SuppressWarnings("unchecked")
-                                    Map<String, Object> params = (Map<String, Object>) args.get("params");
-
-                                    for (var param : parameterContexts) {
+                                    for (int i = 0; i < parameterContexts.size(); i++) {
+                                        var param = parameterContexts.get(i);
                                         String paramName = param.ID().getText();
                                         String paramType = param.datatype().getText().toUpperCase(java.util.Locale.ROOT);
-                                        Object value = params.get(paramName);
+                                        String rawValue = callArgs.get(i).getText();
+
+                                        Object value;
+                                        switch (paramType) {
+                                            case "INT":
+                                                value = Integer.valueOf(rawValue);
+                                                break;
+                                            case "NUMBER":
+                                                value = Double.valueOf(rawValue); // Generic fallback
+                                                break;
+                                            case "FLOAT":
+                                                value = Double.valueOf(rawValue);
+                                                break;
+                                            case "BOOLEAN":
+                                                value = Boolean.parseBoolean(rawValue);
+                                                break;
+                                            case "STRING":
+                                                value = rawValue.replaceAll("^['\\\"]|['\\\"]$", ""); // strip quotes
+                                                break;
+                                            default:
+                                                value = rawValue;
+                                        }
+
                                         executionContext.declareVariable(paramName, paramType);
                                         executionContext.setVariable(paramName, value);
                                     }
@@ -138,7 +159,8 @@ public class PlEsqlExecutor {
                                     }
                                 }
 
-                                ProcedureExecutor procedureExecutor = new ProcedureExecutor(executionContext, threadPool, client, storedTokens);
+                                ProcedureExecutor procedureExecutor =
+                                    new ProcedureExecutor(executionContext, threadPool, client, storedTokens);
                                 EsqlBuiltInFunctions.registerAll(executionContext, procedureExecutor, client);
                                 ESFunctions.registerGetDocumentFunction(executionContext, client);
                                 ESFunctions.registerUpdateDocumentFunction(executionContext, client);

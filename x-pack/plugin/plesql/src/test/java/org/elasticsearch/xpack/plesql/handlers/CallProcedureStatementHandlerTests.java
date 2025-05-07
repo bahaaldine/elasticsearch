@@ -28,6 +28,7 @@ import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import org.junit.Test;
 
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -211,5 +212,49 @@ public class CallProcedureStatementHandlerTests extends ESIntegTestCase {
         });
 
         assertTrue("Timeout waiting for procedure call", callLatch.await(10, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testCallStoredProcedureViaExecutor() throws Exception {
+        String procedureText = """
+            PROCEDURE add(a NUMBER, b NUMBER)
+            BEGIN
+              RETURN a + b;
+            END PROCEDURE;
+        """;
+
+        Client client = client();
+        ThreadPool threadPool = new TestThreadPool("test-thread-pool");
+        PlEsqlExecutor plEsqlExecutor = new PlEsqlExecutor(threadPool, client);
+
+        CountDownLatch storeLatch = new CountDownLatch(1);
+        plEsqlExecutor.storeProcedureAsync("add", procedureText, ActionListener.wrap(
+            success -> storeLatch.countDown(),
+            e -> {
+                fail("Failed to store procedure: " + e.getMessage());
+                storeLatch.countDown();
+            }
+        ));
+        assertTrue("Timeout storing procedure", storeLatch.await(10, TimeUnit.SECONDS));
+
+        String callText = "CALL add(5, 7);";
+        CountDownLatch callLatch = new CountDownLatch(1);
+
+        plEsqlExecutor.executeProcedure(callText, Map.of(), ActionListener.wrap(
+            result -> {
+                LOGGER.info("Procedure call executed with result: {}", result);
+                assertTrue("Expected ReturnValue", result instanceof ReturnValue);
+                ReturnValue rv = (ReturnValue) result;
+                assertEquals(12.0, Double.parseDouble(rv.getValue().toString()), 0.00001);
+                callLatch.countDown();
+            },
+            e -> {
+                fail("Failed to execute procedure call: " + e.getMessage());
+                callLatch.countDown();
+            }
+        ));
+
+        assertTrue("Timeout waiting for procedure call", callLatch.await(10, TimeUnit.SECONDS));
+        threadPool.shutdown();
     }
 }

@@ -31,7 +31,6 @@ import org.elasticsearch.xpack.plesql.handlers.LoopStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.PrintStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.ThrowStatementHandler;
 import org.elasticsearch.xpack.plesql.handlers.TryCatchStatementHandler;
-import org.elasticsearch.xpack.plesql.handlers.DeleteProcedureStatementHandler;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureBaseVisitor;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureLexer;
 import org.elasticsearch.xpack.plesql.parser.PlEsqlProcedureParser;
@@ -40,7 +39,6 @@ import org.elasticsearch.xpack.plesql.functions.FunctionDefinition;
 import org.elasticsearch.xpack.plesql.primitives.ReturnValue;
 import org.elasticsearch.xpack.plesql.procedure.StoredProcedureDefinition;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
-import org.elasticsearch.xpack.plesql.executors.PlEsqlExecutor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -70,7 +68,6 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
     private final ExecuteStatementHandler executeHandler;
     private final PrintStatementHandler printStatementHandler;
     private final CallProcedureStatementHandler callProcedureStatementHandler;
-    private final DeleteProcedureStatementHandler deleteProcedureStatementHandler;
     private final Client client;
 
     private final CommonTokenStream tokenStream;
@@ -101,8 +98,6 @@ public class ProcedureExecutor extends PlEsqlProcedureBaseVisitor<Object> {
         this.throwHandler = new ThrowStatementHandler(this);
         this.printStatementHandler = new PrintStatementHandler(this);
         this.callProcedureStatementHandler = new CallProcedureStatementHandler(this);
-        this.deleteProcedureStatementHandler =
-            new DeleteProcedureStatementHandler(this.context, new PlEsqlExecutor(this.threadPool, this.client));
         this.tokenStream = tokenStream;
         // Initialize ExpressionEvaluator with this executor instance.
         this.expressionEvaluator = new ExpressionEvaluator(this);
