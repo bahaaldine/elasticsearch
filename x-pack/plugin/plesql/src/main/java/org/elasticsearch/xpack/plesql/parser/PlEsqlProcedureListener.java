@@ -14,6 +14,16 @@ import org.antlr.v4.runtime.tree.ParseTreeListener;
  */
 public interface PlEsqlProcedureListener extends ParseTreeListener {
 	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#program}.
+	 * @param ctx the parse tree
+	 */
+	void enterProgram(PlEsqlProcedureParser.ProgramContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#program}.
+	 * @param ctx the parse tree
+	 */
+	void exitProgram(PlEsqlProcedureParser.ProgramContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#procedure}.
 	 * @param ctx the parse tree
 	 */
@@ -23,6 +33,26 @@ public interface PlEsqlProcedureListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitProcedure(PlEsqlProcedureParser.ProcedureContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#create_procedure_statement}.
+	 * @param ctx the parse tree
+	 */
+	void enterCreate_procedure_statement(PlEsqlProcedureParser.Create_procedure_statementContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#create_procedure_statement}.
+	 * @param ctx the parse tree
+	 */
+	void exitCreate_procedure_statement(PlEsqlProcedureParser.Create_procedure_statementContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#delete_procedure_statement}.
+	 * @param ctx the parse tree
+	 */
+	void enterDelete_procedure_statement(PlEsqlProcedureParser.Delete_procedure_statementContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link PlEsqlProcedureParser#delete_procedure_statement}.
+	 * @param ctx the parse tree
+	 */
+	void exitDelete_procedure_statement(PlEsqlProcedureParser.Delete_procedure_statementContext ctx);
 	/**
 	 * Enter a parse tree produced by {@link PlEsqlProcedureParser#statement}.
 	 * @param ctx the parse tree

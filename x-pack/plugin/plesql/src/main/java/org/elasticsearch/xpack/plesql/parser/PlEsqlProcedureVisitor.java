@@ -17,11 +17,29 @@ import org.antlr.v4.runtime.tree.ParseTreeVisitor;
  */
 public interface PlEsqlProcedureVisitor<T> extends ParseTreeVisitor<T> {
 	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#program}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitProgram(PlEsqlProcedureParser.ProgramContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#procedure}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitProcedure(PlEsqlProcedureParser.ProcedureContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#create_procedure_statement}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitCreate_procedure_statement(PlEsqlProcedureParser.Create_procedure_statementContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#delete_procedure_statement}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDelete_procedure_statement(PlEsqlProcedureParser.Delete_procedure_statementContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link PlEsqlProcedureParser#statement}.
 	 * @param ctx the parse tree

@@ -4,6 +4,15 @@ grammar PlEsqlProcedure;
 // Lexer Rules
 // =======================
 
+// Procedure
+CREATE: 'CREATE';
+DELETE: 'DELETE';
+CALL : 'CALL';
+PROCEDURE: 'PROCEDURE';
+IN: 'IN';
+OUT: 'OUT';
+INOUT: 'INOUT';
+
 // Print rules
 PRINT: 'PRINT';
 DEBUG: 'DEBUG';
@@ -24,11 +33,7 @@ SET: 'SET';
 FOR: 'FOR';
 NULL: [Nn][Uu][Ll][Ll];
 
-CALL_PROCEDURE: 'CALL_PROCEDURE';
-PROCEDURE: 'PROCEDURE';
-IN: 'IN';
-OUT: 'OUT';
-INOUT: 'INOUT';
+
 
 WHILE: 'WHILE';
 LOOP: 'LOOP';
@@ -167,8 +172,22 @@ INDEX_DOCUMENT: 'INDEX_DOCUMENT';
 // Parser Rules
 // =======================
 
+program
+    : create_procedure_statement
+    | delete_procedure_statement
+    | call_procedure_statement
+    ;
+
 procedure
     : PROCEDURE ID LPAREN (parameter_list)? RPAREN BEGIN statement+ END PROCEDURE
+    ;
+
+create_procedure_statement
+    : CREATE procedure
+    ;
+
+delete_procedure_statement
+    : DELETE PROCEDURE ID SEMICOLON
     ;
 
 statement
@@ -189,8 +208,10 @@ statement
     | SEMICOLON
     ;
 
+
+
 call_procedure_statement
-    : CALL_PROCEDURE ID LPAREN (argument_list)? RPAREN
+    : CALL ID LPAREN (argument_list)? RPAREN
     ;
 
 print_statement
