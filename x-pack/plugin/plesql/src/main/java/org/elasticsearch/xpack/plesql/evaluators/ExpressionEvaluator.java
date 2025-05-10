@@ -481,29 +481,26 @@ public class ExpressionEvaluator {
         evaluateExpressionAsync(bracketExprs.get(index).expression(), new ActionListener<Object>() {
             @Override
             public void onResponse(Object keyObj) {
-                if ( (keyObj instanceof String) == false ) {
-                    listener.onFailure(new RuntimeException("Document field access requires a string key, but got: " + keyObj));
+                if ((keyObj instanceof String) == false) {
+                    // Check for list indexing using an integer index
+                    if (current instanceof List && keyObj instanceof Number) {
+                        List<?> list = (List<?>) current;
+                        int idx = ((Number) keyObj).intValue();
+                        if (idx < 0 || idx >= list.size()) {
+                            listener.onFailure(new RuntimeException("List index out of bounds: " + idx));
+                            return;
+                        }
+                        Object newValue = list.get(idx);
+                        evaluateDocumentFieldAccessRecursive(newValue, bracketExprs, index + 1, listener);
+                    } else {
+                        listener.onFailure(
+                            new RuntimeException("Document field access requires a string key or numeric index, but got: " + keyObj));
+                    }
                     return;
                 }
                 String key = (String) keyObj;
                 if (current instanceof Map) {
                     Object newValue = ((Map<?, ?>) current).get(key);
-                    evaluateDocumentFieldAccessRecursive(newValue, bracketExprs, index + 1, listener);
-                } else if (current instanceof List) {
-                    // list indexing by numeric key
-                    List<?> list = (List<?>) current;
-                    int idx;
-                    try {
-                        idx = ((Number) keyObj).intValue();
-                    } catch (ClassCastException e) {
-                        listener.onFailure(new RuntimeException("List index must be numeric, but got: " + keyObj));
-                        return;
-                    }
-                    if (idx < 0 || idx >= list.size()) {
-                        listener.onFailure(new RuntimeException("List index out of bounds: " + idx));
-                        return;
-                    }
-                    Object newValue = list.get(idx);
                     evaluateDocumentFieldAccessRecursive(newValue, bracketExprs, index + 1, listener);
                 } else {
                     listener.onFailure(new RuntimeException("Attempted to index into unsupported type: " +

@@ -6,6 +6,7 @@ TARBALL_DIR="distribution/archives/darwin-tar/build/distributions"
 TARBALL="elasticsearch-${ES_VERSION}-darwin-x86_64.tar.gz"
 ES_DIR="elasticsearch-${ES_VERSION}"
 NOTEBOOK_NAME="./x-pack/plugin/plesql/src/test/script/retro-arcade-data.ipynb"
+NEW_NOTEBOOK_NAME="./x-pack/plugin/plesql/src/test/script/video-games-platform.ipynb"
 
 # Function to kill any running Elasticsearch processes
 kill_elasticsearch() {
@@ -120,13 +121,21 @@ else
   exit 1
 fi
 
-# Step 10: Run the Python notebook to index data into Elasticsearch using papermill
-echo "Running Python notebook to index data into Elasticsearch using papermill..."
+# Step 10: Run the Python notebooks to index data into Elasticsearch using papermill
+echo "Running Python notebooks to index data into Elasticsearch using papermill..."
 install_dependencies  # Install dependencies before running the notebook
 papermill "${NOTEBOOK_NAME}" output_notebook.ipynb
 
 if [ $? -ne 0 ]; then
-  echo "Error: Failed to execute Python notebook with papermill."
+  echo "Error: Failed to execute retro arcade notebook."
+  cleanup
+  exit 1
+fi
+
+papermill "${NEW_NOTEBOOK_NAME}" output_video_games_notebook.ipynb
+
+if [ $? -ne 0 ]; then
+  echo "Error: Failed to execute video games notebook."
   cleanup
   exit 1
 fi
