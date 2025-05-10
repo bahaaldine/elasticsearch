@@ -6,6 +6,11 @@
  */
 
 package org.elasticsearch.xpack.plesql.functions.builtin.datatypes;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionCollectionSpec;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionCategory;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionParam;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionReturn;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionSpec;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -23,13 +28,47 @@ import java.util.regex.Pattern;
 /**
  * Registers all built‑in functions (mostly string functions) in the given ExecutionContext.
  */
-public class StringBuiltInFunctions {
+@FunctionCollectionSpec(
+    category = FunctionCategory.STRING,
+    description = "Built-in string manipulation functions like LENGTH, SUBSTR, UPPER, etc."
+)
+public class git s {
     private static final Logger LOGGER = LogManager.getLogger(StringBuiltInFunctions.class);
 
     public static void registerAll(ExecutionContext context) {
         LOGGER.info("Registering String built-in functions");
+        registerLength(context);
+        registerSubstr(context);
+        registerUpper(context);
+        registerLower(context);
+        registerTrim(context);
+        registerLtrim(context);
+        registerRtrim(context);
+        registerReplace(context);
+        registerInstr(context);
+        registerLpad(context);
+        registerRpad(context);
+        registerSplit(context);
+        registerConcat(context);
+        registerRegexpReplace(context);
+        registerRegexpSubstr(context);
+        registerReverse(context);
+        registerInitcap(context);
+    }
 
-        // LENGTH: expects one argument of type STRING.
+    @FunctionSpec(
+        name = "LENGTH",
+        description = "Returns the length of a string.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to measure")
+        },
+        returnType = @FunctionReturn(type = "INTEGER", description = "The number of characters in the string"),
+        examples = {
+            "LENGTH('Elastic') -> 7"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerLength(ExecutionContext context) {
         context.declareFunction("LENGTH",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
             new BuiltInFunctionDefinition("LENGTH", (List<Object> args, ActionListener<Object> listener) -> {
@@ -40,10 +79,24 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // SUBSTR: for simplicity, we register with three parameters:
-        //   input (STRING), start (NUMBER), length (NUMBER)
-        // The lambda accepts 2 or 3 arguments.
+    @FunctionSpec(
+        name = "SUBSTR",
+        description = "Returns a substring from a string starting at a given position with optional length.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to extract from"),
+            @FunctionParam(name = "start", type = "NUMBER", description = "The starting position (1-based)"),
+            @FunctionParam(name = "length", type = "NUMBER", description = "The length of the substring (optional)")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The extracted substring"),
+        examples = {
+            "SUBSTR('Elastic', 2, 3) -> 'las'",
+            "SUBSTR('Elastic', 2) -> 'lastic'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerSubstr(ExecutionContext context) {
         context.declareFunction("SUBSTR",
             Arrays.asList(
                 new Parameter("input", "STRING", ParameterMode.IN),
@@ -65,8 +118,21 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // UPPER: expects one STRING argument.
+    @FunctionSpec(
+        name = "UPPER",
+        description = "Converts a string to upper case.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to convert")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The upper-cased string"),
+        examples = {
+            "UPPER('Elastic') -> 'ELASTIC'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerUpper(ExecutionContext context) {
         context.declareFunction("UPPER",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
             new BuiltInFunctionDefinition("UPPER", (List<Object> args, ActionListener<Object> listener) -> {
@@ -77,8 +143,21 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // LOWER: expects one STRING argument.
+    @FunctionSpec(
+        name = "LOWER",
+        description = "Converts a string to lower case.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to convert")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The lower-cased string"),
+        examples = {
+            "LOWER('Elastic') -> 'elastic'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerLower(ExecutionContext context) {
         context.declareFunction("LOWER",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
             new BuiltInFunctionDefinition("LOWER", (List<Object> args, ActionListener<Object> listener) -> {
@@ -89,8 +168,21 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // TRIM: expects one STRING argument.
+    @FunctionSpec(
+        name = "TRIM",
+        description = "Removes leading and trailing whitespace from a string.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to trim")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The trimmed string"),
+        examples = {
+            "TRIM('  Elastic  ') -> 'Elastic'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerTrim(ExecutionContext context) {
         context.declareFunction("TRIM",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
             new BuiltInFunctionDefinition("TRIM", (List<Object> args, ActionListener<Object> listener) -> {
@@ -101,8 +193,21 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // LTRIM: expects one STRING argument.
+    @FunctionSpec(
+        name = "LTRIM",
+        description = "Removes leading whitespace from a string.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to trim")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The left-trimmed string"),
+        examples = {
+            "LTRIM('   Elastic') -> 'Elastic'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerLtrim(ExecutionContext context) {
         context.declareFunction("LTRIM",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
             new BuiltInFunctionDefinition("LTRIM", (List<Object> args, ActionListener<Object> listener) -> {
@@ -113,8 +218,21 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // RTRIM: expects one STRING argument.
+    @FunctionSpec(
+        name = "RTRIM",
+        description = "Removes trailing whitespace from a string.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to trim")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The right-trimmed string"),
+        examples = {
+            "RTRIM('Elastic   ') -> 'Elastic'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerRtrim(ExecutionContext context) {
         context.declareFunction("RTRIM",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
             new BuiltInFunctionDefinition("RTRIM", (List<Object> args, ActionListener<Object> listener) -> {
@@ -125,8 +243,23 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // REPLACE: expects three STRING arguments.
+    @FunctionSpec(
+        name = "REPLACE",
+        description = "Replaces all occurrences of a substring with a replacement string.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to search"),
+            @FunctionParam(name = "target", type = "STRING", description = "The substring to replace"),
+            @FunctionParam(name = "replacement", type = "STRING", description = "The replacement string")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The string with replacements"),
+        examples = {
+            "REPLACE('Elastic', 'E', 'e') -> 'elastic'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerReplace(ExecutionContext context) {
         context.declareFunction("REPLACE",
             Arrays.asList(
                 new Parameter("input", "STRING", ParameterMode.IN),
@@ -144,8 +277,23 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // INSTR: expects two STRING arguments.
+    @FunctionSpec(
+        name = "INSTR",
+        description = "Returns the position of the first occurrence of a substring in a string (1-based). Returns 0 if not found.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to search"),
+            @FunctionParam(name = "substring", type = "STRING", description = "The substring to search for")
+        },
+        returnType = @FunctionReturn(type = "INTEGER", description = "The position of the substring, or 0 if not found"),
+        examples = {
+            "INSTR('Elastic', 'as') -> 2",
+            "INSTR('Elastic', 'xyz') -> 0"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerInstr(ExecutionContext context) {
         context.declareFunction("INSTR",
             Arrays.asList(
                 new Parameter("input", "STRING", ParameterMode.IN),
@@ -162,8 +310,23 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // LPAD: expects three arguments: STRING, NUMBER, STRING.
+    @FunctionSpec(
+        name = "LPAD",
+        description = "Pads the left side of a string with another string to a certain length.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The original string"),
+            @FunctionParam(name = "totalLength", type = "NUMBER", description = "The desired total length"),
+            @FunctionParam(name = "padStr", type = "STRING", description = "The string to pad with")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The padded string"),
+        examples = {
+            "LPAD('Elastic', 10, '*') -> '***Elastic'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerLpad(ExecutionContext context) {
         context.declareFunction("LPAD",
             Arrays.asList(
                 new Parameter("input", "STRING", ParameterMode.IN),
@@ -189,8 +352,23 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // RPAD: expects three arguments: STRING, NUMBER, STRING.
+    @FunctionSpec(
+        name = "RPAD",
+        description = "Pads the right side of a string with another string to a certain length.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The original string"),
+            @FunctionParam(name = "totalLength", type = "NUMBER", description = "The desired total length"),
+            @FunctionParam(name = "padStr", type = "STRING", description = "The string to pad with")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The padded string"),
+        examples = {
+            "RPAD('Elastic', 10, '*') -> 'Elastic***'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerRpad(ExecutionContext context) {
         context.declareFunction("RPAD",
             Arrays.asList(
                 new Parameter("input", "STRING", ParameterMode.IN),
@@ -212,8 +390,22 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // SPLIT: expects two STRING arguments.
+    @FunctionSpec(
+        name = "SPLIT",
+        description = "Splits a string by the given delimiter.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to split"),
+            @FunctionParam(name = "delimiter", type = "STRING", description = "The delimiter string")
+        },
+        returnType = @FunctionReturn(type = "ARRAY<STRING>", description = "The list of split parts"),
+        examples = {
+            "SPLIT('a,b,c', ',') -> ['a','b','c']"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerSplit(ExecutionContext context) {
         context.declareFunction("SPLIT",
             Arrays.asList(
                 new Parameter("input", "STRING", ParameterMode.IN),
@@ -230,8 +422,22 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // Concatenation operator "||": expects two arguments.
+    @FunctionSpec(
+        name = "||",
+        description = "Concatenates two strings.",
+        parameters = {
+            @FunctionParam(name = "left", type = "STRING", description = "The left string"),
+            @FunctionParam(name = "right", type = "STRING", description = "The right string")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The concatenated string"),
+        examples = {
+            "'foo' || 'bar' -> 'foobar'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerConcat(ExecutionContext context) {
         context.declareFunction("||",
             Arrays.asList(
                 new Parameter("left", "STRING", ParameterMode.IN),
@@ -245,8 +451,23 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // REGEXP_REPLACE: expects three STRING arguments.
+    @FunctionSpec(
+        name = "REGEXP_REPLACE",
+        description = "Replaces each substring that matches a regular expression with a replacement string.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to search"),
+            @FunctionParam(name = "regex", type = "STRING", description = "The regular expression"),
+            @FunctionParam(name = "replacement", type = "STRING", description = "The replacement string")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The string with regex replacements"),
+        examples = {
+            "REGEXP_REPLACE('Elastic', '[aeiou]', '*') -> 'El*st*c'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerRegexpReplace(ExecutionContext context) {
         context.declareFunction("REGEXP_REPLACE",
             Arrays.asList(
                 new Parameter("input", "STRING", ParameterMode.IN),
@@ -264,8 +485,22 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // REGEXP_SUBSTR: expects two STRING arguments.
+    @FunctionSpec(
+        name = "REGEXP_SUBSTR",
+        description = "Returns the first substring that matches the given regular expression.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to search"),
+            @FunctionParam(name = "regex", type = "STRING", description = "The regular expression")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The first matching substring, or empty if none"),
+        examples = {
+            "REGEXP_SUBSTR('Elastic', '[aeiou]') -> 'a'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerRegexpSubstr(ExecutionContext context) {
         context.declareFunction("REGEXP_SUBSTR",
             Arrays.asList(
                 new Parameter("input", "STRING", ParameterMode.IN),
@@ -286,8 +521,21 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // REVERSE: expects one STRING argument.
+    @FunctionSpec(
+        name = "REVERSE",
+        description = "Reverses a string.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to reverse")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The reversed string"),
+        examples = {
+            "REVERSE('Elastic') -> 'citsalE'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerReverse(ExecutionContext context) {
         context.declareFunction("REVERSE",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
             new BuiltInFunctionDefinition("REVERSE", (List<Object> args, ActionListener<Object> listener) -> {
@@ -299,8 +547,21 @@ public class StringBuiltInFunctions {
                 }
             })
         );
+    }
 
-        // INITCAP: expects one STRING argument.
+    @FunctionSpec(
+        name = "INITCAP",
+        description = "Converts the first letter of each word to upper case and the rest to lower case.",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "The string to convert")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "The converted string"),
+        examples = {
+            "INITCAP('elastic search') -> 'Elastic Search'"
+        },
+        category = FunctionCategory.STRING
+    )
+    public static void registerInitcap(ExecutionContext context) {
         context.declareFunction("INITCAP",
             Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
             new BuiltInFunctionDefinition("INITCAP", (List<Object> args, ActionListener<Object> listener) -> {

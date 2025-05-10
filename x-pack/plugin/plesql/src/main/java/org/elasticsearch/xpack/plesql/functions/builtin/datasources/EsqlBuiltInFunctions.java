@@ -7,6 +7,11 @@
 
 package org.elasticsearch.xpack.plesql.functions.builtin.datasources;
 
+import org.elasticsearch.xpack.plesql.functions.api.FunctionSpec;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionParam;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionReturn;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionCategory;
+
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionType;
 import org.elasticsearch.action.search.SearchRequest;
@@ -33,10 +38,50 @@ import org.elasticsearch.logging.LogManager;
 import org.elasticsearch.logging.Logger;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 
-// Add any additional necessary imports (e.g. for SearchRequest, SearchSourceBuilder)
-// import org.elasticsearch.action.search.SearchRequest;
-// import org.elasticsearch.search.builder.SearchSourceBuilder;
-
+/**
+ * Provides the ESQL_QUERY built-in function for executing raw ESQL query strings.
+ *
+ * The {@code ESQL_QUERY} function executes a raw ESQL query string and returns a list of normalized documents.
+ * It supports variable substitution using the {@code :var} syntax, where variables defined in the current
+ * {@link org.elasticsearch.xpack.plesql.context.ExecutionContext} are replaced in the query before execution.
+ * The function returns a list of documents, where each document represents a result row and maps column names to values.
+ * Nested structures (such as maps or lists) in the result are converted to JSON strings for normalization.
+ *
+ * Example usages:
+ * <pre>
+ *   ESQL_QUERY('FROM games | LIMIT 10')
+ *   ESQL_QUERY('FROM purchases | WHERE user_id == :userId')
+ * </pre>
+ *
+ * Parameters:
+ * <ul>
+ *   <li>{@code query} (STRING): The raw ESQL query string to execute. Variables in the form of {@code :varName}
+ *   will be replaced using the current execution context.</li>
+ * </ul>
+ *
+ * Returns:
+ * <ul>
+ *   <li>ARRAY OF DOCUMENT: A list of documents representing the result rows, with each document mapping column names to values.</li>
+ * </ul>
+ */
+@FunctionSpec(
+    name = "ESQL_QUERY",
+    description = "Executes a raw ESQL query string and returns a list of normalized documents. " +
+        "Supports variable substitution using :var syntax.",
+    parameters = {
+        @FunctionParam(name = "query", type = "STRING", description = "The raw ESQL query string to execute. " +
+            "Variables in the form of :varName will be replaced using the current execution context.")
+    },
+    returnType = @FunctionReturn(
+        type = "ARRAY OF DOCUMENT",
+        description = "A list of documents representing the result rows, with each document mapping column names to values."
+    ),
+    examples = {
+        "ESQL_QUERY('FROM games | LIMIT 10')",
+        "ESQL_QUERY('FROM purchases | WHERE user_id == :userId')"
+    },
+    category = FunctionCategory.DATASOURCE
+)
 public class EsqlBuiltInFunctions {
 
     private static final Logger LOGGER = LogManager.getLogger(EsqlBuiltInFunctions.class);

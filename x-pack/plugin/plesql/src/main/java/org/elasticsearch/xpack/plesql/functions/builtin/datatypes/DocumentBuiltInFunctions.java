@@ -1,195 +1,203 @@
-/*
- * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0; you may not use this file except in compliance with the Elastic License
- * 2.0.
- */
-
 package org.elasticsearch.xpack.plesql.functions.builtin.datatypes;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 import org.elasticsearch.xpack.plesql.functions.Parameter;
 import org.elasticsearch.xpack.plesql.functions.ParameterMode;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionCategory;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionCollectionSpec;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionParam;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionReturn;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionSpec;
 import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
-import org.elasticsearch.xpack.plesql.context.ExecutionContext;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Registers all built‐in functions for DOCUMENT types used in PLESQL.
- * <p>
- * This class is responsible for adding document‐related functions to the global
- * ExecutionContext. It registers functions that allow operations on DOCUMENT values,
- * represented as Java Map objects. The supported functions include:
- * <ul>
- *   <li><strong>DOCUMENT_KEYS</strong>: Returns a list of keys from a document.
- *       <br>Expected arguments: 1 (a DOCUMENT).</li>
- *   <li><strong>DOCUMENT_VALUES</strong>: Returns a list of values from a document.
- *       <br>Expected arguments: 1 (a DOCUMENT).</li>
- *   <li><strong>DOCUMENT_GET</strong>: Retrieves the value associated with a specified key.
- *       <br>Expected arguments: 2 (a DOCUMENT and a key).</li>
- *   <li><strong>DOCUMENT_MERGE</strong>: Merges two documents into one.
- *       <br>Expected arguments: 2 (document1 and document2).</li>
- *   <li><strong>DOCUMENT_REMOVE</strong>: Returns a new document with the given key removed.
- *       <br>Expected arguments: 2 (a DOCUMENT and a key).</li>
- *   <li><strong>DOCUMENT_CONTAINS</strong>: Returns true if the document contains the given key.
- *       <br>Expected arguments: 2 (a DOCUMENT and a key).</li>
- * </ul>
- * <p>
- * Each function is declared using the three‐argument version of the
- * {@code declareFunction(String, List<Parameter>, FunctionDefinition)} method on the
- * ExecutionContext. The registration provides a specific parameter list that defines the
- * expected arguments (including their types and modes) for each function.
- * </p>
- * <p>
- * Example usage:
- * <pre>
- *   ExecutionContext context = new ExecutionContext();
- *   DocumentBuiltInFunctions.registerAll(context);
- * </pre>
- *
- * @see ExecutionContext
- * @see BuiltInFunctionDefinition
- * @see org.elasticsearch.xpack.plesql.functions.Parameter
- * @see org.elasticsearch.xpack.plesql.functions.ParameterMode
- */
+@FunctionCollectionSpec(
+    category = FunctionCategory.DOCUMENT,
+    description = "Document manipulation functions such as merging, extracting keys, values, and conditional logic."
+)
 public class DocumentBuiltInFunctions {
+
     private static final Logger LOGGER = LogManager.getLogger(DocumentBuiltInFunctions.class);
 
     public static void registerAll(ExecutionContext context) {
         LOGGER.info("Registering Document built-in functions");
-        // In DocumentBuiltInFunctions.java
 
-// DOCUMENT_KEYS: returns the list of keys in a document.
+        registerDocumentKeys(context);
+        registerDocumentValues(context);
+        registerDocumentGet(context);
+        registerDocumentMerge(context);
+        registerDocumentRemove(context);
+        registerDocumentContains(context);
+    }
+
+    @FunctionSpec(
+        name = "DOCUMENT_KEYS",
+        description = "Returns the list of keys in the given document.",
+        parameters = {
+            @FunctionParam(name = "doc", type = "DOCUMENT", description = "The input document.")
+        },
+        returnType = @FunctionReturn(type = "ARRAY OF STRING", description = "An array of keys from the document."),
+        examples = {"DOCUMENT_KEYS({\"a\":1,\"b\":2}) -> [\"a\", \"b\"]"},
+        category = FunctionCategory.DOCUMENT
+    )
+    public static void registerDocumentKeys(ExecutionContext context) {
         context.declareFunction("DOCUMENT_KEYS",
             Collections.singletonList(new Parameter("doc", "DOCUMENT", ParameterMode.IN)),
             new BuiltInFunctionDefinition("DOCUMENT_KEYS", (List<Object> args, ActionListener<Object> listener) -> {
-                if (args.size() != 1) {
-                    listener.onFailure(new RuntimeException("DOCUMENT_KEYS expects one argument"));
-                } else {
-                    Object docObj = args.get(0);
-                    if ((docObj instanceof Map) == false) {
-                        listener.onFailure(new RuntimeException("DOCUMENT_KEYS expects a document"));
-                    } else {
-                        Map<?, ?> doc = (Map<?, ?>) docObj;
-                        listener.onResponse(new ArrayList<>(doc.keySet()));
-                    }
+                if (args.size() != 1 || (args.get(0) instanceof Map) == false ) {
+                    listener.onFailure(new RuntimeException("DOCUMENT_KEYS expects one DOCUMENT argument"));
+                    return;
                 }
+                Map<?, ?> doc = (Map<?, ?>) args.get(0);
+                listener.onResponse(new ArrayList<>(doc.keySet()));
             })
         );
+    }
 
-// DOCUMENT_VALUES: returns the list of values in a document.
+    @FunctionSpec(
+        name = "DOCUMENT_VALUES",
+        description = "Returns the list of values in the given document.",
+        parameters = {
+            @FunctionParam(name = "doc", type = "DOCUMENT", description = "The input document.")
+        },
+        returnType = @FunctionReturn(type = "ARRAY", description = "An array of values from the document."),
+        examples = {"DOCUMENT_VALUES({\"a\":1,\"b\":2}) -> [1, 2]"},
+        category = FunctionCategory.DOCUMENT
+    )
+    public static void registerDocumentValues(ExecutionContext context) {
         context.declareFunction("DOCUMENT_VALUES",
             Collections.singletonList(new Parameter("doc", "DOCUMENT", ParameterMode.IN)),
             new BuiltInFunctionDefinition("DOCUMENT_VALUES", (List<Object> args, ActionListener<Object> listener) -> {
-                if (args.size() != 1) {
-                    listener.onFailure(new RuntimeException("DOCUMENT_VALUES expects one argument"));
-                } else {
-                    Object docObj = args.get(0);
-                    if ((docObj instanceof Map) == false) {
-                        listener.onFailure(new RuntimeException("DOCUMENT_VALUES expects a document"));
-                    } else {
-                        Map<?, ?> doc = (Map<?, ?>) docObj;
-                        listener.onResponse(new ArrayList<>(doc.values()));
-                    }
+                if (args.size() != 1 || (args.get(0) instanceof Map) == false) {
+                    listener.onFailure(new RuntimeException("DOCUMENT_VALUES expects one DOCUMENT argument"));
+                    return;
                 }
+                Map<?, ?> doc = (Map<?, ?>) args.get(0);
+                listener.onResponse(new ArrayList<>(doc.values()));
             })
         );
+    }
 
-// DOCUMENT_GET: returns the value for a given key.
+    @FunctionSpec(
+        name = "DOCUMENT_GET",
+        description = "Returns the value for a given key in the document.",
+        parameters = {
+            @FunctionParam(name = "doc", type = "DOCUMENT", description = "The input document."),
+            @FunctionParam(name = "key", type = "STRING", description = "The key to retrieve from the document.")
+        },
+        returnType = @FunctionReturn(type = "ANY", description = "The value associated with the given key."),
+        examples = {"DOCUMENT_GET({\"a\":1,\"b\":2}, \"a\") -> 1"},
+        category = FunctionCategory.DOCUMENT
+    )
+    public static void registerDocumentGet(ExecutionContext context) {
         context.declareFunction("DOCUMENT_GET",
-            Arrays.asList(
+            List.of(
                 new Parameter("doc", "DOCUMENT", ParameterMode.IN),
                 new Parameter("key", "STRING", ParameterMode.IN)
             ),
             new BuiltInFunctionDefinition("DOCUMENT_GET", (List<Object> args, ActionListener<Object> listener) -> {
-                if (args.size() != 2) {
-                    listener.onFailure(new RuntimeException("DOCUMENT_GET expects two arguments: a document and a key"));
-                } else {
-                    Object docObj = args.get(0);
-                    if ((docObj instanceof Map) == false) {
-                        listener.onFailure(new RuntimeException("DOCUMENT_GET expects a document as the first argument"));
-                    } else {
-                        Map<?, ?> doc = (Map<?, ?>) docObj;
-                        Object key = args.get(1);
-                        listener.onResponse(doc.get(key));
-                    }
+                if (args.size() != 2 || (args.get(0) instanceof Map) == false ) {
+                    listener.onFailure(new RuntimeException("DOCUMENT_GET expects DOCUMENT and STRING arguments"));
+                    return;
                 }
+                Map<?, ?> doc = (Map<?, ?>) args.get(0);
+                Object key = args.get(1);
+                listener.onResponse(doc.get(key));
             })
         );
+    }
 
-// DOCUMENT_MERGE: returns a new document that is the result of merging two documents.
+    @FunctionSpec(
+        name = "DOCUMENT_MERGE",
+        description = "Returns a new document that is the result of merging two documents.",
+        parameters = {
+            @FunctionParam(name = "doc1", type = "DOCUMENT", description = "The first document."),
+            @FunctionParam(name = "doc2", type = "DOCUMENT", description = "The second document.")
+        },
+        returnType = @FunctionReturn(type = "DOCUMENT", description = "A new document containing all keys and values from both documents."),
+        examples = {"DOCUMENT_MERGE({\"a\":1}, {\"b\":2}) -> {\"a\":1, \"b\":2}"},
+        category = FunctionCategory.DOCUMENT
+    )
+    public static void registerDocumentMerge(ExecutionContext context) {
         context.declareFunction("DOCUMENT_MERGE",
-            Arrays.asList(
+            List.of(
                 new Parameter("doc1", "DOCUMENT", ParameterMode.IN),
                 new Parameter("doc2", "DOCUMENT", ParameterMode.IN)
             ),
             new BuiltInFunctionDefinition("DOCUMENT_MERGE", (List<Object> args, ActionListener<Object> listener) -> {
-                if (args.size() != 2) {
-                    listener.onFailure(new RuntimeException("DOCUMENT_MERGE expects two arguments: document1 and document2"));
-                } else {
-                    Object docObj1 = args.get(0);
-                    Object docObj2 = args.get(1);
-                    if ((docObj1 instanceof Map && docObj2 instanceof Map) == false) {
-                        listener.onFailure(new RuntimeException("DOCUMENT_MERGE expects both arguments to be documents"));
-                    } else {
-                        Map<Object, Object> merged = new HashMap<>((Map<?, ?>) docObj1);
-                        merged.putAll((Map<?, ?>) docObj2);
-                        listener.onResponse(merged);
-                    }
+                if (args.size() != 2 || (args.get(0) instanceof Map == false || (args.get(1) instanceof Map) == false )) {
+                    listener.onFailure(new RuntimeException("DOCUMENT_MERGE expects two DOCUMENT arguments"));
+                    return;
                 }
+                Map<Object, Object> merged = new HashMap<>((Map<?, ?>) args.get(0));
+                merged.putAll((Map<?, ?>) args.get(1));
+                listener.onResponse(merged);
             })
         );
+    }
 
-// DOCUMENT_REMOVE: returns a new document with the specified key removed.
+    @FunctionSpec(
+        name = "DOCUMENT_REMOVE",
+        description = "Returns a new document with the specified key removed.",
+        parameters = {
+            @FunctionParam(name = "doc", type = "DOCUMENT", description = "The input document."),
+            @FunctionParam(name = "key", type = "STRING", description = "The key to remove from the document.")
+        },
+        returnType = @FunctionReturn(type = "DOCUMENT", description = "A new document without the specified key."),
+        examples = {"DOCUMENT_REMOVE({\"a\":1,\"b\":2}, \"a\") -> {\"b\":2}"},
+        category = FunctionCategory.DOCUMENT
+    )
+    public static void registerDocumentRemove(ExecutionContext context) {
         context.declareFunction("DOCUMENT_REMOVE",
-            Arrays.asList(
+            List.of(
                 new Parameter("doc", "DOCUMENT", ParameterMode.IN),
                 new Parameter("key", "STRING", ParameterMode.IN)
             ),
             new BuiltInFunctionDefinition("DOCUMENT_REMOVE", (List<Object> args, ActionListener<Object> listener) -> {
-                if (args.size() != 2) {
-                    listener.onFailure(new RuntimeException("DOCUMENT_REMOVE expects two arguments: a document and a key"));
-                } else {
-                    Object docObj = args.get(0);
-                    if ((docObj instanceof Map) == false) {
-                        listener.onFailure(new RuntimeException("DOCUMENT_REMOVE expects the first argument to be a document"));
-                    } else {
-                        Map<Object, Object> doc = new HashMap<>((Map<?, ?>) docObj);
-                        Object key = args.get(1);
-                        doc.remove(key);
-                        listener.onResponse(doc);
-                    }
+                if (args.size() != 2 || (args.get(0) instanceof Map) == false ) {
+                    listener.onFailure(new RuntimeException("DOCUMENT_REMOVE expects DOCUMENT and STRING arguments"));
+                    return;
                 }
+                Map<Object, Object> doc = new HashMap<>((Map<?, ?>) args.get(0));
+                doc.remove(args.get(1));
+                listener.onResponse(doc);
             })
         );
+    }
 
-// DOCUMENT_CONTAINS: returns true if the document contains the given key.
+    @FunctionSpec(
+        name = "DOCUMENT_CONTAINS",
+        description = "Returns true if the document contains the given key.",
+        parameters = {
+            @FunctionParam(name = "doc", type = "DOCUMENT", description = "The input document."),
+            @FunctionParam(name = "key", type = "STRING", description = "The key to check in the document.")
+        },
+        returnType = @FunctionReturn(type = "BOOLEAN", description = "True if the document contains the key, false otherwise."),
+        examples = {"DOCUMENT_CONTAINS({\"a\":1,\"b\":2}, \"a\") -> true"},
+        category = FunctionCategory.DOCUMENT
+    )
+    public static void registerDocumentContains(ExecutionContext context) {
         context.declareFunction("DOCUMENT_CONTAINS",
-            Arrays.asList(
+            List.of(
                 new Parameter("doc", "DOCUMENT", ParameterMode.IN),
                 new Parameter("key", "STRING", ParameterMode.IN)
             ),
             new BuiltInFunctionDefinition("DOCUMENT_CONTAINS", (List<Object> args, ActionListener<Object> listener) -> {
-                if (args.size() != 2) {
-                    listener.onFailure(new RuntimeException("DOCUMENT_CONTAINS expects two arguments: a document and a key"));
-                } else {
-                    Object docObj = args.get(0);
-                    if ((docObj instanceof Map) == false) {
-                        listener.onFailure(new RuntimeException("DOCUMENT_CONTAINS expects the first argument to be a document"));
-                    } else {
-                        Map<?, ?> doc = (Map<?, ?>) docObj;
-                        Object key = args.get(1);
-                        listener.onResponse(doc.containsKey(key));
-                    }
+                if (args.size() != 2 || (args.get(0) instanceof Map) == false ) {
+                    listener.onFailure(new RuntimeException("DOCUMENT_CONTAINS expects DOCUMENT and STRING arguments"));
+                    return;
                 }
+                Map<?, ?> doc = (Map<?, ?>) args.get(0);
+                Object key = args.get(1);
+                listener.onResponse(doc.containsKey(key));
             })
         );
     }
