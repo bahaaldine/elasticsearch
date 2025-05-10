@@ -22,7 +22,6 @@ import org.elasticsearch.client.internal.OriginSettingClient;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
-import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.ValidationException;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -101,7 +100,6 @@ public class TransportPutTrainedModelAction extends TransportMasterNodeAction<Re
         ThreadPool threadPool,
         XPackLicenseState licenseState,
         ActionFilters actionFilters,
-        IndexNameExpressionResolver indexNameExpressionResolver,
         Client client,
         TrainedModelProvider trainedModelProvider,
         NamedXContentRegistry xContentRegistry
@@ -113,7 +111,6 @@ public class TransportPutTrainedModelAction extends TransportMasterNodeAction<Re
             threadPool,
             actionFilters,
             Request::new,
-            indexNameExpressionResolver,
             Response::new,
             EsExecutors.DIRECT_EXECUTOR_SERVICE
         );
@@ -415,7 +412,7 @@ public class TransportPutTrainedModelAction extends TransportMasterNodeAction<Re
             ML_ORIGIN,
             searchRequest,
             ActionListener.<SearchResponse>wrap(response -> {
-                if (response.getHits().getTotalHits().value > 0) {
+                if (response.getHits().getTotalHits().value() > 0) {
                     listener.onFailure(
                         ExceptionsHelper.badRequestException(Messages.getMessage(Messages.INFERENCE_MODEL_ID_AND_TAGS_UNIQUE, modelId))
                     );
@@ -443,7 +440,7 @@ public class TransportPutTrainedModelAction extends TransportMasterNodeAction<Re
             ML_ORIGIN,
             searchRequest,
             ActionListener.<SearchResponse>wrap(response -> {
-                if (response.getHits().getTotalHits().value > 0) {
+                if (response.getHits().getTotalHits().value() > 0) {
                     listener.onFailure(
                         ExceptionsHelper.badRequestException(Messages.getMessage(Messages.INFERENCE_TAGS_AND_MODEL_IDS_UNIQUE, tags))
                     );

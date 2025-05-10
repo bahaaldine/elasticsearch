@@ -144,7 +144,7 @@ public final class TrainedModelAssignment implements SimpleDiffable<TrainedModel
      * @param assignmentState used to track the state of the assignment for rebalancing, autoscaling, and more
      * @param reason may contain a human-readable explanation for the current state
      * @param startTime the time when the assignment was created
-     * @param maxAssignedAllocations used for adaptive allocations
+     * @param maxAssignedAllocations keeps track of the maximum number of allocations used for this assignment
      * @param adaptiveAllocationsSettings how the assignment should scale based on usage
      */
     TrainedModelAssignment(
@@ -178,7 +178,7 @@ public final class TrainedModelAssignment implements SimpleDiffable<TrainedModel
         } else {
             this.maxAssignedAllocations = totalCurrentAllocations();
         }
-        if (in.getTransportVersion().onOrAfter(TransportVersions.INFERENCE_ADAPTIVE_ALLOCATIONS)) {
+        if (in.getTransportVersion().onOrAfter(TransportVersions.V_8_16_0)) {
             this.adaptiveAllocationsSettings = in.readOptionalWriteable(AdaptiveAllocationsSettings::new);
         } else {
             this.adaptiveAllocationsSettings = null;
@@ -382,7 +382,7 @@ public final class TrainedModelAssignment implements SimpleDiffable<TrainedModel
         if (out.getTransportVersion().onOrAfter(TransportVersions.V_8_4_0)) {
             out.writeVInt(maxAssignedAllocations);
         }
-        if (out.getTransportVersion().onOrAfter(TransportVersions.INFERENCE_ADAPTIVE_ALLOCATIONS)) {
+        if (out.getTransportVersion().onOrAfter(TransportVersions.V_8_16_0)) {
             out.writeOptionalWriteable(adaptiveAllocationsSettings);
         }
     }
@@ -532,6 +532,9 @@ public final class TrainedModelAssignment implements SimpleDiffable<TrainedModel
         public AssignmentState calculateAssignmentState() {
             if (assignmentState.equals(AssignmentState.STOPPING)) {
                 return assignmentState;
+            }
+            if (taskParams.getNumberOfAllocations() == 0) {
+                return AssignmentState.STARTED;
             }
             if (nodeRoutingTable.values().stream().anyMatch(r -> r.getState().equals(RoutingState.STARTED))) {
                 return AssignmentState.STARTED;

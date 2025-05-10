@@ -10,6 +10,7 @@
 package org.elasticsearch.repositories.azure;
 
 import fixture.azure.AzureHttpFixture;
+import fixture.azure.MockAzureBlobStore;
 
 import com.azure.core.exception.HttpResponseException;
 import com.azure.storage.blob.BlobContainerClient;
@@ -30,6 +31,8 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.core.Booleans;
+import org.elasticsearch.logging.LogManager;
+import org.elasticsearch.logging.Logger;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.repositories.AbstractThirdPartyRepositoryTestCase;
 import org.elasticsearch.repositories.blobstore.BlobStoreRepository;
@@ -45,7 +48,12 @@ import static org.hamcrest.Matchers.blankOrNullString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
 
+/**
+ * These tests sometimes run against a genuine Azure endpoint with credentials obtained from Vault. These credentials expire periodically
+ * and must be manually renewed; the process is in the onboarding/process docs.
+ */
 public class AzureStorageCleanupThirdPartyTests extends AbstractThirdPartyRepositoryTestCase {
+    private static final Logger logger = LogManager.getLogger(AzureStorageCleanupThirdPartyTests.class);
     private static final boolean USE_FIXTURE = Booleans.parseBoolean(System.getProperty("test.azure.fixture", "true"));
 
     private static final String AZURE_ACCOUNT = System.getProperty("test.azure.account");
@@ -57,7 +65,8 @@ public class AzureStorageCleanupThirdPartyTests extends AbstractThirdPartyReposi
         System.getProperty("test.azure.container"),
         System.getProperty("test.azure.tenant_id"),
         System.getProperty("test.azure.client_id"),
-        AzureHttpFixture.sharedKeyForAccountPredicate(AZURE_ACCOUNT)
+        AzureHttpFixture.sharedKeyForAccountPredicate(AZURE_ACCOUNT),
+        MockAzureBlobStore.LeaseExpiryPredicate.NEVER_EXPIRE
     );
 
     @Override
@@ -89,8 +98,10 @@ public class AzureStorageCleanupThirdPartyTests extends AbstractThirdPartyReposi
         MockSecureSettings secureSettings = new MockSecureSettings();
         secureSettings.setString("azure.client.default.account", System.getProperty("test.azure.account"));
         if (hasSasToken) {
+            logger.info("--> Using SAS token authentication");
             secureSettings.setString("azure.client.default.sas_token", System.getProperty("test.azure.sas_token"));
         } else {
+            logger.info("--> Using key authentication");
             secureSettings.setString("azure.client.default.key", System.getProperty("test.azure.key"));
         }
         return secureSettings;
@@ -108,7 +119,7 @@ public class AzureStorageCleanupThirdPartyTests extends AbstractThirdPartyReposi
                 Settings.builder()
                     .put("container", System.getProperty("test.azure.container"))
                     .put("base_path", System.getProperty("test.azure.base") + randomAlphaOfLength(8))
-                    .put("max_single_part_upload_size", new ByteSizeValue(1, ByteSizeUnit.MB))
+                    .put("max_single_part_upload_size", ByteSizeValue.of(1, ByteSizeUnit.MB))
             )
             .get();
         assertThat(putRepositoryResponse.isAcknowledged(), equalTo(true));
@@ -126,10 +137,8 @@ public class AzureStorageCleanupThirdPartyTests extends AbstractThirdPartyReposi
                 .client("default", LocationMode.PRIMARY_ONLY, randomFrom(OperationPurpose.values()));
             final BlobServiceClient client = azureBlobServiceClient.getSyncClient();
             try {
-                SocketAccess.doPrivilegedException(() -> {
-                    final BlobContainerClient blobContainer = client.getBlobContainerClient(blobStore.toString());
-                    return blobContainer.exists();
-                });
+                final BlobContainerClient blobContainer = client.getBlobContainerClient(blobStore.toString());
+                blobContainer.exists();
                 future.onFailure(
                     new RuntimeException(
                         "The SAS token used in this test allowed for checking container existence. This test only supports tokens "

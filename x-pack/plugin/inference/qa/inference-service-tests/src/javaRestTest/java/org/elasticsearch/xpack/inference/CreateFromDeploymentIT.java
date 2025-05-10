@@ -29,7 +29,7 @@ public class CreateFromDeploymentIT extends InferenceBaseRestTest {
 
         CustomElandModelIT.createMlNodeTextExpansionModel(modelId, client());
         var response = startMlNodeDeploymemnt(modelId, deploymentId);
-        assertOkOrCreated(response);
+        assertStatusOkOrCreated(response);
 
         var inferenceId = "inference_on_existing_deployment";
         var putModel = putModel(inferenceId, endpointConfig(deploymentId), TaskType.SPARSE_EMBEDDING);
@@ -40,8 +40,34 @@ public class CreateFromDeploymentIT extends InferenceBaseRestTest {
             is(Map.of("num_allocations", 1, "num_threads", 1, "model_id", "attach_to_deployment", "deployment_id", "existing_deployment"))
         );
 
+        var getModel = getModel(inferenceId);
+        serviceSettings = getModel.get("service_settings");
+        assertThat(
+            getModel.toString(),
+            serviceSettings,
+            is(Map.of("num_allocations", 1, "num_threads", 1, "model_id", "attach_to_deployment", "deployment_id", "existing_deployment"))
+        );
+
         var results = infer(inferenceId, List.of("washing machine"));
         assertNotNull(results.get("sparse_embedding"));
+
+        var updatedNumAllocations = randomIntBetween(1, 10);
+        var updatedEndpointConfig = updateEndpoint(inferenceId, updatedEndpointConfig(updatedNumAllocations), TaskType.SPARSE_EMBEDDING);
+        assertThat(
+            updatedEndpointConfig.get("service_settings"),
+            is(
+                Map.of(
+                    "num_allocations",
+                    updatedNumAllocations,
+                    "num_threads",
+                    1,
+                    "model_id",
+                    "attach_to_deployment",
+                    "deployment_id",
+                    "existing_deployment"
+                )
+            )
+        );
 
         deleteModel(inferenceId);
         // assert deployment not stopped
@@ -58,7 +84,7 @@ public class CreateFromDeploymentIT extends InferenceBaseRestTest {
 
         CustomElandModelIT.createMlNodeTextExpansionModel(modelId, client());
         var response = startMlNodeDeploymemnt(modelId, deploymentId);
-        assertOkOrCreated(response);
+        assertStatusOkOrCreated(response);
 
         var inferenceId = "inference_on_existing_deployment";
         var putModel = putModel(inferenceId, endpointConfig(modelId, deploymentId), TaskType.SPARSE_EMBEDDING);
@@ -80,8 +106,45 @@ public class CreateFromDeploymentIT extends InferenceBaseRestTest {
             )
         );
 
+        var getModel = getModel(inferenceId);
+        serviceSettings = getModel.get("service_settings");
+        assertThat(
+            getModel.toString(),
+            serviceSettings,
+            is(
+                Map.of(
+                    "num_allocations",
+                    1,
+                    "num_threads",
+                    1,
+                    "model_id",
+                    "attach_with_model_id",
+                    "deployment_id",
+                    "existing_deployment_with_model_id"
+                )
+            )
+        );
+
         var results = infer(inferenceId, List.of("washing machine"));
         assertNotNull(results.get("sparse_embedding"));
+
+        var updatedNumAllocations = randomIntBetween(1, 10);
+        var updatedEndpointConfig = updateEndpoint(inferenceId, updatedEndpointConfig(updatedNumAllocations), TaskType.SPARSE_EMBEDDING);
+        assertThat(
+            updatedEndpointConfig.get("service_settings"),
+            is(
+                Map.of(
+                    "num_allocations",
+                    updatedNumAllocations,
+                    "num_threads",
+                    1,
+                    "model_id",
+                    "attach_with_model_id",
+                    "deployment_id",
+                    "existing_deployment_with_model_id"
+                )
+            )
+        );
 
         stopMlNodeDeployment(deploymentId);
     }
@@ -93,7 +156,7 @@ public class CreateFromDeploymentIT extends InferenceBaseRestTest {
 
         CustomElandModelIT.createMlNodeTextExpansionModel(modelId, client());
         var response = startMlNodeDeploymemnt(modelId, deploymentId);
-        assertOkOrCreated(response);
+        assertStatusOkOrCreated(response);
 
         var inferenceId = "inference_on_existing_deployment";
         var e = expectThrows(
@@ -105,6 +168,63 @@ public class CreateFromDeploymentIT extends InferenceBaseRestTest {
             containsString(
                 "Deployment [existing_deployment_with_model_id] uses model [attach_with_model_id] "
                     + "which does not match the model [not_the_same_as_the_one_used_in_the_deployment] in the request."
+            )
+        );
+    }
+
+    public void testDeploymentDoesNotExist() {
+        var deploymentId = "missing_deployment";
+
+        var inferenceId = "inference_on_missing_deployment";
+        var e = expectThrows(ResponseException.class, () -> putModel(inferenceId, endpointConfig(deploymentId), TaskType.SPARSE_EMBEDDING));
+        assertThat(e.getMessage(), containsString("Cannot find deployment [missing_deployment]"));
+    }
+
+    public void testNumAllocationsIsUpdated() throws IOException {
+        var modelId = "update_num_allocations";
+        var deploymentId = modelId;
+
+        CustomElandModelIT.createMlNodeTextExpansionModel(modelId, client());
+        var response = startMlNodeDeploymemnt(modelId, deploymentId);
+        assertStatusOkOrCreated(response);
+
+        var inferenceId = "test_num_allocations_updated";
+        var putModel = putModel(inferenceId, endpointConfig(deploymentId), TaskType.SPARSE_EMBEDDING);
+        var serviceSettings = putModel.get("service_settings");
+        assertThat(
+            putModel.toString(),
+            serviceSettings,
+            is(
+                Map.of(
+                    "num_allocations",
+                    1,
+                    "num_threads",
+                    1,
+                    "model_id",
+                    "update_num_allocations",
+                    "deployment_id",
+                    "update_num_allocations"
+                )
+            )
+        );
+
+        assertStatusOkOrCreated(updateMlNodeDeploymemnt(deploymentId, 2));
+
+        var updatedServiceSettings = getModel(inferenceId).get("service_settings");
+        assertThat(
+            updatedServiceSettings.toString(),
+            updatedServiceSettings,
+            is(
+                Map.of(
+                    "num_allocations",
+                    2,
+                    "num_threads",
+                    1,
+                    "model_id",
+                    "update_num_allocations",
+                    "deployment_id",
+                    "update_num_allocations"
+                )
             )
         );
     }
@@ -132,6 +252,16 @@ public class CreateFromDeploymentIT extends InferenceBaseRestTest {
             """, modelId, deploymentId);
     }
 
+    private String updatedEndpointConfig(int numAllocations) {
+        return Strings.format("""
+            {
+              "service_settings": {
+                "num_allocations": %d
+              }
+            }
+            """, numAllocations);
+    }
+
     private Response startMlNodeDeploymemnt(String modelId, String deploymentId) throws IOException {
         String endPoint = "/_ml/trained_models/"
             + modelId
@@ -144,6 +274,20 @@ public class CreateFromDeploymentIT extends InferenceBaseRestTest {
         }
 
         Request request = new Request("POST", endPoint);
+        return client().performRequest(request);
+    }
+
+    private Response updateMlNodeDeploymemnt(String deploymentId, int numAllocations) throws IOException {
+        String endPoint = "/_ml/trained_models/" + deploymentId + "/deployment/_update";
+
+        var body = Strings.format("""
+            {
+              "number_of_allocations": %d
+            }
+            """, numAllocations);
+
+        Request request = new Request("POST", endPoint);
+        request.setJsonEntity(body);
         return client().performRequest(request);
     }
 

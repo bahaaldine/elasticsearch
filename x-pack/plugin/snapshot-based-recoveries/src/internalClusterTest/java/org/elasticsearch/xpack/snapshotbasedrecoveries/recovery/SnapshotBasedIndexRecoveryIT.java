@@ -465,7 +465,7 @@ public class SnapshotBasedIndexRecoveryIT extends AbstractSnapshotIntegTestCase 
 
         int numDocs = randomIntBetween(300, 1000);
         indexDocs(indexName, 0, numDocs);
-        forceMerge();
+        forceMerge(false);
 
         String repoName = "repo";
         createRepo(repoName, TestRepositoryPlugin.INSTRUMENTED_TYPE);
@@ -1529,7 +1529,7 @@ public class SnapshotBasedIndexRecoveryIT extends AbstractSnapshotIntegTestCase 
     private Store.MetadataSnapshot getMetadataSnapshot(String nodeName, String indexName) throws IOException {
         ClusterState clusterState = clusterAdmin().prepareState(TEST_REQUEST_TIMEOUT).get().getState();
         IndicesService indicesService = internalCluster().getInstance(IndicesService.class, nodeName);
-        IndexService indexService = indicesService.indexService(clusterState.metadata().index(indexName).getIndex());
+        IndexService indexService = indicesService.indexService(clusterState.metadata().getProject().index(indexName).getIndex());
         IndexShard shard = indexService.getShard(0);
         try (Engine.IndexCommitRef indexCommitRef = shard.acquireSafeIndexCommit()) {
             IndexCommit safeCommit = indexCommitRef.getIndexCommit();
@@ -1595,7 +1595,7 @@ public class SnapshotBasedIndexRecoveryIT extends AbstractSnapshotIntegTestCase 
                     int docIdToMatch = randomIntBetween(0, docCount - 1);
                     assertResponse(searchRequestBuilder.setQuery(QueryBuilders.termQuery("field", docIdToMatch)), searchResponse -> {
                         assertThat(searchResponse.getSuccessfulShards(), equalTo(1));
-                        assertThat(searchResponse.getHits().getTotalHits().value, equalTo(1L));
+                        assertThat(searchResponse.getHits().getTotalHits().value(), equalTo(1L));
                         SearchHit searchHit = searchResponse.getHits().getAt(0);
                         Map<String, Object> source = searchHit.getSourceAsMap();
                         assertThat(source, is(notNullValue()));
@@ -1613,7 +1613,7 @@ public class SnapshotBasedIndexRecoveryIT extends AbstractSnapshotIntegTestCase 
 
     private void assertSearchResponseContainsAllIndexedDocs(SearchResponse searchResponse, long docCount) {
         assertThat(searchResponse.getSuccessfulShards(), equalTo(1));
-        assertThat(searchResponse.getHits().getTotalHits().value, equalTo(docCount));
+        assertThat(searchResponse.getHits().getTotalHits().value(), equalTo(docCount));
         for (int i = 0; i < searchResponse.getHits().getHits().length; i++) {
             SearchHit searchHit = searchResponse.getHits().getAt(i);
             Map<String, Object> source = searchHit.getSourceAsMap();

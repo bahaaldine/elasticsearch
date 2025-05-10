@@ -13,41 +13,47 @@ package org.elasticsearch.gradle.internal;
  * This class models the different Docker base images that are used to build Docker distributions of Elasticsearch.
  */
 public enum DockerBase {
-    DEFAULT("ubuntu:20.04", "", "apt-get"),
-
-    // "latest" here is intentional, since the image name specifies "8"
-    UBI("docker.elastic.co/ubi8/ubi-minimal:latest", "-ubi", "microdnf"),
+    // "latest" here is intentional, since the image name specifies "9"
+    DEFAULT("redhat/ubi9-minimal:latest", "", "microdnf", "Dockerfile.default"),
 
     // The Iron Bank base image is UBI (albeit hardened), but we are required to parameterize the Docker build
-    IRON_BANK("${BASE_REGISTRY}/${BASE_IMAGE}:${BASE_TAG}", "-ironbank", "yum"),
-
-    // Base image with extras for Cloud
-    CLOUD("ubuntu:20.04", "-cloud", "apt-get"),
+    IRON_BANK("${BASE_REGISTRY}/${BASE_IMAGE}:${BASE_TAG}", "-ironbank", "yum", "Dockerfile"),
 
     // Chainguard based wolfi image with latest jdk
     // This is usually updated via renovatebot
     // spotless:off
-    WOLFI("docker.elastic.co/wolfi/chainguard-base:latest@sha256:bf163e1977002301f7b9fd28fe6837a8cb2dd5c83e4cd45fb67fb28d15d5d40f",
+    WOLFI(
+        "docker.elastic.co/wolfi/chainguard-base:latest@sha256:29150cd940cc7f69407d978d5a19c86f4d9e67cf44e4d6ded787a497e8f27c9a",
         "-wolfi",
-        "apk"
+        "apk",
+        "Dockerfile"
     ),
     // spotless:on
     // Based on WOLFI above, with more extras. We don't set a base image because
     // we programmatically extend from the wolfi image.
-    CLOUD_ESS(null, "-cloud-ess", "apk");
+    CLOUD_ESS(null, "-cloud-ess", "apk", "Dockerfile.ess"),
+
+    CLOUD_ESS_FIPS(
+        "docker.elastic.co/wolfi/chainguard-base-fips:sha256-ebfc3f1d7dba992231747a2e05ad1b859843e81b5e676ad342859d7cf9e425a7@sha256:ebfc3f1d7dba992231747a2e05ad1b859843e81b5e676ad342859d7cf9e425a7",
+        "-cloud-ess-fips",
+        "apk",
+        "Dockerfile.ess-fips"
+    );
 
     private final String image;
     private final String suffix;
     private final String packageManager;
+    private final String dockerfile;
 
     DockerBase(String image, String suffix) {
-        this(image, suffix, "apt-get");
+        this(image, suffix, "apt-get", "dockerfile");
     }
 
-    DockerBase(String image, String suffix, String packageManager) {
+    DockerBase(String image, String suffix, String packageManager, String dockerfile) {
         this.image = image;
         this.suffix = suffix;
         this.packageManager = packageManager;
+        this.dockerfile = dockerfile;
     }
 
     public String getImage() {
@@ -60,5 +66,9 @@ public enum DockerBase {
 
     public String getPackageManager() {
         return packageManager;
+    }
+
+    public String getDockerfile() {
+        return dockerfile;
     }
 }

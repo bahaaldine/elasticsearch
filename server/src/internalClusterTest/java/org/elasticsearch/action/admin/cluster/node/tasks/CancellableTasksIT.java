@@ -252,11 +252,13 @@ public class CancellableTasksIT extends ESIntegTestCase {
         if (waitForCompletion) {
             assertFalse(cancelFuture.isDone());
         } else {
-            assertBusy(() -> assertTrue(cancelFuture.isDone()));
+            cancelFuture.get();
         }
         allowEntireRequest(rootRequest);
         waitForRootTask(mainTaskFuture, false);
-        cancelFuture.actionGet();
+        if (waitForCompletion) {
+            cancelFuture.actionGet();
+        }
         ensureBansAndCancellationsConsistency();
     }
 
@@ -493,9 +495,7 @@ public class CancellableTasksIT extends ESIntegTestCase {
 
         }
 
-        public TestResponse(StreamInput in) throws IOException {
-            super(in);
-        }
+        public TestResponse(StreamInput in) {}
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
@@ -603,8 +603,8 @@ public class CancellableTasksIT extends ESIntegTestCase {
 
     public static class TaskPlugin extends Plugin implements ActionPlugin {
         @Override
-        public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
-            return Collections.singletonList(new ActionHandler<>(TransportTestAction.ACTION, TransportTestAction.class));
+        public List<ActionHandler> getActions() {
+            return Collections.singletonList(new ActionHandler(TransportTestAction.ACTION, TransportTestAction.class));
         }
     }
 

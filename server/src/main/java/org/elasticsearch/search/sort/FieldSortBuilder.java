@@ -18,7 +18,6 @@ import org.apache.lucene.search.SortField;
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.TransportVersion;
 import org.elasticsearch.TransportVersions;
-import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.time.DateMathParser;
@@ -729,13 +728,6 @@ public final class FieldSortBuilder extends SortBuilder<FieldSortBuilder> {
         PARSER.declareObject(FieldSortBuilder::setNestedSort, (p, c) -> NestedSortBuilder.fromXContent(p), NESTED_FIELD);
         PARSER.declareString(FieldSortBuilder::setNumericType, NUMERIC_TYPE);
         PARSER.declareString(FieldSortBuilder::setFormat, FORMAT);
-        PARSER.declareField((b, v) -> {}, (p, c) -> {
-            throw new ParsingException(p.getTokenLocation(), "[nested_path] has been removed in favour of the [nested] parameter", c);
-        }, NESTED_PATH_FIELD, ValueType.STRING);
-
-        PARSER.declareObject((b, v) -> {}, (p, c) -> {
-            throw new ParsingException(p.getTokenLocation(), "[nested_filter] has been removed in favour of the [nested] parameter", c);
-        }, NESTED_FILTER_FIELD);
     }
 
     @Override
@@ -748,5 +740,12 @@ public final class FieldSortBuilder extends SortBuilder<FieldSortBuilder> {
             return this;
         }
         return new FieldSortBuilder(this).setNestedSort(rewrite);
+    }
+
+    @Override
+    public boolean supportsParallelCollection() {
+        // Disable parallel collection for sort by field.
+        // It is supported but not optimized on the Lucene side to share info across collectors, and can cause regressions.
+        return false;
     }
 }

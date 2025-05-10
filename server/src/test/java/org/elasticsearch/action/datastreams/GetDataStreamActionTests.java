@@ -75,7 +75,7 @@ public class GetDataStreamActionTests extends ESTestCase {
             ToXContent.Params params = new ToXContent.MapParams(DataStreamLifecycle.INCLUDE_EFFECTIVE_RETENTION_PARAMS);
             RolloverConfiguration rolloverConfiguration = null;
             DataStreamGlobalRetention globalRetention = new DataStreamGlobalRetention(globalDefaultRetention, globalMaxRetention);
-            dataStreamInfo.toXContent(builder, params, rolloverConfiguration, globalRetention);
+            dataStreamInfo.toXContent(builder, params, rolloverConfiguration, globalRetention, globalRetention);
             String serialized = Strings.toString(builder);
             return XContentHelper.convertToMap(XContentType.JSON.xContent(), serialized, randomBoolean());
         }
@@ -85,19 +85,21 @@ public class GetDataStreamActionTests extends ESTestCase {
         DataStream dataStream = newDataStreamInstance(isSystem, retention);
         return new GetDataStreamAction.Response.DataStreamInfo(
             dataStream,
+            randomBoolean(),
             randomFrom(ClusterHealthStatus.values()),
             null,
             null,
             null,
             Map.of(),
             randomBoolean(),
+            null,
             null
         );
     }
 
     private static DataStream newDataStreamInstance(boolean isSystem, TimeValue retention) {
         List<Index> indices = List.of(new Index(randomAlphaOfLength(10), randomAlphaOfLength(10)));
-        DataStreamLifecycle lifecycle = new DataStreamLifecycle(new DataStreamLifecycle.Retention(retention), null, null);
+        DataStreamLifecycle lifecycle = DataStreamLifecycle.createDataLifecycle(true, retention, null);
         return DataStream.builder(randomAlphaOfLength(50), indices)
             .setGeneration(randomLongBetween(1, 1000))
             .setMetadata(Map.of())

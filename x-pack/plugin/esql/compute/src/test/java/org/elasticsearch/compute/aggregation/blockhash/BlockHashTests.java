@@ -11,11 +11,7 @@ import com.carrotsearch.randomizedtesting.annotations.Name;
 import com.carrotsearch.randomizedtesting.annotations.ParametersFactory;
 
 import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.common.breaker.CircuitBreaker;
 import org.elasticsearch.common.unit.ByteSizeValue;
-import org.elasticsearch.common.util.BigArrays;
-import org.elasticsearch.common.util.MockBigArrays;
-import org.elasticsearch.common.util.PageCacheRecycler;
 import org.elasticsearch.compute.aggregation.GroupingAggregatorFunction;
 import org.elasticsearch.compute.data.Block;
 import org.elasticsearch.compute.data.BooleanBlock;
@@ -23,45 +19,40 @@ import org.elasticsearch.compute.data.BytesRefBlock;
 import org.elasticsearch.compute.data.BytesRefVector;
 import org.elasticsearch.compute.data.DoubleBlock;
 import org.elasticsearch.compute.data.ElementType;
+import org.elasticsearch.compute.data.IntArrayBlock;
+import org.elasticsearch.compute.data.IntBigArrayBlock;
 import org.elasticsearch.compute.data.IntBlock;
 import org.elasticsearch.compute.data.IntVector;
 import org.elasticsearch.compute.data.LongBlock;
-import org.elasticsearch.compute.data.MockBlockFactory;
+import org.elasticsearch.compute.data.LongVector;
 import org.elasticsearch.compute.data.OrdinalBytesRefBlock;
 import org.elasticsearch.compute.data.OrdinalBytesRefVector;
 import org.elasticsearch.compute.data.Page;
-import org.elasticsearch.compute.data.TestBlockFactory;
+import org.elasticsearch.compute.test.TestBlockFactory;
 import org.elasticsearch.core.Releasable;
 import org.elasticsearch.core.ReleasableIterator;
 import org.elasticsearch.core.Releasables;
-import org.elasticsearch.indices.breaker.CircuitBreakerService;
-import org.elasticsearch.test.ESTestCase;
+import org.elasticsearch.xpack.esql.core.util.Holder;
 import org.junit.After;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
 import static org.hamcrest.Matchers.arrayWithSize;
-import static org.hamcrest.Matchers.either;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.startsWith;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-public class BlockHashTests extends ESTestCase {
-
-    final CircuitBreaker breaker = new MockBigArrays.LimitedBreaker("esql-test-breaker", ByteSizeValue.ofGb(1));
-    final BigArrays bigArrays = new MockBigArrays(PageCacheRecycler.NON_RECYCLING_INSTANCE, mockBreakerService(breaker));
-    final MockBlockFactory blockFactory = new MockBlockFactory(breaker, bigArrays);
+public class BlockHashTests extends BlockHashTestCase {
 
     @ParametersFactory
     public static List<Object[]> params() {
@@ -1147,7 +1138,7 @@ public class BlockHashTests extends ESTestCase {
                 } else {
                     assertThat(
                         ordsAndKeys.description,
-                        equalTo("BytesRefLongBlockHash{keys=[BytesRefKey[channel=1], LongKey[channel=0]], entries=9, size=491b}")
+                        equalTo("BytesRefLongBlockHash{keys=[BytesRefKey[channel=1], LongKey[channel=0]], entries=9, size=483b}")
                     );
                     assertOrds(
                         ordsAndKeys.ords,
@@ -1286,7 +1277,13 @@ public class BlockHashTests extends ESTestCase {
         ) {
             hash1.add(page, new GroupingAggregatorFunction.AddInput() {
                 @Override
-                public void add(int positionOffset, IntBlock groupIds) {
+                public void add(int positionOffset, IntArrayBlock groupIds) {
+                    groupIds.incRef();
+                    output1.add(new Output(positionOffset, groupIds, null));
+                }
+
+                @Override
+                public void add(int positionOffset, IntBigArrayBlock groupIds) {
                     groupIds.incRef();
                     output1.add(new Output(positionOffset, groupIds, null));
                 }
@@ -1304,7 +1301,13 @@ public class BlockHashTests extends ESTestCase {
             });
             hash2.add(page, new GroupingAggregatorFunction.AddInput() {
                 @Override
-                public void add(int positionOffset, IntBlock groupIds) {
+                public void add(int positionOffset, IntArrayBlock groupIds) {
+                    groupIds.incRef();
+                    output2.add(new Output(positionOffset, groupIds, null));
+                }
+
+                @Override
+                public void add(int positionOffset, IntBigArrayBlock groupIds) {
                     groupIds.incRef();
                     output2.add(new Output(positionOffset, groupIds, null));
                 }
@@ -1326,7 +1329,8 @@ public class BlockHashTests extends ESTestCase {
                 Output o2 = output2.get(i);
                 assertThat(o1.offset, equalTo(o2.offset));
                 if (o1.vector != null) {
-                    assertThat(o1.vector, either(equalTo(o2.vector)).or(equalTo(o2.block.asVector())));
+                    assertNull(o1.block);
+                    assertThat(o1.vector, equalTo(o2.vector != null ? o2.vector : o2.block.asVector()));
                 } else {
                     assertNull(o2.vector);
                     assertThat(o1.block, equalTo(o2.block));
@@ -1336,6 +1340,129 @@ public class BlockHashTests extends ESTestCase {
             Releasables.close(output1);
             Releasables.close(output2);
             page.releaseBlocks();
+        }
+    }
+
+    public void testTimeSeriesBlockHash() throws Exception {
+        long endTime = randomLongBetween(10_000_000, 20_000_000);
+        var hash1 = new TimeSeriesBlockHash(0, 1, blockFactory);
+        var hash2 = BlockHash.build(
+            List.of(new BlockHash.GroupSpec(0, ElementType.BYTES_REF), new BlockHash.GroupSpec(1, ElementType.LONG)),
+            blockFactory,
+            32 * 1024,
+            forcePackedHash
+        );
+        int numPages = between(1, 100);
+        int globalTsid = -1;
+        long timestamp = endTime;
+        try (hash1; hash2) {
+            for (int p = 0; p < numPages; p++) {
+                int numRows = between(1, 1000);
+                if (randomBoolean()) {
+                    timestamp -= between(0, 100);
+                }
+                try (
+                    BytesRefVector.Builder dictBuilder = blockFactory.newBytesRefVectorBuilder(numRows);
+                    IntVector.Builder ordinalBuilder = blockFactory.newIntVectorBuilder(numRows);
+                    LongVector.Builder timestampsBuilder = blockFactory.newLongVectorBuilder(numRows)
+                ) {
+                    int perPageOrd = -1;
+                    for (int i = 0; i < numRows; i++) {
+                        boolean newGroup = globalTsid == -1 || randomInt(100) < 10;
+                        if (newGroup) {
+                            globalTsid++;
+                            timestamp = endTime;
+                            if (randomBoolean()) {
+                                timestamp -= between(0, 1000);
+                            }
+                        }
+                        if (perPageOrd == -1 || newGroup) {
+                            perPageOrd++;
+                            dictBuilder.appendBytesRef(new BytesRef(String.format(Locale.ROOT, "id-%06d", globalTsid)));
+                        }
+                        ordinalBuilder.appendInt(perPageOrd);
+                        if (randomInt(100) < 20) {
+                            timestamp -= between(1, 10);
+                        }
+                        timestampsBuilder.appendLong(timestamp);
+                    }
+                    try (
+                        var tsidBlock = new OrdinalBytesRefVector(ordinalBuilder.build(), dictBuilder.build()).asBlock();
+                        var timestampBlock = timestampsBuilder.build().asBlock()
+                    ) {
+                        Page page = new Page(tsidBlock, timestampBlock);
+                        Holder<IntVector> ords1 = new Holder<>();
+                        hash1.add(page, new GroupingAggregatorFunction.AddInput() {
+                            @Override
+                            public void add(int positionOffset, IntArrayBlock groupIds) {
+                                throw new AssertionError("time-series block hash should emit a vector");
+                            }
+
+                            @Override
+                            public void add(int positionOffset, IntBigArrayBlock groupIds) {
+                                throw new AssertionError("time-series block hash should emit a vector");
+                            }
+
+                            @Override
+                            public void add(int positionOffset, IntVector groupIds) {
+                                groupIds.incRef();
+                                ords1.set(groupIds);
+                            }
+
+                            @Override
+                            public void close() {
+
+                            }
+                        });
+                        Holder<IntVector> ords2 = new Holder<>();
+                        hash2.add(page, new GroupingAggregatorFunction.AddInput() {
+                            private void addBlock(int positionOffset, IntBlock groupIds) {
+                                // TODO: check why PackedValuesBlockHash doesn't emit a vector?
+                                IntVector vector = groupIds.asVector();
+                                assertNotNull("should emit a vector", vector);
+                                vector.incRef();
+                                ords2.set(vector);
+                            }
+
+                            @Override
+                            public void add(int positionOffset, IntArrayBlock groupIds) {
+                                addBlock(positionOffset, groupIds);
+                            }
+
+                            @Override
+                            public void add(int positionOffset, IntBigArrayBlock groupIds) {
+                                addBlock(positionOffset, groupIds);
+                            }
+
+                            @Override
+                            public void add(int positionOffset, IntVector groupIds) {
+                                groupIds.incRef();
+                                ords2.set(groupIds);
+                            }
+
+                            @Override
+                            public void close() {
+
+                            }
+                        });
+                        try {
+                            assertThat("input=" + page, ords1.get(), equalTo(ords2.get()));
+                        } finally {
+                            Releasables.close(ords1.get(), ords2.get());
+                        }
+                    }
+                }
+            }
+            Block[] keys1 = null;
+            Block[] keys2 = null;
+            try {
+                keys1 = hash1.getKeys();
+                keys2 = hash2.getKeys();
+                assertThat(keys1, equalTo(keys2));
+            } finally {
+                Releasables.close(keys1);
+                Releasables.close(keys2);
+            }
         }
     }
 
@@ -1399,8 +1526,7 @@ public class BlockHashTests extends ESTestCase {
 
     static void hash(boolean collectKeys, BlockHash blockHash, Consumer<OrdsAndKeys> callback, Block... values) {
         blockHash.add(new Page(values), new GroupingAggregatorFunction.AddInput() {
-            @Override
-            public void add(int positionOffset, IntBlock groupIds) {
+            private void addBlock(int positionOffset, IntBlock groupIds) {
                 OrdsAndKeys result = new OrdsAndKeys(
                     blockHash.toString(),
                     positionOffset,
@@ -1434,8 +1560,18 @@ public class BlockHashTests extends ESTestCase {
             }
 
             @Override
+            public void add(int positionOffset, IntArrayBlock groupIds) {
+                addBlock(positionOffset, groupIds);
+            }
+
+            @Override
+            public void add(int positionOffset, IntBigArrayBlock groupIds) {
+                addBlock(positionOffset, groupIds);
+            }
+
+            @Override
             public void add(int positionOffset, IntVector groupIds) {
-                add(positionOffset, groupIds.asBlock());
+                addBlock(positionOffset, groupIds.asBlock());
             }
 
             @Override
@@ -1532,13 +1668,6 @@ public class BlockHashTests extends ESTestCase {
                 }
             }
         }
-    }
-
-    // A breaker service that always returns the given breaker for getBreaker(CircuitBreaker.REQUEST)
-    static CircuitBreakerService mockBreakerService(CircuitBreaker breaker) {
-        CircuitBreakerService breakerService = mock(CircuitBreakerService.class);
-        when(breakerService.getBreaker(CircuitBreaker.REQUEST)).thenReturn(breaker);
-        return breakerService;
     }
 
     IntVector intRange(int startInclusive, int endExclusive) {

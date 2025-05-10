@@ -54,7 +54,7 @@ public class APMPlugin extends Plugin implements ActionPlugin {
                 services.threadPool(),
                 services.client(),
                 services.xContentRegistry(),
-                services.featureService()
+                services.projectResolver()
             )
         );
         if (enabled) {

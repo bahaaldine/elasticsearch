@@ -13,11 +13,6 @@ setup:
               id: "test-id-2"
             - synonyms: "test => check"
               id: "test-id-3"
-  - do:
-      cluster.health:
-        index: .synonyms
-        timeout: 1m
-        wait_for_status: green
 
 ---
 "Get a synonym rule":

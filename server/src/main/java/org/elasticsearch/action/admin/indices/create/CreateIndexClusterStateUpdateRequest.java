@@ -14,6 +14,8 @@ import org.elasticsearch.action.admin.indices.shrink.ResizeType;
 import org.elasticsearch.action.support.ActiveShardCount;
 import org.elasticsearch.cluster.metadata.ComposableIndexTemplate;
 import org.elasticsearch.cluster.metadata.IndexMetadata;
+import org.elasticsearch.cluster.metadata.Metadata;
+import org.elasticsearch.cluster.metadata.ProjectId;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.indices.SystemDataStreamDescriptor;
@@ -27,6 +29,7 @@ import java.util.Set;
 public class CreateIndexClusterStateUpdateRequest {
 
     private final String cause;
+    private final ProjectId projectId;
     private final String index;
     private String dataStreamName;
     private final String providedName;
@@ -35,6 +38,7 @@ public class CreateIndexClusterStateUpdateRequest {
     private ResizeType resizeType;
     private boolean copySettings;
     private SystemDataStreamDescriptor systemDataStreamDescriptor;
+    private boolean isFailureIndex = false;
 
     private Settings settings = Settings.EMPTY;
 
@@ -48,8 +52,17 @@ public class CreateIndexClusterStateUpdateRequest {
 
     private ComposableIndexTemplate matchingTemplate;
 
+    /**
+     * @deprecated project id ought always be specified
+     */
+    @Deprecated(forRemoval = true)
     public CreateIndexClusterStateUpdateRequest(String cause, String index, String providedName) {
+        this(cause, Metadata.DEFAULT_PROJECT_ID, index, providedName);
+    }
+
+    public CreateIndexClusterStateUpdateRequest(String cause, ProjectId projectId, String index, String providedName) {
         this.cause = cause;
+        this.projectId = projectId;
         this.index = index;
         this.providedName = providedName;
     }
@@ -102,12 +115,21 @@ public class CreateIndexClusterStateUpdateRequest {
         return this;
     }
 
+    public CreateIndexClusterStateUpdateRequest isFailureIndex(boolean isFailureIndex) {
+        this.isFailureIndex = isFailureIndex;
+        return this;
+    }
+
     public String cause() {
         return cause;
     }
 
     public String index() {
         return index;
+    }
+
+    public ProjectId projectId() {
+        return projectId;
     }
 
     public Settings settings() {
@@ -168,6 +190,10 @@ public class CreateIndexClusterStateUpdateRequest {
         return dataStreamName;
     }
 
+    public boolean isFailureIndex() {
+        return isFailureIndex;
+    }
+
     public CreateIndexClusterStateUpdateRequest dataStreamName(String dataStreamName) {
         this.dataStreamName = dataStreamName;
         return this;
@@ -203,6 +229,9 @@ public class CreateIndexClusterStateUpdateRequest {
             + "cause='"
             + cause
             + '\''
+            + ", projectId='"
+            + projectId
+            + '\''
             + ", index='"
             + index
             + '\''
@@ -228,6 +257,8 @@ public class CreateIndexClusterStateUpdateRequest {
             + systemDataStreamDescriptor
             + ", matchingTemplate="
             + matchingTemplate
+            + ", isFailureIndex="
+            + isFailureIndex
             + '}';
     }
 }

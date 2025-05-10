@@ -22,7 +22,6 @@ import org.elasticsearch.inference.InferenceServiceExtension;
 import org.elasticsearch.inference.InputType;
 import org.elasticsearch.inference.Model;
 import org.elasticsearch.inference.TaskType;
-import org.elasticsearch.inference.UnparsedModel;
 import org.elasticsearch.xpack.core.ClientHelper;
 import org.elasticsearch.xpack.core.ml.MachineLearningField;
 import org.elasticsearch.xpack.core.ml.action.GetTrainedModelsAction;
@@ -35,11 +34,9 @@ import org.elasticsearch.xpack.core.ml.inference.TrainedModelInput;
 import org.elasticsearch.xpack.core.ml.inference.TrainedModelPrefixStrings;
 import org.elasticsearch.xpack.core.ml.inference.trainedmodel.InferenceConfigUpdate;
 import org.elasticsearch.xpack.core.ml.utils.MlPlatformArchitecturesUtil;
-import org.elasticsearch.xpack.inference.DefaultElserFeatureFlag;
 import org.elasticsearch.xpack.inference.InferencePlugin;
 
 import java.io.IOException;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
@@ -83,14 +80,8 @@ public abstract class BaseElasticsearchInternalService implements InferenceServi
         this.clusterService = context.clusterService();
     }
 
-    /**
-     * The task types supported by the service
-     * @return Set of supported.
-     */
-    protected abstract EnumSet<TaskType> supportedTaskTypes();
-
     @Override
-    public void start(Model model, ActionListener<Boolean> finalListener) {
+    public void start(Model model, TimeValue timeout, ActionListener<Boolean> finalListener) {
         if (model instanceof ElasticsearchInternalModel esModel) {
             if (supportedTaskTypes().contains(model.getTaskType()) == false) {
                 finalListener.onFailure(
@@ -114,8 +105,8 @@ public abstract class BaseElasticsearchInternalService implements InferenceServi
                     }
                 })
                 .<Boolean>andThen((l2, modelDidPut) -> {
-                    var startRequest = esModel.getStartTrainedModelDeploymentActionRequest();
-                    var responseListener = esModel.getCreateTrainedModelAssignmentActionListener(model, finalListener);
+                    var startRequest = esModel.getStartTrainedModelDeploymentActionRequest(timeout);
+                    var responseListener = esModel.getCreateTrainedModelAssignmentActionListener(model, l2);
                     client.execute(StartTrainedModelDeploymentAction.INSTANCE, startRequest, responseListener);
                 })
                 .addListener(finalListener);
@@ -126,9 +117,7 @@ public abstract class BaseElasticsearchInternalService implements InferenceServi
     }
 
     @Override
-    public void stop(UnparsedModel unparsedModel, ActionListener<Boolean> listener) {
-
-        var model = parsePersistedConfig(unparsedModel.inferenceEntityId(), unparsedModel.taskType(), unparsedModel.settings());
+    public void stop(Model model, ActionListener<Boolean> listener) {
         if (model instanceof ElasticsearchInternalModel esModel) {
 
             var serviceSettings = esModel.getServiceSettings();
@@ -156,8 +145,7 @@ public abstract class BaseElasticsearchInternalService implements InferenceServi
         );
     }
 
-    @Override
-    public void putModel(Model model, ActionListener<Boolean> listener) {
+    protected void putModel(Model model, ActionListener<Boolean> listener) {
         if (model instanceof ElasticsearchInternalModel == false) {
             listener.onFailure(notElasticsearchModelException(model));
             return;
@@ -165,6 +153,8 @@ public abstract class BaseElasticsearchInternalService implements InferenceServi
             putBuiltInModel(e5Model.getServiceSettings().modelId(), listener);
         } else if (model instanceof ElserInternalModel elserModel) {
             putBuiltInModel(elserModel.getServiceSettings().modelId(), listener);
+        } else if (model instanceof ElasticRerankerModel elasticRerankerModel) {
+            putBuiltInModel(elasticRerankerModel.getServiceSettings().modelId(), listener);
         } else if (model instanceof CustomElandModel) {
             logger.info("Custom eland model detected, model must have been already loaded into the cluster with eland.");
             listener.onResponse(Boolean.TRUE);
@@ -288,10 +278,14 @@ public abstract class BaseElasticsearchInternalService implements InferenceServi
         TimeValue timeout
     ) {
         var request = InferModelAction.Request.forTextInput(id, update, inputs, true, timeout);
-        request.setPrefixType(
-            InputType.SEARCH == inputType ? TrainedModelPrefixStrings.PrefixType.SEARCH : TrainedModelPrefixStrings.PrefixType.INGEST
-        );
-        request.setHighPriority(InputType.SEARCH == inputType);
+        var isSearchInput = InputType.SEARCH == inputType || InputType.INTERNAL_SEARCH == inputType;
+        var isIngestInput = InputType.INGEST == inputType || InputType.INTERNAL_INGEST == inputType;
+        if (isSearchInput) {
+            request.setPrefixType(TrainedModelPrefixStrings.PrefixType.SEARCH);
+        } else if (isIngestInput) {
+            request.setPrefixType(TrainedModelPrefixStrings.PrefixType.INGEST);
+        }
+        request.setHighPriority(isSearchInput);
         request.setChunked(false);
         return request;
     }
@@ -304,16 +298,10 @@ public abstract class BaseElasticsearchInternalService implements InferenceServi
         InferModelAction.Request request,
         ActionListener<InferModelAction.Response> listener
     ) {
-        if (DefaultElserFeatureFlag.isEnabled() == false) {
-            listener.onFailure(e);
-            return;
-        }
-
         if (isDefaultId(model.getInferenceEntityId()) && ExceptionsHelper.unwrapCause(e) instanceof ResourceNotFoundException) {
-            this.start(
-                model,
-                listener.delegateFailureAndWrap((l, started) -> { client.execute(InferModelAction.INSTANCE, request, listener); })
-            );
+            this.start(model, request.getInferenceTimeout(), listener.delegateFailureAndWrap((l, started) -> {
+                client.execute(InferModelAction.INSTANCE, request, listener);
+            }));
         } else {
             listener.onFailure(e);
         }

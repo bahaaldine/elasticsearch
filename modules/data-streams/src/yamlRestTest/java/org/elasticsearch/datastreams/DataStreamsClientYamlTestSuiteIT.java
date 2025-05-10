@@ -20,8 +20,6 @@ import org.elasticsearch.test.rest.yaml.ClientYamlTestCandidate;
 import org.elasticsearch.test.rest.yaml.ESClientYamlSuiteTestCase;
 import org.junit.ClassRule;
 
-import static org.elasticsearch.test.cluster.FeatureFlag.FAILURE_STORE_ENABLED;
-
 public class DataStreamsClientYamlTestSuiteIT extends ESClientYamlSuiteTestCase {
 
     public DataStreamsClientYamlTestSuiteIT(final ClientYamlTestCandidate testCandidate) {
@@ -46,10 +44,13 @@ public class DataStreamsClientYamlTestSuiteIT extends ESClientYamlSuiteTestCase 
     private static ElasticsearchCluster createCluster() {
         LocalClusterSpecBuilder<ElasticsearchCluster> clusterBuilder = ElasticsearchCluster.local()
             .distribution(DistributionType.DEFAULT)
-            .feature(FAILURE_STORE_ENABLED)
             .setting("xpack.security.enabled", "true")
             .keystore("bootstrap.password", "x-pack-test-password")
-            .user("x_pack_rest_user", "x-pack-test-password");
+            .user("x_pack_rest_user", "x-pack-test-password")
+            .systemProperty("es.queryable_built_in_roles_enabled", "false");
+        if (initTestSeed().nextBoolean()) {
+            clusterBuilder.setting("xpack.license.self_generated.type", "trial");
+        }
         boolean setNodes = Boolean.parseBoolean(System.getProperty("yaml.rest.tests.set_num_nodes", "true"));
         if (setNodes) {
             clusterBuilder.nodes(2);

@@ -36,7 +36,6 @@ import org.apache.lucene.util.BitSet;
 import org.apache.lucene.util.BitSetIterator;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.SparseFixedBitSet;
-import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
 import org.elasticsearch.core.Releasable;
 import org.elasticsearch.lucene.util.CombinedBitSet;
 import org.elasticsearch.search.dfs.AggregatedDfs;
@@ -53,9 +52,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.PriorityQueue;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 
 /**
  * Context-aware extension of {@link IndexSearcher}.
@@ -76,11 +75,11 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
     private QueryProfiler profiler;
     private final MutableQueryTimeout cancellable;
 
+    private final boolean hasExecutor;
     private final int maximumNumberOfSlices;
     // don't create slices with less than this number of docs
     private final int minimumDocsPerSlice;
 
-    private final Set<Thread> timeoutOverwrites = ConcurrentCollections.newConcurrentSet();
     private volatile boolean timeExceeded = false;
 
     /** constructor for non-concurrent search */
@@ -133,12 +132,22 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
         int minimumDocsPerSlice
     ) throws IOException {
         super(wrapWithExitableDirectoryReader ? new ExitableDirectoryReader((DirectoryReader) reader, cancellable) : reader, executor);
+        this.hasExecutor = executor != null;
         setSimilarity(similarity);
         setQueryCache(queryCache);
         setQueryCachingPolicy(queryCachingPolicy);
         this.cancellable = cancellable;
         this.minimumDocsPerSlice = minimumDocsPerSlice;
         this.maximumNumberOfSlices = maximumNumberOfSlices;
+    }
+
+    /**
+     * Whether an executor was provided at construction time or not. This indicates whether operations that support concurrency
+     * may be executed concurrently. It is not straightforward to deduct this from {@link #getTaskExecutor()} because {@link IndexSearcher}
+     * creates a {@link org.apache.lucene.search.TaskExecutor} anyways.
+     */
+    public boolean hasExecutor() {
+        return hasExecutor;
     }
 
     @Override
@@ -149,11 +158,6 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
         return leafSlices;
     }
 
-    // package private for testing
-    int getMinimumDocsPerSlice() {
-        return minimumDocsPerSlice;
-    }
-
     public void setProfiler(QueryProfiler profiler) {
         this.profiler = profiler;
     }
@@ -162,8 +166,8 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
      * Add a {@link Runnable} that will be run on a regular basis while accessing documents in the
      * DirectoryReader but also while collecting them and check for query cancellation or timeout.
      */
-    public Runnable addQueryCancellation(Runnable action) {
-        return this.cancellable.add(action);
+    public void addQueryCancellation(Runnable action) {
+        this.cancellable.add(action);
     }
 
     /**
@@ -243,7 +247,14 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
             throw new IllegalArgumentException("maxSliceNum must be >= 1 (got " + maxSliceNum + ")");
         }
         if (maxSliceNum == 1) {
-            return new LeafSlice[] { new LeafSlice(new ArrayList<>(leaves)) };
+            return new LeafSlice[] {
+                new LeafSlice(
+                    new ArrayList<>(
+                        leaves.stream()
+                            .map(LeafReaderContextPartition::createForEntireSegment)
+                            .collect(Collectors.toCollection(ArrayList::new))
+                    )
+                ) };
         }
         // total number of documents to be searched
         final int numDocs = leaves.stream().mapToInt(l -> l.reader().maxDoc()).sum();
@@ -291,7 +302,11 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
         for (List<LeafReaderContext> currentLeaf : queue) {
             // LeafSlice ctor reorders leaves so that leaves within a slice preserve the order they had within the IndexReader.
             // This is important given how Elasticsearch sorts leaves by descending @timestamp to get better query performance.
-            slices[upto++] = new LeafSlice(currentLeaf);
+            slices[upto++] = new LeafSlice(
+                currentLeaf.stream()
+                    .map(LeafReaderContextPartition::createForEntireSegment)
+                    .collect(Collectors.toCollection(ArrayList::new))
+            );
         }
 
         return slices;
@@ -344,10 +359,10 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
             }
             final List<Callable<C>> listTasks = new ArrayList<>(leafSlices.length);
             for (int i = 0; i < leafSlices.length; ++i) {
-                final LeafReaderContext[] leaves = leafSlices[i].leaves;
+                final LeafReaderContextPartition[] leaves = leafSlices[i].partitions;
                 final C collector = collectors.get(i);
                 listTasks.add(() -> {
-                    search(Arrays.asList(leaves), weight, collector);
+                    search(leaves, weight, collector);
                     return collector;
                 });
             }
@@ -355,6 +370,8 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
             return collectorManager.reduce(collectedCollectors);
         }
     }
+
+    private static final ThreadLocal<Boolean> timeoutOverwrites = ThreadLocal.withInitial(() -> false);
 
     /**
      * Similar to the lucene implementation, with the following changes made:
@@ -364,7 +381,7 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
      * 2) handles the ES TimeExceededException
      */
     @Override
-    public void search(List<LeafReaderContext> leaves, Weight weight, Collector collector) throws IOException {
+    public void search(LeafReaderContextPartition[] leaves, Weight weight, Collector collector) throws IOException {
         boolean success = false;
         try {
             super.search(leaves, weight, collector);
@@ -379,12 +396,12 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
                 try {
                     // Search phase has finished, no longer need to check for timeout
                     // otherwise the aggregation post-collection phase might get cancelled.
-                    boolean added = timeoutOverwrites.add(Thread.currentThread());
-                    assert added;
+                    assert timeoutOverwrites.get() == false;
+                    timeoutOverwrites.set(true);
                     doAggregationPostCollection(collector);
                 } finally {
-                    boolean removed = timeoutOverwrites.remove(Thread.currentThread());
-                    assert removed;
+                    assert timeoutOverwrites.get();
+                    timeoutOverwrites.set(false);
                 }
             }
         }
@@ -402,17 +419,25 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
     }
 
     public void throwTimeExceededException() {
-        if (timeoutOverwrites.contains(Thread.currentThread()) == false) {
+        if (timeoutOverwrites.get() == false) {
             throw new TimeExceededException();
         }
     }
 
-    public static class TimeExceededException extends RuntimeException {
+    /**
+     * Exception thrown whenever a search timeout occurs. May be thrown by {@link ContextIndexSearcher} or {@link ExitableDirectoryReader}.
+     */
+    public static final class TimeExceededException extends RuntimeException {
         // This exception should never be re-thrown, but we fill in the stacktrace to be able to trace where it does not get properly caught
+
+        /**
+         * Created via {@link #throwTimeExceededException()}
+         */
+        private TimeExceededException() {}
     }
 
     @Override
-    protected void searchLeaf(LeafReaderContext ctx, Weight weight, Collector collector) throws IOException {
+    protected void searchLeaf(LeafReaderContext ctx, int minDocId, int maxDocId, Weight weight, Collector collector) throws IOException {
         cancellable.checkCancelled();
         final LeafCollector leafCollector;
         try {
@@ -432,7 +457,7 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
                     bulkScorer = new CancellableBulkScorer(bulkScorer, cancellable::checkCancelled);
                 }
                 try {
-                    bulkScorer.score(leafCollector, liveDocs);
+                    bulkScorer.score(leafCollector, liveDocs, minDocId, maxDocId);
                 } catch (CollectionTerminatedException e) {
                     // collection was terminated prematurely
                     // continue with the following leaf
@@ -552,14 +577,12 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
     }
 
     private static class MutableQueryTimeout implements ExitableDirectoryReader.QueryCancellation {
-
         private final List<Runnable> runnables = new ArrayList<>();
 
-        private Runnable add(Runnable action) {
+        private void add(Runnable action) {
             Objects.requireNonNull(action, "cancellation runnable should not be null");
             assert runnables.contains(action) == false : "Cancellation runnable already added";
             runnables.add(action);
-            return action;
         }
 
         private void remove(Runnable action) {

@@ -99,13 +99,13 @@ class S3Repository extends MeteredBlobStoreRepository {
     /**
      * Maximum size of files that can be uploaded using a single upload request.
      */
-    static final ByteSizeValue MAX_FILE_SIZE = new ByteSizeValue(5, ByteSizeUnit.GB);
+    static final ByteSizeValue MAX_FILE_SIZE = ByteSizeValue.of(5, ByteSizeUnit.GB);
 
     /**
      * Minimum size of parts that can be uploaded using the Multipart Upload API.
      * (see http://docs.aws.amazon.com/AmazonS3/latest/dev/qfacts.html)
      */
-    static final ByteSizeValue MIN_PART_SIZE_USING_MULTIPART = new ByteSizeValue(5, ByteSizeUnit.MB);
+    static final ByteSizeValue MIN_PART_SIZE_USING_MULTIPART = ByteSizeValue.of(5, ByteSizeUnit.MB);
 
     /**
      * Maximum size of parts that can be uploaded using the Multipart Upload API.
@@ -116,7 +116,7 @@ class S3Repository extends MeteredBlobStoreRepository {
     /**
      * Maximum size of files that can be uploaded using the Multipart Upload API.
      */
-    static final ByteSizeValue MAX_FILE_SIZE_USING_MULTIPART = new ByteSizeValue(5, ByteSizeUnit.TB);
+    static final ByteSizeValue MAX_FILE_SIZE_USING_MULTIPART = ByteSizeValue.of(5, ByteSizeUnit.TB);
 
     /**
      * Minimum threshold below which the chunk is uploaded using a single request. Beyond this threshold,
@@ -132,12 +132,24 @@ class S3Repository extends MeteredBlobStoreRepository {
     );
 
     /**
+     * Maximum size allowed for copy without multipart.
+     * Objects larger than this will be copied using multipart copy. S3 enforces a minimum multipart size of 5 MiB and a maximum
+     * non-multipart copy size of 5 GiB. The default is to use the maximum allowable size in order to minimize request count.
+     */
+    static final Setting<ByteSizeValue> MAX_COPY_SIZE_BEFORE_MULTIPART = Setting.byteSizeSetting(
+        "max_copy_size_before_multipart",
+        MAX_FILE_SIZE,
+        MIN_PART_SIZE_USING_MULTIPART,
+        MAX_FILE_SIZE
+    );
+
+    /**
      * Big files can be broken down into chunks during snapshotting if needed. Defaults to 5tb.
      */
     static final Setting<ByteSizeValue> CHUNK_SIZE_SETTING = Setting.byteSizeSetting(
         "chunk_size",
         MAX_FILE_SIZE_USING_MULTIPART,
-        new ByteSizeValue(5, ByteSizeUnit.MB),
+        ByteSizeValue.of(5, ByteSizeUnit.MB),
         MAX_FILE_SIZE_USING_MULTIPART
     );
 
@@ -241,6 +253,8 @@ class S3Repository extends MeteredBlobStoreRepository {
 
     private final ByteSizeValue chunkSize;
 
+    private final ByteSizeValue maxCopySizeBeforeMultipart;
+
     private final boolean serverSideEncryption;
 
     private final String storageClass;
@@ -308,6 +322,8 @@ class S3Repository extends MeteredBlobStoreRepository {
             );
         }
 
+        this.maxCopySizeBeforeMultipart = MAX_COPY_SIZE_BEFORE_MULTIPART.get(metadata.settings());
+
         this.serverSideEncryption = SERVER_SIDE_ENCRYPTION_SETTING.get(metadata.settings());
 
         this.storageClass = STORAGE_CLASS_SETTING.get(metadata.settings());
@@ -318,23 +334,29 @@ class S3Repository extends MeteredBlobStoreRepository {
             deprecationLogger.critical(
                 DeprecationCategory.SECURITY,
                 "s3_repository_secret_settings",
-                "Using s3 access/secret key from repository settings. Instead "
-                    + "store these in named clients and the elasticsearch keystore for secure settings."
+                INSECURE_CREDENTIALS_DEPRECATION_WARNING
             );
         }
 
         coolDown = COOLDOWN_PERIOD.get(metadata.settings());
 
         logger.debug(
-            "using bucket [{}], chunk_size [{}], server_side_encryption [{}], buffer_size [{}], cannedACL [{}], storageClass [{}]",
+            "using bucket [{}], chunk_size [{}], server_side_encryption [{}], buffer_size [{}], "
+                + "max_copy_size_before_multipart [{}], cannedACL [{}], storageClass [{}]",
             bucket,
             chunkSize,
             serverSideEncryption,
             bufferSize,
+            maxCopySizeBeforeMultipart,
             cannedACL,
             storageClass
         );
     }
+
+    static final String INSECURE_CREDENTIALS_DEPRECATION_WARNING = Strings.format("""
+        This repository's settings include a S3 access key and secret key, but repository settings are stored in plaintext and must not be \
+        used for security-sensitive information. Instead, store all secure settings in the keystore. See [%s] for more information.\
+        """, ReferenceDocs.SECURE_SETTINGS);
 
     private static Map<String, String> buildLocation(RepositoryMetadata metadata) {
         return Map.of("base_path", BASE_PATH_SETTING.get(metadata.settings()), "bucket", BUCKET_SETTING.get(metadata.settings()));
@@ -372,10 +394,10 @@ class S3Repository extends MeteredBlobStoreRepository {
                 finalizeSnapshotContext.snapshotInfo(),
                 finalizeSnapshotContext.repositoryMetaVersion(),
                 wrapWithWeakConsistencyProtection(ActionListener.runAfter(finalizeSnapshotContext, () -> metadataDone.onResponse(null))),
-                info -> metadataDone.addListener(new ActionListener<>() {
+                () -> metadataDone.addListener(new ActionListener<>() {
                     @Override
                     public void onResponse(Void unused) {
-                        finalizeSnapshotContext.onDone(info);
+                        finalizeSnapshotContext.onDone();
                     }
 
                     @Override
@@ -450,6 +472,7 @@ class S3Repository extends MeteredBlobStoreRepository {
             bucket,
             serverSideEncryption,
             bufferSize,
+            maxCopySizeBeforeMultipart,
             cannedACL,
             storageClass,
             metadata,

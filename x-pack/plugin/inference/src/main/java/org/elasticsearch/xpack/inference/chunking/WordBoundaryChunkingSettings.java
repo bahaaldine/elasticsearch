@@ -21,6 +21,7 @@ import org.elasticsearch.xpack.inference.services.ServiceUtils;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -28,6 +29,8 @@ import java.util.Set;
 public class WordBoundaryChunkingSettings implements ChunkingSettings {
     public static final String NAME = "WordBoundaryChunkingSettings";
     private static final ChunkingStrategy STRATEGY = ChunkingStrategy.WORD;
+    private static final int MAX_CHUNK_SIZE_LOWER_LIMIT = 10;
+    private static final int MAX_CHUNK_SIZE_UPPER_LIMIT = 300;
     private static final Set<String> VALID_KEYS = Set.of(
         ChunkingSettingsOptions.STRATEGY.toString(),
         ChunkingSettingsOptions.MAX_CHUNK_SIZE.toString(),
@@ -46,6 +49,26 @@ public class WordBoundaryChunkingSettings implements ChunkingSettings {
         overlap = in.readInt();
     }
 
+    @Override
+    public Map<String, Object> asMap() {
+        return Map.of(
+            ChunkingSettingsOptions.STRATEGY.toString(),
+            STRATEGY.toString().toLowerCase(Locale.ROOT),
+            ChunkingSettingsOptions.MAX_CHUNK_SIZE.toString(),
+            maxChunkSize,
+            ChunkingSettingsOptions.OVERLAP.toString(),
+            overlap
+        );
+    }
+
+    public int maxChunkSize() {
+        return maxChunkSize;
+    }
+
+    public int overlap() {
+        return overlap;
+    }
+
     public static WordBoundaryChunkingSettings fromMap(Map<String, Object> map) {
         ValidationException validationException = new ValidationException();
 
@@ -56,9 +79,11 @@ public class WordBoundaryChunkingSettings implements ChunkingSettings {
             );
         }
 
-        Integer maxChunkSize = ServiceUtils.extractRequiredPositiveInteger(
+        Integer maxChunkSize = ServiceUtils.extractRequiredPositiveIntegerBetween(
             map,
             ChunkingSettingsOptions.MAX_CHUNK_SIZE.toString(),
+            MAX_CHUNK_SIZE_LOWER_LIMIT,
+            MAX_CHUNK_SIZE_UPPER_LIMIT,
             ModelConfigurations.CHUNKING_SETTINGS,
             validationException
         );
@@ -100,7 +125,7 @@ public class WordBoundaryChunkingSettings implements ChunkingSettings {
 
     @Override
     public TransportVersion getMinimalSupportedVersion() {
-        return TransportVersions.ML_INFERENCE_CHUNKING_SETTINGS;
+        return TransportVersions.V_8_16_0;
     }
 
     @Override
@@ -125,5 +150,10 @@ public class WordBoundaryChunkingSettings implements ChunkingSettings {
     @Override
     public int hashCode() {
         return Objects.hash(maxChunkSize, overlap);
+    }
+
+    @Override
+    public String toString() {
+        return Strings.toString(this);
     }
 }

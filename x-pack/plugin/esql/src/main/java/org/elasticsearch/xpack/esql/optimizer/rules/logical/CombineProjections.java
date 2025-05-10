@@ -15,12 +15,15 @@ import org.elasticsearch.xpack.esql.core.expression.AttributeSet;
 import org.elasticsearch.xpack.esql.core.expression.Expression;
 import org.elasticsearch.xpack.esql.core.expression.Expressions;
 import org.elasticsearch.xpack.esql.core.expression.NamedExpression;
+import org.elasticsearch.xpack.esql.core.expression.ReferenceAttribute;
+import org.elasticsearch.xpack.esql.expression.function.grouping.GroupingFunction;
 import org.elasticsearch.xpack.esql.plan.logical.Aggregate;
 import org.elasticsearch.xpack.esql.plan.logical.LogicalPlan;
 import org.elasticsearch.xpack.esql.plan.logical.Project;
 import org.elasticsearch.xpack.esql.plan.logical.UnaryPlan;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 public final class CombineProjections extends OptimizerRules.OptimizerRule<UnaryPlan> {
@@ -30,7 +33,6 @@ public final class CombineProjections extends OptimizerRules.OptimizerRule<Unary
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected LogicalPlan rule(UnaryPlan plan) {
         LogicalPlan child = plan.child();
 
@@ -52,7 +54,7 @@ public final class CombineProjections extends OptimizerRules.OptimizerRule<Unary
                 // project can be fully removed
                 if (newAggs != null) {
                     var newGroups = replacePrunedAliasesUsedInGroupBy(a.groupings(), aggs, newAggs);
-                    plan = new Aggregate(a.source(), a.child(), a.aggregateType(), newGroups, newAggs);
+                    plan = a.with(newGroups, newAggs);
                 }
             }
             return plan;
@@ -62,19 +64,20 @@ public final class CombineProjections extends OptimizerRules.OptimizerRule<Unary
         if (plan instanceof Aggregate a) {
             if (child instanceof Project p) {
                 var groupings = a.groupings();
-                List<Attribute> groupingAttrs = new ArrayList<>(a.groupings().size());
+                List<NamedExpression> groupingAttrs = new ArrayList<>(a.groupings().size());
                 for (Expression grouping : groupings) {
                     if (grouping instanceof Attribute attribute) {
                         groupingAttrs.add(attribute);
+                    } else if (grouping instanceof Alias as && as.child() instanceof GroupingFunction.NonEvaluatableGroupingFunction) {
+                        groupingAttrs.add(as);
                     } else {
-                        // After applying ReplaceStatsNestedExpressionWithEval, groupings can only contain attributes.
+                        // After applying ReplaceAggregateNestedExpressionWithEval,
+                        // evaluatable groupings can only contain attributes.
                         throw new EsqlIllegalArgumentException("Expected an Attribute, got {}", grouping);
                     }
                 }
-                plan = new Aggregate(
-                    a.source(),
+                plan = a.with(
                     p.child(),
-                    a.aggregateType(),
                     combineUpperGroupingsAndLowerProjections(groupingAttrs, p.projections()),
                     combineProjections(a.aggregates(), p.projections())
                 );
@@ -92,7 +95,7 @@ public final class CombineProjections extends OptimizerRules.OptimizerRule<Unary
         List<? extends NamedExpression> upperProjection,
         List<? extends NamedExpression> lowerAggregations
     ) {
-        AttributeSet seen = new AttributeSet();
+        AttributeSet.Builder seen = AttributeSet.builder();
         for (NamedExpression upper : upperProjection) {
             Expression unwrapped = Alias.unwrap(upper);
             // projection contains an inner alias (point to an existing fields inside the projection)
@@ -113,20 +116,23 @@ public final class CombineProjections extends OptimizerRules.OptimizerRule<Unary
     private static List<NamedExpression> combineProjections(List<? extends NamedExpression> upper, List<? extends NamedExpression> lower) {
 
         // collect named expressions declaration in the lower list
-        AttributeMap<NamedExpression> namedExpressions = new AttributeMap<>();
+        AttributeMap.Builder<NamedExpression> namedExpressionsBuilder = AttributeMap.builder();
         // while also collecting the alias map for resolving the source (f1 = 1, f2 = f1, etc..)
-        AttributeMap<Expression> aliases = new AttributeMap<>();
+        AttributeMap.Builder<Expression> aliasesBuilder = AttributeMap.builder(lower.size());
         for (NamedExpression ne : lower) {
             // record the alias
-            aliases.put(ne.toAttribute(), Alias.unwrap(ne));
+            aliasesBuilder.put(ne.toAttribute(), Alias.unwrap(ne));
 
             // record named expression as is
             if (ne instanceof Alias as) {
                 Expression child = as.child();
-                namedExpressions.put(ne.toAttribute(), as.replaceChild(aliases.resolve(child, child)));
+                namedExpressionsBuilder.put(ne.toAttribute(), as.replaceChild(aliasesBuilder.build().resolve(child, child)));
+            } else if (ne instanceof ReferenceAttribute ra) {
+                namedExpressionsBuilder.put(ra, ra);
             }
         }
-        List<NamedExpression> replaced = new ArrayList<>();
+        List<NamedExpression> replaced = new ArrayList<>(upper.size());
+        var namedExpressions = namedExpressionsBuilder.build();
 
         // replace any matching attribute with a lower alias (if there's a match)
         // but clean-up non-top aliases at the end
@@ -138,23 +144,36 @@ public final class CombineProjections extends OptimizerRules.OptimizerRule<Unary
     }
 
     private static List<Expression> combineUpperGroupingsAndLowerProjections(
-        List<? extends Attribute> upperGroupings,
+        List<? extends NamedExpression> upperGroupings,
         List<? extends NamedExpression> lowerProjections
     ) {
+        assert upperGroupings.size() <= 1
+            || upperGroupings.stream()
+                .anyMatch(group -> group.anyMatch(expr -> expr instanceof GroupingFunction.NonEvaluatableGroupingFunction)) == false
+            : "CombineProjections only tested with a single CATEGORIZE with no additional groups";
         // Collect the alias map for resolving the source (f1 = 1, f2 = f1, etc..)
-        AttributeMap<Attribute> aliases = new AttributeMap<>();
+        AttributeMap.Builder<Attribute> aliasesBuilder = AttributeMap.builder();
         for (NamedExpression ne : lowerProjections) {
+            // Record the aliases.
             // Projections are just aliases for attributes, so casting is safe.
-            aliases.put(ne.toAttribute(), (Attribute) Alias.unwrap(ne));
+            aliasesBuilder.put(ne.toAttribute(), (Attribute) Alias.unwrap(ne));
         }
+        var aliases = aliasesBuilder.build();
 
-        // Replace any matching attribute directly with the aliased attribute from the projection.
-        AttributeSet replaced = new AttributeSet();
-        for (Attribute attr : upperGroupings) {
-            // All substitutions happen before; groupings must be attributes at this point.
-            replaced.add(aliases.resolve(attr, attr));
+        // Propagate any renames from the lower projection into the upper groupings.
+        // This can lead to duplicates: e.g.
+        // | EVAL x = y | STATS ... BY x, y
+        // All substitutions happen before; groupings must be attributes at this point except for non-evaluatable groupings which will be
+        // an alias like `c = CATEGORIZE(attribute)`.
+        // Therefore, it is correct to deduplicate based on simple equality (based on names) instead of name ids (Set vs. AttributeSet).
+        // TODO: The deduplication based on simple equality will be insufficient in case of multiple non-evaluatable groupings, e.g. for
+        // `| EVAL x = y | STATS ... BY CATEGORIZE(x), CATEGORIZE(y)`. That will require semantic equality instead.
+        LinkedHashSet<NamedExpression> resolvedGroupings = new LinkedHashSet<>();
+        for (NamedExpression ne : upperGroupings) {
+            NamedExpression transformed = (NamedExpression) ne.transformUp(Attribute.class, a -> aliases.resolve(a, a));
+            resolvedGroupings.add(transformed);
         }
-        return new ArrayList<>(replaced);
+        return new ArrayList<>(resolvedGroupings);
     }
 
     /**
@@ -165,18 +184,19 @@ public final class CombineProjections extends OptimizerRules.OptimizerRule<Unary
         List<? extends NamedExpression> oldAggs,
         List<? extends NamedExpression> newAggs
     ) {
-        AttributeMap<Expression> removedAliases = new AttributeMap<>();
-        AttributeSet currentAliases = new AttributeSet(Expressions.asAttributes(newAggs));
+        AttributeMap.Builder<Expression> removedAliasesBuilder = AttributeMap.builder();
+        AttributeSet currentAliases = AttributeSet.of(Expressions.asAttributes(newAggs));
 
         // record only removed aliases
         for (NamedExpression ne : oldAggs) {
             if (ne instanceof Alias alias) {
                 var attr = ne.toAttribute();
                 if (currentAliases.contains(attr) == false) {
-                    removedAliases.put(attr, alias.child());
+                    removedAliasesBuilder.put(attr, alias.child());
                 }
             }
         }
+        var removedAliases = removedAliasesBuilder.build();
 
         if (removedAliases.isEmpty()) {
             return groupings;

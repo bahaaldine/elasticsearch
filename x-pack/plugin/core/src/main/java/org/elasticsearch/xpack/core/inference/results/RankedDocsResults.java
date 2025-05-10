@@ -139,7 +139,11 @@ public class RankedDocsResults implements InferenceServiceResults {
         }
 
         public Map<String, Object> asMap() {
-            return Map.of(NAME, Map.of(INDEX, index, RELEVANCE_SCORE, relevanceScore, TEXT, text));
+            if (text != null) {
+                return Map.of(NAME, Map.of(INDEX, index, RELEVANCE_SCORE, relevanceScore, TEXT, text));
+            } else {
+                return Map.of(NAME, Map.of(INDEX, index, RELEVANCE_SCORE, relevanceScore));
+            }
         }
 
         @Override
@@ -190,11 +194,6 @@ public class RankedDocsResults implements InferenceServiceResults {
     @Override
     public List<? extends InferenceResults> transformToCoordinationFormat() {
         throw new UnsupportedOperationException("Coordination format not supported by " + NAME);
-    }
-
-    @Override
-    public List<? extends InferenceResults> transformToLegacyFormat() {
-        throw new UnsupportedOperationException("Legacy format not supported by " + NAME);
     }
 
     @Override
