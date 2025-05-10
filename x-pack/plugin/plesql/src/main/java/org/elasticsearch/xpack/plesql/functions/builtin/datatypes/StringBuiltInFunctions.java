@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
     category = FunctionCategory.STRING,
     description = "Built-in string manipulation functions like LENGTH, SUBSTR, UPPER, etc."
 )
-public class git s {
+public class StringBuiltInFunctions {
     private static final Logger LOGGER = LogManager.getLogger(StringBuiltInFunctions.class);
 
     public static void registerAll(ExecutionContext context) {
