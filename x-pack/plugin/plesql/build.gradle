@@ -5,10 +5,6 @@
  * 2.0.
  */
 
-import org.elasticsearch.gradle.internal.info.BuildParams
-import org.elasticsearch.gradle.internal.precommit.CheckForbiddenApisTask;
-import org.elasticsearch.gradle.internal.util.SourceDirectoryCommandLineArgumentProvider;
-
 apply plugin: 'elasticsearch.internal-es-plugin'
 apply plugin: 'elasticsearch.internal-cluster-test'
 apply plugin: 'elasticsearch.string-templates'
@@ -149,6 +145,201 @@ import org.antlr.v4.runtime.tree.TerminalNode;''',
       encoding: 'UTF-8'
     ) {
       fileset(dir: outputPath, includes: 'PlEsqlProcedureParser*.java')
+    }
+  }
+}
+
+// Scaffold a new single function
+tasks.register("generateFunction") {
+  doLast {
+    def name = project.findProperty("functionName")
+    if (!name) throw new GradleException("Specify -PfunctionName=MyFunction")
+
+    def className = name.capitalize()
+    def destFile = file("src/main/java/org/elasticsearch/xpack/plesql/functions/community/${className}.java")
+    destFile.parentFile.mkdirs()
+    destFile.text = """/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+package org.elasticsearch.xpack.plesql.functions.community;
+
+import org.elasticsearch.xpack.plesql.functions.api.FunctionSpec;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionParam;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionReturn;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionCategory;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
+import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
+import org.elasticsearch.xpack.plesql.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.ParameterMode;
+import org.elasticsearch.action.ActionListener;
+
+import java.util.Collections;
+import java.util.List;
+
+@FunctionSpec(
+    name = "${name.toUpperCase()}",
+    description = "Describe what this function does.",
+    parameters = {
+        @FunctionParam(name = "input", type = "STRING", description = "Input value")
+    },
+    returnType = @FunctionReturn(type = "STRING", description = "The result of the transformation"),
+    examples = {
+        "${name.toUpperCase()}('hello') -> 'olleh'"
+    },
+    category = FunctionCategory.UTILITY
+)
+public class ${className} {
+
+    public static void register(ExecutionContext context) {
+        context.declareFunction("${name.toUpperCase()}",
+            Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
+            new BuiltInFunctionDefinition("${name.toUpperCase()}", ${className}::execute)
+        );
+    }
+
+    private static void execute(List<Object> args, ActionListener<Object> listener) {
+        if (args.size() != 1 || !(args.get(0) instanceof String)) {
+            listener.onFailure(new IllegalArgumentException("Expected a single STRING argument"));
+        } else {
+            String input = (String) args.get(0);
+            listener.onResponse(new StringBuilder(input).reverse().toString());
+        }
+    }
+}
+"""
+    println "✅ Created single function class at: ${destFile}"
+
+    def loaderFile = file("src/main/java/org/elasticsearch/xpack/plesql/functions/community/FunctionLoader.java")
+    def loaderText = loaderFile.text
+    def insertLine = "        classes.add(org.elasticsearch.xpack.plesql.functions.community.${className}.class);"
+
+    if (!loaderText.contains(insertLine)) {
+        loaderText = loaderText.replaceFirst(
+            /List<Class<?>> classes = new ArrayList\(\);/,
+            "List<Class<?>> classes = new ArrayList();\n${insertLine}"
+        )
+        loaderFile.text = loaderText
+        println "✅ Registered ${className} in FunctionLoader"
+    }
+
+    // Update registry.txt
+    def registryDir = file("src/main/resources/org/elasticsearch/xpack/plesql/functions/community")
+    registryDir.mkdirs()
+    def registryFile = file("${registryDir}/registry.txt")
+    def entry = "org.elasticsearch.xpack.plesql.functions.community.${className}\n"
+    if (!registryFile.exists()) {
+        registryFile.text = entry
+    } else {
+        def registryText = registryFile.text
+        if (!registryText.contains("org.elasticsearch.xpack.plesql.functions.community.${className}")) {
+            registryFile.append(entry)
+        }
+    }
+  }
+}
+
+// Scaffold a new function collection
+tasks.register("generateFunctionCollection") {
+  doLast {
+    def name = project.findProperty("functionName")
+    if (!name) throw new GradleException("Specify -PfunctionName=MyFunctions")
+
+    def className = name.capitalize()
+    def destFile = file("src/main/java/org/elasticsearch/xpack/plesql/functions/community/${className}.java")
+    destFile.parentFile.mkdirs()
+    destFile.text = """/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+package org.elasticsearch.xpack.plesql.functions.community;
+
+import org.elasticsearch.xpack.plesql.functions.api.FunctionCollectionSpec;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionSpec;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionParam;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionReturn;
+import org.elasticsearch.xpack.plesql.functions.api.FunctionCategory;
+import org.elasticsearch.xpack.plesql.context.ExecutionContext;
+import org.elasticsearch.xpack.plesql.functions.builtin.BuiltInFunctionDefinition;
+import org.elasticsearch.xpack.plesql.functions.Parameter;
+import org.elasticsearch.xpack.plesql.functions.ParameterMode;
+import org.elasticsearch.action.ActionListener;
+
+import java.util.Collections;
+import java.util.List;
+
+@FunctionCollectionSpec(
+    category = FunctionCategory.UTILITY,
+    description = "Custom function collection: ${name}"
+)
+public class ${className} {
+
+    public static void registerAll(ExecutionContext context) {
+        registerSample(context);
+    }
+
+    @FunctionSpec(
+        name = "${name.toUpperCase()}_SAMPLE",
+        description = "A sample function in ${name}",
+        parameters = {
+            @FunctionParam(name = "input", type = "STRING", description = "Input value")
+        },
+        returnType = @FunctionReturn(type = "STRING", description = "Processed output"),
+        examples = {
+            "${name.toUpperCase()}_SAMPLE('abc') -> 'xyz'"
+        },
+        category = FunctionCategory.UTILITY
+    )
+    public static void registerSample(ExecutionContext context) {
+        context.declareFunction("${name.toUpperCase()}_SAMPLE",
+            Collections.singletonList(new Parameter("input", "STRING", ParameterMode.IN)),
+            new BuiltInFunctionDefinition("${name.toUpperCase()}_SAMPLE", ${className}::executeSample)
+        );
+    }
+
+    private static void executeSample(List<Object> args, ActionListener<Object> listener) {
+        if (args.size() != 1 || !(args.get(0) instanceof String)) {
+            listener.onFailure(new IllegalArgumentException("Expected a single STRING argument"));
+        } else {
+            String input = (String) args.get(0);
+            listener.onResponse(new StringBuilder(input).reverse().toString());
+        }
+    }
+}
+"""
+    println "✅ Created function collection class at: ${destFile}"
+
+    def loaderFile = file("src/main/java/org/elasticsearch/xpack/plesql/functions/community/FunctionLoader.java")
+    def loaderText = loaderFile.text
+    def insertLine = "        classes.add(org.elasticsearch.xpack.plesql.functions.community.${className}.class);"
+
+    if (!loaderText.contains(insertLine)) {
+        loaderText = loaderText.replaceFirst(
+            /List<Class<?>> classes = new ArrayList\(\);/,
+            "List<Class<?>> classes = new ArrayList();\n${insertLine}"
+        )
+        loaderFile.text = loaderText
+        println "✅ Registered ${className} in FunctionLoader"
+    }
+
+    // Update registry.txt
+    def registryDir = file("src/main/resources/org/elasticsearch/xpack/plesql/functions/community")
+    registryDir.mkdirs()
+    def registryFile = file("${registryDir}/registry.txt")
+    def entry = "org.elasticsearch.xpack.plesql.functions.community.${className}\n"
+    if (!registryFile.exists()) {
+        registryFile.text = entry
+    } else {
+        def registryText = registryFile.text
+        if (!registryText.contains("org.elasticsearch.xpack.plesql.functions.community.${className}")) {
+            registryFile.append(entry)
+        }
     }
   }
 }

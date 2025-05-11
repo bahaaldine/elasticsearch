@@ -20,6 +20,7 @@ import org.elasticsearch.injection.guice.Inject;
 import org.elasticsearch.logging.LogManager;
 import org.elasticsearch.logging.Logger;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.xpack.plesql.functions.community.FunctionLoader;
 import org.elasticsearch.xpack.plesql.functions.builtin.datasources.ESFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datasources.EsqlBuiltInFunctions;
 import org.elasticsearch.xpack.plesql.functions.builtin.datatypes.DocumentBuiltInFunctions;
@@ -35,7 +36,6 @@ import org.elasticsearch.xpack.plesql.procedure.ProcedureDefinition;
 import org.elasticsearch.xpack.plesql.utils.ActionListenerUtils;
 import org.elasticsearch.xpack.plesql.visitors.ProcedureDefinitionVisitor;
 
-import javax.swing.text.Document;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -174,6 +174,8 @@ public class PlEsqlExecutor {
                                 ArrayBuiltInFunctions.registerAll(executionContext);
                                 DateBuiltInFunctions.registerAll(executionContext);
                                 DocumentBuiltInFunctions.registerAll(executionContext);
+
+                                FunctionLoader.loadCommunityFunctions(executionContext);
 
                                 ActionListener<Object> execListener = ActionListenerUtils.withLogging(listener,
                                     this.getClass().getName(), "ExecuteStoredProcedure-" + procedureContent);
