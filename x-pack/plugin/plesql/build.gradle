@@ -304,7 +304,7 @@ public class ${className} {
     }
 
     private static void executeSample(List<Object> args, ActionListener<Object> listener) {
-        if (args.size() != 1 || !(args.get(0) instanceof String)) {
+        if (args.size() != 1 || (args.get(0) instanceof String) == false) {
             listener.onFailure(new IllegalArgumentException("Expected a single STRING argument"));
         } else {
             String input = (String) args.get(0);
