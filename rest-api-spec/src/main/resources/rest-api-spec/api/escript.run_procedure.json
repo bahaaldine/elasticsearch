@@ -1,0 +1,32 @@
+{
+  "plesql": {
+    "documentation": {
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/master/escript-query-api.html",
+      "description": "Executes a Elastic Script procedure provided in the body for testing purposes. The procedure does not need to be pre-stored."
+    },
+    "stability": "stable",
+    "visibility": "public",
+    "headers": {
+      "accept": ["application/json"],
+      "content_type": ["application/json"]
+    },
+    "url": {
+      "paths": [
+        {
+          "path": "/_escript",
+          "methods": ["POST"]
+        }
+      ]
+    },
+    "params": {
+      "format": {
+        "type": "string",
+        "description": "Short version of the Accept header, e.g., json, yaml"
+      }
+    },
+    "body": {
+      "description": "The Elastic Script procedure to execute for testing",
+      "required": true
+    }
+  }
+}

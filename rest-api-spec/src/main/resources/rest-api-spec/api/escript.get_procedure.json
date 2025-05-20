@@ -1,0 +1,27 @@
+{
+  "plesql.get_procedure": {
+    "documentation": {
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/master/escript-get-procedure-api.html",
+      "description": "Retrieves a stored Elastic Script procedure by ID"
+    },
+    "stability": "stable",
+    "visibility": "public",
+    "headers": {
+      "accept": ["application/json"]
+    },
+    "url": {
+      "paths": [
+        {
+          "path": "/_escript/{procedure_id}",
+          "methods": ["GET"],
+          "parts": {
+            "procedure_id": {
+              "type": "string",
+              "description": "The ID of the procedure to retrieve"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
