@@ -78,9 +78,9 @@ public class ElasticScriptPlugin extends Plugin implements ActionPlugin {
     }
 
     @Override
-    public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
+    public List<ActionHandler> getActions() {
         return List.of(
-            new ActionHandler<>(ElasticScriptAction.INSTANCE, TransportElasticScriptAction.class)
+            new ActionHandler(ElasticScriptAction.INSTANCE, TransportElasticScriptAction.class)
         );
     }
 }

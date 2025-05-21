@@ -20,7 +20,7 @@ public class ElasticScriptQueryResponse extends ActionResponse {
     private RestStatus status;
 
     public ElasticScriptQueryResponse(StreamInput in) throws IOException {
-        super(in);
+        super();
         this.result = in.readString();
         this.status = RestStatus.readFrom(in);
     }

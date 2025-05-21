@@ -16,6 +16,7 @@ import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
 import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.common.xcontent.XContentHelper;
+import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.injection.guice.Inject;
 import org.elasticsearch.logging.LogManager;
@@ -319,7 +320,7 @@ public class ElasticScriptExecutor {
             }
         }
 
-        GetIndexRequest request = new GetIndexRequest().indices(indexName);
+        GetIndexRequest request = new GetIndexRequest(TimeValue.timeValueSeconds(30)).indices(indexName);
         client.admin().indices().getIndex(request, ActionListener.wrap(
             getIndexResponse -> {
                 indexProcedureDocument(id, procedureText, parameters, listener);

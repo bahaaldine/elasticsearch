@@ -124,7 +124,7 @@ public class VideoGameIntegrationTests extends ESIntegTestCase {
             .setSize(0)
             .setTrackTotalHits(true)
             .get();
-        long count = response.getHits().getTotalHits().value;
+        long count = response.getHits().getTotalHits().value();
         assertEquals("Expected 1000 documents in the videogames index", 1000, count);
     }
 

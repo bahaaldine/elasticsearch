@@ -16,6 +16,7 @@ import org.elasticsearch.action.admin.indices.resolve.ResolveIndexAction;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.client.internal.Client;
 import org.elasticsearch.common.Strings;
+import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.logging.LogManager;
 import org.elasticsearch.logging.Logger;
@@ -250,7 +251,7 @@ public class ExecuteStatementHandler {
     private void persistResults(String sourceIndex, String targetIndex, List<Map<String, Object>> documents,
                                 ActionListener<Void> listener) {
         // 1) Get source mapping asynchronously.
-        GetMappingsRequest getMappingsRequest = new GetMappingsRequest().indices(sourceIndex);
+        GetMappingsRequest getMappingsRequest = new GetMappingsRequest(TimeValue.timeValueSeconds(30)).indices(sourceIndex);
         client.admin().indices().getMappings(getMappingsRequest, new ActionListener<GetMappingsResponse>() {
             @Override
             public void onResponse(GetMappingsResponse getMappingsResponse) {
