@@ -144,7 +144,6 @@ public class QueryPhase {
 
         RescorePhase.execute(searchContext);
         SuggestPhase.execute(searchContext);
-
         if (searchContext.getProfilers() != null) {
             searchContext.queryResult().profileResults(searchContext.getProfilers().buildQueryPhaseResults());
         }
@@ -217,10 +216,11 @@ public class QueryPhase {
             queryResult.topDocs(queryPhaseResult.topDocsAndMaxScore(), queryPhaseResult.sortValueFormats());
             if (searcher.timeExceeded()) {
                 assert timeoutRunnable != null : "TimeExceededException thrown even though timeout wasn't set";
-                if (searchContext.request().allowPartialSearchResults() == false) {
-                    throw new SearchTimeoutException(searchContext.shardTarget(), "Time exceeded");
-                }
-                queryResult.searchTimedOut(true);
+                SearchTimeoutException.handleTimeout(
+                    searchContext.request().allowPartialSearchResults(),
+                    searchContext.shardTarget(),
+                    searchContext.queryResult()
+                );
             }
             if (searchContext.terminateAfter() != SearchContext.DEFAULT_TERMINATE_AFTER) {
                 queryResult.terminatedEarly(queryPhaseResult.terminatedAfter());
@@ -248,7 +248,7 @@ public class QueryPhase {
         }
         final Sort sort = sortAndFormats.sort;
         for (LeafReaderContext ctx : reader.leaves()) {
-            Sort indexSort = ctx.reader().getMetaData().getSort();
+            Sort indexSort = ctx.reader().getMetaData().sort();
             if (indexSort == null || Lucene.canEarlyTerminate(sort, indexSort) == false) {
                 return false;
             }

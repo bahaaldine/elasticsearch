@@ -10,9 +10,9 @@
 package org.elasticsearch.simdvec.internal;
 
 import org.apache.lucene.store.MemorySegmentAccessInput;
-import org.apache.lucene.util.hnsw.RandomVectorScorer;
 import org.apache.lucene.util.hnsw.RandomVectorScorerSupplier;
-import org.apache.lucene.util.quantization.RandomAccessQuantizedByteVectorValues;
+import org.apache.lucene.util.hnsw.UpdateableRandomVectorScorer;
+import org.apache.lucene.util.quantization.QuantizedByteVectorValues;
 import org.apache.lucene.util.quantization.ScalarQuantizedVectorSimilarity;
 
 import java.io.IOException;
@@ -31,12 +31,12 @@ public abstract sealed class Int7SQVectorScorerSupplier implements RandomVectorS
     final int maxOrd;
     final float scoreCorrectionConstant;
     final MemorySegmentAccessInput input;
-    final RandomAccessQuantizedByteVectorValues values; // to support ordToDoc/getAcceptOrds
+    final QuantizedByteVectorValues values; // to support ordToDoc/getAcceptOrds
     final ScalarQuantizedVectorSimilarity fallbackScorer;
 
     protected Int7SQVectorScorerSupplier(
         MemorySegmentAccessInput input,
-        RandomAccessQuantizedByteVectorValues values,
+        QuantizedByteVectorValues values,
         float scoreCorrectionConstant,
         ScalarQuantizedVectorSimilarity fallbackScorer
     ) {
@@ -55,9 +55,6 @@ public abstract sealed class Int7SQVectorScorerSupplier implements RandomVectorS
     }
 
     final float scoreFromOrds(int firstOrd, int secondOrd) throws IOException {
-        checkOrdinal(firstOrd);
-        checkOrdinal(secondOrd);
-
         final int length = dims;
         long firstByteOffset = (long) firstOrd * (length + Float.BYTES);
         long secondByteOffset = (long) secondOrd * (length + Float.BYTES);
@@ -92,23 +89,27 @@ public abstract sealed class Int7SQVectorScorerSupplier implements RandomVectorS
     }
 
     @Override
-    public RandomVectorScorer scorer(int ord) {
-        checkOrdinal(ord);
-        return new RandomVectorScorer.AbstractRandomVectorScorer(values) {
+    public UpdateableRandomVectorScorer scorer() {
+        return new UpdateableRandomVectorScorer.AbstractUpdateableRandomVectorScorer(values) {
+            private int ord = -1;
+
             @Override
             public float score(int node) throws IOException {
+                checkOrdinal(node);
                 return scoreFromOrds(ord, node);
+            }
+
+            @Override
+            public void setScoringOrdinal(int node) throws IOException {
+                checkOrdinal(node);
+                this.ord = node;
             }
         };
     }
 
     public static final class EuclideanSupplier extends Int7SQVectorScorerSupplier {
 
-        public EuclideanSupplier(
-            MemorySegmentAccessInput input,
-            RandomAccessQuantizedByteVectorValues values,
-            float scoreCorrectionConstant
-        ) {
+        public EuclideanSupplier(MemorySegmentAccessInput input, QuantizedByteVectorValues values, float scoreCorrectionConstant) {
             super(input, values, scoreCorrectionConstant, fromVectorSimilarity(EUCLIDEAN, scoreCorrectionConstant, BITS));
         }
 
@@ -127,11 +128,7 @@ public abstract sealed class Int7SQVectorScorerSupplier implements RandomVectorS
 
     public static final class DotProductSupplier extends Int7SQVectorScorerSupplier {
 
-        public DotProductSupplier(
-            MemorySegmentAccessInput input,
-            RandomAccessQuantizedByteVectorValues values,
-            float scoreCorrectionConstant
-        ) {
+        public DotProductSupplier(MemorySegmentAccessInput input, QuantizedByteVectorValues values, float scoreCorrectionConstant) {
             super(input, values, scoreCorrectionConstant, fromVectorSimilarity(DOT_PRODUCT, scoreCorrectionConstant, BITS));
         }
 
@@ -151,11 +148,7 @@ public abstract sealed class Int7SQVectorScorerSupplier implements RandomVectorS
 
     public static final class MaxInnerProductSupplier extends Int7SQVectorScorerSupplier {
 
-        public MaxInnerProductSupplier(
-            MemorySegmentAccessInput input,
-            RandomAccessQuantizedByteVectorValues values,
-            float scoreCorrectionConstant
-        ) {
+        public MaxInnerProductSupplier(MemorySegmentAccessInput input, QuantizedByteVectorValues values, float scoreCorrectionConstant) {
             super(input, values, scoreCorrectionConstant, fromVectorSimilarity(MAXIMUM_INNER_PRODUCT, scoreCorrectionConstant, BITS));
         }
 

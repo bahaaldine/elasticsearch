@@ -19,6 +19,7 @@ import org.elasticsearch.common.util.BitArray;
 import org.elasticsearch.compute.Describable;
 import org.elasticsearch.compute.aggregation.GroupingAggregator;
 import org.elasticsearch.compute.aggregation.GroupingAggregator.Factory;
+import org.elasticsearch.compute.aggregation.GroupingAggregatorEvaluationContext;
 import org.elasticsearch.compute.aggregation.GroupingAggregatorFunction;
 import org.elasticsearch.compute.aggregation.SeenGroupIds;
 import org.elasticsearch.compute.aggregation.blockhash.BlockHash;
@@ -292,7 +293,7 @@ public class OrdinalsGroupingOperator implements Operator {
                 try (IntVector selected = IntVector.range(0, blocks[0].getPositionCount(), driverContext.blockFactory())) {
                     int offset = 1;
                     for (int i = 0; i < aggregators.size(); i++) {
-                        aggregators.get(i).evaluate(blocks, offset, selected, driverContext);
+                        aggregators.get(i).evaluate(blocks, offset, selected, new GroupingAggregatorEvaluationContext(driverContext));
                         offset += aggBlockCounts[i];
                     }
                 }
@@ -372,8 +373,8 @@ public class OrdinalsGroupingOperator implements Operator {
         }
 
         void addInput(IntVector docs, Page page) {
+            GroupingAggregatorFunction.AddInput[] prepared = new GroupingAggregatorFunction.AddInput[aggregators.size()];
             try {
-                GroupingAggregatorFunction.AddInput[] prepared = new GroupingAggregatorFunction.AddInput[aggregators.size()];
                 for (int i = 0; i < prepared.length; i++) {
                     prepared[i] = aggregators.get(i).prepareProcessPage(this, page);
                 }
@@ -392,7 +393,7 @@ public class OrdinalsGroupingOperator implements Operator {
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             } finally {
-                page.releaseBlocks();
+                Releasables.close(page::releaseBlocks, Releasables.wrap(prepared));
             }
         }
 

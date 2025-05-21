@@ -25,6 +25,10 @@ import com.azure.storage.blob.BlobContainerAsyncClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceAsyncClient;
 import com.azure.storage.blob.BlobServiceClient;
+import com.azure.storage.blob.batch.BlobBatch;
+import com.azure.storage.blob.batch.BlobBatchAsyncClient;
+import com.azure.storage.blob.batch.BlobBatchClientBuilder;
+import com.azure.storage.blob.batch.BlobBatchStorageException;
 import com.azure.storage.blob.models.BlobErrorCode;
 import com.azure.storage.blob.models.BlobItem;
 import com.azure.storage.blob.models.BlobItemProperties;
@@ -36,6 +40,7 @@ import com.azure.storage.blob.models.DownloadRetryOptions;
 import com.azure.storage.blob.models.ListBlobsOptions;
 import com.azure.storage.blob.options.BlobParallelUploadOptions;
 import com.azure.storage.blob.options.BlockBlobSimpleUploadOptions;
+import com.azure.storage.blob.specialized.BlobLeaseClient;
 import com.azure.storage.blob.specialized.BlobLeaseClientBuilder;
 import com.azure.storage.blob.specialized.BlockBlobAsyncClient;
 
@@ -47,6 +52,7 @@ import org.elasticsearch.common.UUIDs;
 import org.elasticsearch.common.blobstore.BlobContainer;
 import org.elasticsearch.common.blobstore.BlobPath;
 import org.elasticsearch.common.blobstore.BlobStore;
+import org.elasticsearch.common.blobstore.BlobStoreActionStats;
 import org.elasticsearch.common.blobstore.DeleteResult;
 import org.elasticsearch.common.blobstore.OperationPurpose;
 import org.elasticsearch.common.blobstore.OptionalBytesReference;
@@ -69,6 +75,7 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -99,8 +106,10 @@ import static org.elasticsearch.core.Strings.format;
 
 public class AzureBlobStore implements BlobStore {
     private static final Logger logger = LogManager.getLogger(AzureBlobStore.class);
-    private static final long DEFAULT_READ_CHUNK_SIZE = new ByteSizeValue(32, ByteSizeUnit.MB).getBytes();
-    private static final int DEFAULT_UPLOAD_BUFFERS_SIZE = (int) new ByteSizeValue(64, ByteSizeUnit.KB).getBytes();
+    // See https://learn.microsoft.com/en-us/rest/api/storageservices/blob-batch#request-body
+    public static final int MAX_ELEMENTS_PER_BATCH = 256;
+    private static final long DEFAULT_READ_CHUNK_SIZE = ByteSizeValue.of(32, ByteSizeUnit.MB).getBytes();
+    private static final int DEFAULT_UPLOAD_BUFFERS_SIZE = (int) ByteSizeValue.of(64, ByteSizeUnit.KB).getBytes();
 
     private final AzureStorageService service;
     private final BigArrays bigArrays;
@@ -110,6 +119,8 @@ public class AzureBlobStore implements BlobStore {
     private final String container;
     private final LocationMode locationMode;
     private final ByteSizeValue maxSinglePartUploadSize;
+    private final int deletionBatchSize;
+    private final int maxConcurrentBatchDeletes;
 
     private final RequestMetricsRecorder requestMetricsRecorder;
     private final AzureClientProvider.RequestMetricsHandler requestMetricsHandler;
@@ -129,6 +140,8 @@ public class AzureBlobStore implements BlobStore {
         // locationMode is set per repository, not per client
         this.locationMode = Repository.LOCATION_MODE_SETTING.get(metadata.settings());
         this.maxSinglePartUploadSize = Repository.MAX_SINGLE_PART_UPLOAD_SIZE_SETTING.get(metadata.settings());
+        this.deletionBatchSize = Repository.DELETION_BATCH_SIZE_SETTING.get(metadata.settings());
+        this.maxConcurrentBatchDeletes = Repository.MAX_CONCURRENT_BATCH_DELETES_SETTING.get(metadata.settings());
 
         List<RequestMatcher> requestMatchers = List.of(
             new RequestMatcher((httpMethod, url) -> httpMethod == HttpMethod.HEAD, Operation.GET_BLOB_PROPERTIES),
@@ -147,17 +160,14 @@ public class AzureBlobStore implements BlobStore {
                     && isPutBlockRequest(httpMethod, url) == false
                     && isPutBlockListRequest(httpMethod, url) == false,
                 Operation.PUT_BLOB
-            )
+            ),
+            new RequestMatcher(AzureBlobStore::isBlobBatch, Operation.BLOB_BATCH)
         );
 
         this.requestMetricsHandler = (purpose, method, url, metrics) -> {
             try {
                 URI uri = url.toURI();
                 String path = uri.getPath() == null ? "" : uri.getPath();
-                // Batch delete requests
-                if (path.contains(container) == false) {
-                    return;
-                }
                 assert path.contains(container) : uri.toString();
             } catch (URISyntaxException ignored) {
                 return;
@@ -170,6 +180,10 @@ public class AzureBlobStore implements BlobStore {
                 }
             }
         };
+    }
+
+    private static boolean isBlobBatch(HttpMethod method, URL url) {
+        return method == HttpMethod.POST && url.getQuery() != null && url.getQuery().contains("comp=batch");
     }
 
     private static boolean isListRequest(HttpMethod httpMethod, URL url) {
@@ -220,106 +234,102 @@ public class AzureBlobStore implements BlobStore {
         final BlobServiceClient client = client(purpose);
 
         try {
-            Boolean blobExists = SocketAccess.doPrivilegedException(() -> {
-                final BlobClient azureBlob = client.getBlobContainerClient(container).getBlobClient(blob);
-                return azureBlob.exists();
-            });
-            return Boolean.TRUE.equals(blobExists);
+            final BlobClient azureBlob = client.getBlobContainerClient(container).getBlobClient(blob);
+            return azureBlob.exists();
         } catch (Exception e) {
             logger.trace("can not access [{}] in container {{}}: {}", blob, container, e.getMessage());
             throw new IOException("Unable to check if blob " + blob + " exists", e);
         }
     }
 
-    // number of concurrent blob delete requests to use while bulk deleting
-    private static final int CONCURRENT_DELETES = 100;
-
-    public DeleteResult deleteBlobDirectory(OperationPurpose purpose, String path) {
+    public DeleteResult deleteBlobDirectory(OperationPurpose purpose, String path) throws IOException {
         final AtomicInteger blobsDeleted = new AtomicInteger(0);
         final AtomicLong bytesDeleted = new AtomicLong(0);
-
-        SocketAccess.doPrivilegedVoidException(() -> {
-            final BlobContainerAsyncClient blobContainerAsyncClient = asyncClient(purpose).getBlobContainerAsyncClient(container);
-            final ListBlobsOptions options = new ListBlobsOptions().setPrefix(path)
-                .setDetails(new BlobListDetails().setRetrieveMetadata(true));
-            try {
-                blobContainerAsyncClient.listBlobs(options, null).flatMap(blobItem -> {
-                    if (blobItem.isPrefix() != null && blobItem.isPrefix()) {
-                        return Mono.empty();
-                    } else {
-                        final String blobName = blobItem.getName();
-                        BlobAsyncClient blobAsyncClient = blobContainerAsyncClient.getBlobAsyncClient(blobName);
-                        final Mono<Void> deleteTask = getDeleteTask(blobName, blobAsyncClient);
-                        bytesDeleted.addAndGet(blobItem.getProperties().getContentLength());
-                        blobsDeleted.incrementAndGet();
-                        return deleteTask;
-                    }
-                }, CONCURRENT_DELETES).then().block();
-            } catch (Exception e) {
-                filterDeleteExceptionsAndRethrow(e, new IOException("Deleting directory [" + path + "] failed"));
-            }
+        final AzureBlobServiceClient client = getAzureBlobServiceClientClient(purpose);
+        final BlobContainerAsyncClient blobContainerAsyncClient = client.getAsyncClient().getBlobContainerAsyncClient(container);
+        final ListBlobsOptions options = new ListBlobsOptions().setPrefix(path).setDetails(new BlobListDetails().setRetrieveMetadata(true));
+        final Flux<String> blobsFlux = blobContainerAsyncClient.listBlobs(options).filter(bi -> bi.isPrefix() == false).map(bi -> {
+            bytesDeleted.addAndGet(bi.getProperties().getContentLength());
+            blobsDeleted.incrementAndGet();
+            return bi.getName();
         });
+        deleteListOfBlobs(client, blobsFlux);
 
         return new DeleteResult(blobsDeleted.get(), bytesDeleted.get());
     }
 
-    private static void filterDeleteExceptionsAndRethrow(Exception e, IOException exception) throws IOException {
-        int suppressedCount = 0;
-        for (Throwable suppressed : e.getSuppressed()) {
-            // We're only interested about the blob deletion exceptions and not in the reactor internals exceptions
-            if (suppressed instanceof IOException) {
-                exception.addSuppressed(suppressed);
-                suppressedCount++;
-                if (suppressedCount > 10) {
-                    break;
-                }
-            }
+    void deleteBlobs(OperationPurpose purpose, Iterator<String> blobNames) throws IOException {
+        if (blobNames.hasNext() == false) {
+            return;
         }
-        throw exception;
+        deleteListOfBlobs(
+            getAzureBlobServiceClientClient(purpose),
+            Flux.fromStream(StreamSupport.stream(Spliterators.spliteratorUnknownSize(blobNames, Spliterator.ORDERED), false))
+        );
+    }
+
+    private void deleteListOfBlobs(AzureBlobServiceClient azureBlobServiceClient, Flux<String> blobNames) throws IOException {
+        // We need to use a container-scoped BlobBatchClient, so the restype=container parameter
+        // is sent, and we can support all SAS token types
+        // See https://learn.microsoft.com/en-us/rest/api/storageservices/blob-batch?tabs=shared-access-signatures#authorization
+        final BlobBatchAsyncClient batchAsyncClient = new BlobBatchClientBuilder(
+            azureBlobServiceClient.getAsyncClient().getBlobContainerAsyncClient(container)
+        ).buildAsyncClient();
+        final List<Throwable> errors;
+        final AtomicInteger errorsCollected = new AtomicInteger(0);
+        try {
+            errors = blobNames.buffer(deletionBatchSize).flatMap(blobs -> {
+                final BlobBatch blobBatch = batchAsyncClient.getBlobBatch();
+                blobs.forEach(blob -> blobBatch.deleteBlob(container, blob));
+                return batchAsyncClient.submitBatch(blobBatch).then(Mono.<Throwable>empty()).onErrorResume(t -> {
+                    // Ignore errors that are just 404s, send other errors downstream as values
+                    if (AzureBlobStore.isIgnorableBatchDeleteException(t)) {
+                        return Mono.empty();
+                    } else {
+                        // Propagate the first 10 errors only
+                        if (errorsCollected.getAndIncrement() < 10) {
+                            return Mono.just(t);
+                        } else {
+                            return Mono.empty();
+                        }
+                    }
+                });
+            }, maxConcurrentBatchDeletes).collectList().block();
+        } catch (Exception e) {
+            throw new IOException("Error deleting batches", e);
+        }
+        if (errors.isEmpty() == false) {
+            final int totalErrorCount = errorsCollected.get();
+            final String errorMessage = totalErrorCount > errors.size()
+                ? "Some errors occurred deleting batches, the first "
+                    + errors.size()
+                    + " are included as suppressed, but the total count was "
+                    + totalErrorCount
+                : "Some errors occurred deleting batches, all errors included as suppressed";
+            final IOException ex = new IOException(errorMessage);
+            errors.forEach(ex::addSuppressed);
+            throw ex;
+        }
     }
 
     /**
-     * {@inheritDoc}
-     * <p>
-     * Note that in this Azure implementation we issue a series of individual
-     * <a href="https://learn.microsoft.com/en-us/rest/api/storageservices/delete-blob">delete blob</a> calls rather than aggregating
-     * deletions into <a href="https://learn.microsoft.com/en-us/rest/api/storageservices/blob-batch">blob batch</a> calls.
-     * The reason for this is that the blob batch endpoint has limited support for SAS token authentication.
+     * We can ignore {@link BlobBatchStorageException}s when they are just telling us some of the files were not found
      *
-     * @see <a href="https://learn.microsoft.com/en-us/rest/api/storageservices/blob-batch?tabs=shared-access-signatures#authorization">
-     *     API docs around SAS auth limitations</a>
-     * @see <a href="https://github.com/Azure/azure-storage-java/issues/538">Java SDK issue</a>
-     * @see <a href="https://github.com/elastic/elasticsearch/pull/65140#discussion_r528752070">Discussion on implementing PR</a>
+     * @param exception An exception throw by batch delete
+     * @return true if it is safe to ignore, false otherwise
      */
-    @Override
-    public void deleteBlobsIgnoringIfNotExists(OperationPurpose purpose, Iterator<String> blobs) {
-        if (blobs.hasNext() == false) {
-            return;
-        }
-
-        BlobServiceAsyncClient asyncClient = asyncClient(purpose);
-        SocketAccess.doPrivilegedVoidException(() -> {
-            final BlobContainerAsyncClient blobContainerClient = asyncClient.getBlobContainerAsyncClient(container);
-            try {
-                Flux.fromStream(StreamSupport.stream(Spliterators.spliteratorUnknownSize(blobs, Spliterator.ORDERED), false))
-                    .flatMap(blob -> getDeleteTask(blob, blobContainerClient.getBlobAsyncClient(blob)), CONCURRENT_DELETES)
-                    .then()
-                    .block();
-            } catch (Exception e) {
-                filterDeleteExceptionsAndRethrow(e, new IOException("Unable to delete blobs"));
+    private static boolean isIgnorableBatchDeleteException(Throwable exception) {
+        if (exception instanceof BlobBatchStorageException bbse) {
+            final Iterable<BlobStorageException> batchExceptions = bbse.getBatchExceptions();
+            for (BlobStorageException bse : batchExceptions) {
+                // If any requests failed with something other than a BLOB_NOT_FOUND, it is not ignorable
+                if (BlobErrorCode.BLOB_NOT_FOUND.equals(bse.getErrorCode()) == false) {
+                    return false;
+                }
             }
-        });
-    }
-
-    private static Mono<Void> getDeleteTask(String blobName, BlobAsyncClient blobAsyncClient) {
-        return blobAsyncClient.delete()
-            // Ignore not found blobs, as it's possible that due to network errors a request
-            // for an already deleted blob is retried, causing an error.
-            .onErrorResume(
-                e -> e instanceof BlobStorageException blobStorageException && blobStorageException.getStatusCode() == 404,
-                throwable -> Mono.empty()
-            )
-            .onErrorMap(throwable -> new IOException("Error deleting blob " + blobName, throwable));
+            return true;
+        }
+        return false;
     }
 
     public InputStream getInputStream(OperationPurpose purpose, String blob, long position, final @Nullable Long length) {
@@ -328,17 +338,17 @@ public class AzureBlobStore implements BlobStore {
         final BlobServiceClient syncClient = azureBlobServiceClient.getSyncClient();
         final BlobServiceAsyncClient asyncClient = azureBlobServiceClient.getAsyncClient();
 
-        return SocketAccess.doPrivilegedException(() -> {
-            final BlobContainerClient blobContainerClient = syncClient.getBlobContainerClient(container);
-            final BlobClient blobClient = blobContainerClient.getBlobClient(blob);
-            final long totalSize;
-            if (length == null) {
-                totalSize = blobClient.getProperties().getBlobSize();
-            } else {
-                totalSize = position + length;
-            }
-            BlobAsyncClient blobAsyncClient = asyncClient.getBlobContainerAsyncClient(container).getBlobAsyncClient(blob);
-            int maxReadRetries = service.getMaxReadRetries(clientName);
+        final BlobContainerClient blobContainerClient = syncClient.getBlobContainerClient(container);
+        final BlobClient blobClient = blobContainerClient.getBlobClient(blob);
+        final long totalSize;
+        if (length == null) {
+            totalSize = blobClient.getProperties().getBlobSize();
+        } else {
+            totalSize = position + length;
+        }
+        BlobAsyncClient blobAsyncClient = asyncClient.getBlobContainerAsyncClient(container).getBlobAsyncClient(blob);
+        int maxReadRetries = service.getMaxReadRetries(clientName);
+        try {
             return new AzureInputStream(
                 blobAsyncClient,
                 position,
@@ -347,7 +357,9 @@ public class AzureBlobStore implements BlobStore {
                 maxReadRetries,
                 azureBlobServiceClient.getAllocator()
             );
-        });
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public Map<String, BlobMetadata> listBlobsByPrefix(OperationPurpose purpose, String keyPath, String prefix) throws IOException {
@@ -355,23 +367,20 @@ public class AzureBlobStore implements BlobStore {
         logger.trace(() -> format("listing container [%s], keyPath [%s], prefix [%s]", container, keyPath, prefix));
         try {
             final BlobServiceClient client = client(purpose);
-            SocketAccess.doPrivilegedVoidException(() -> {
-                final BlobContainerClient containerClient = client.getBlobContainerClient(container);
-                final BlobListDetails details = new BlobListDetails().setRetrieveMetadata(true);
-                final ListBlobsOptions listBlobsOptions = new ListBlobsOptions().setPrefix(keyPath + (prefix == null ? "" : prefix))
-                    .setDetails(details);
+            final BlobContainerClient containerClient = client.getBlobContainerClient(container);
+            final BlobListDetails details = new BlobListDetails().setRetrieveMetadata(true);
+            final ListBlobsOptions listBlobsOptions = new ListBlobsOptions().setPrefix(keyPath + (prefix == null ? "" : prefix))
+                .setDetails(details);
 
-                for (final BlobItem blobItem : containerClient.listBlobsByHierarchy("/", listBlobsOptions, null)) {
-                    BlobItemProperties properties = blobItem.getProperties();
-                    Boolean isPrefix = blobItem.isPrefix();
-                    if (isPrefix != null && isPrefix) {
-                        continue;
-                    }
-                    String blobName = blobItem.getName().substring(keyPath.length());
-
-                    blobsBuilder.put(blobName, new BlobMetadata(blobName, properties.getContentLength()));
+            for (final BlobItem blobItem : containerClient.listBlobsByHierarchy("/", listBlobsOptions, null)) {
+                BlobItemProperties properties = blobItem.getProperties();
+                if (blobItem.isPrefix()) {
+                    continue;
                 }
-            });
+                String blobName = blobItem.getName().substring(keyPath.length());
+
+                blobsBuilder.put(blobName, new BlobMetadata(blobName, properties.getContentLength()));
+            }
         } catch (Exception e) {
             throw new IOException("Unable to list blobs by prefix [" + prefix + "] for path " + keyPath, e);
         }
@@ -384,24 +393,22 @@ public class AzureBlobStore implements BlobStore {
 
         try {
             final BlobServiceClient client = client(purpose);
-            SocketAccess.doPrivilegedVoidException(() -> {
-                BlobContainerClient blobContainer = client.getBlobContainerClient(container);
-                final ListBlobsOptions listBlobsOptions = new ListBlobsOptions();
-                listBlobsOptions.setPrefix(keyPath).setDetails(new BlobListDetails().setRetrieveMetadata(true));
-                for (final BlobItem blobItem : blobContainer.listBlobsByHierarchy("/", listBlobsOptions, null)) {
-                    Boolean isPrefix = blobItem.isPrefix();
-                    if (isPrefix != null && isPrefix) {
-                        String directoryName = blobItem.getName();
-                        directoryName = directoryName.substring(keyPath.length());
-                        if (directoryName.isEmpty()) {
-                            continue;
-                        }
-                        // Remove trailing slash
-                        directoryName = directoryName.substring(0, directoryName.length() - 1);
-                        childrenBuilder.put(directoryName, new AzureBlobContainer(BlobPath.EMPTY.add(blobItem.getName()), this));
+            BlobContainerClient blobContainer = client.getBlobContainerClient(container);
+            final ListBlobsOptions listBlobsOptions = new ListBlobsOptions();
+            listBlobsOptions.setPrefix(keyPath).setDetails(new BlobListDetails().setRetrieveMetadata(true));
+            for (final BlobItem blobItem : blobContainer.listBlobsByHierarchy("/", listBlobsOptions, null)) {
+                Boolean isPrefix = blobItem.isPrefix();
+                if (isPrefix != null && isPrefix) {
+                    String directoryName = blobItem.getName();
+                    directoryName = directoryName.substring(keyPath.length());
+                    if (directoryName.isEmpty()) {
+                        continue;
                     }
+                    // Remove trailing slash
+                    directoryName = directoryName.substring(0, directoryName.length() - 1);
+                    childrenBuilder.put(directoryName, new AzureBlobContainer(BlobPath.EMPTY.add(blobItem.getName()), this));
                 }
-            });
+            }
         } catch (Exception e) {
             throw new IOException("Unable to provide children blob containers for " + path, e);
         }
@@ -431,13 +438,8 @@ public class AzureBlobStore implements BlobStore {
                     return;
                 }
                 final String blockId = makeMultipartBlockId();
-                SocketAccess.doPrivilegedVoidException(
-                    () -> blockBlobAsyncClient.stageBlock(
-                        blockId,
-                        Flux.fromArray(BytesReference.toByteBuffers(buffer.bytes())),
-                        buffer.size()
-                    ).block()
-                );
+                blockBlobAsyncClient.stageBlock(blockId, Flux.fromArray(BytesReference.toByteBuffers(buffer.bytes())), buffer.size())
+                    .block();
                 finishPart(blockId);
             }
 
@@ -447,9 +449,7 @@ public class AzureBlobStore implements BlobStore {
                     writeBlob(purpose, blobName, buffer.bytes(), failIfAlreadyExists);
                 } else {
                     flushBuffer();
-                    SocketAccess.doPrivilegedVoidException(
-                        () -> blockBlobAsyncClient.commitBlockList(parts, failIfAlreadyExists == false).block()
-                    );
+                    blockBlobAsyncClient.commitBlockList(parts, failIfAlreadyExists == false).block();
                 }
             }
 
@@ -497,20 +497,18 @@ public class AzureBlobStore implements BlobStore {
         long blobSize,
         boolean failIfAlreadyExists
     ) {
-        SocketAccess.doPrivilegedVoidException(() -> {
-            final BlobServiceAsyncClient asyncClient = asyncClient(purpose);
+        final BlobServiceAsyncClient asyncClient = asyncClient(purpose);
 
-            final BlobAsyncClient blobAsyncClient = asyncClient.getBlobContainerAsyncClient(container).getBlobAsyncClient(blobName);
-            final BlockBlobAsyncClient blockBlobAsyncClient = blobAsyncClient.getBlockBlobAsyncClient();
+        final BlobAsyncClient blobAsyncClient = asyncClient.getBlobContainerAsyncClient(container).getBlobAsyncClient(blobName);
+        final BlockBlobAsyncClient blockBlobAsyncClient = blobAsyncClient.getBlockBlobAsyncClient();
 
-            final BlockBlobSimpleUploadOptions options = new BlockBlobSimpleUploadOptions(byteBufferFlux, blobSize);
-            BlobRequestConditions requestConditions = new BlobRequestConditions();
-            if (failIfAlreadyExists) {
-                requestConditions.setIfNoneMatch("*");
-            }
-            options.setRequestConditions(requestConditions);
-            blockBlobAsyncClient.uploadWithResponse(options).block();
-        });
+        final BlockBlobSimpleUploadOptions options = new BlockBlobSimpleUploadOptions(byteBufferFlux, blobSize);
+        BlobRequestConditions requestConditions = new BlobRequestConditions();
+        if (failIfAlreadyExists) {
+            requestConditions.setIfNoneMatch("*");
+        }
+        options.setRequestConditions(requestConditions);
+        blockBlobAsyncClient.uploadWithResponse(options).block();
     }
 
     private void executeMultipartUpload(
@@ -520,29 +518,27 @@ public class AzureBlobStore implements BlobStore {
         long blobSize,
         boolean failIfAlreadyExists
     ) {
-        SocketAccess.doPrivilegedVoidException(() -> {
-            final BlobServiceAsyncClient asyncClient = asyncClient(purpose);
-            final BlobAsyncClient blobAsyncClient = asyncClient.getBlobContainerAsyncClient(container).getBlobAsyncClient(blobName);
-            final BlockBlobAsyncClient blockBlobAsyncClient = blobAsyncClient.getBlockBlobAsyncClient();
+        final BlobServiceAsyncClient asyncClient = asyncClient(purpose);
+        final BlobAsyncClient blobAsyncClient = asyncClient.getBlobContainerAsyncClient(container).getBlobAsyncClient(blobName);
+        final BlockBlobAsyncClient blockBlobAsyncClient = blobAsyncClient.getBlockBlobAsyncClient();
 
-            final long partSize = getUploadBlockSize();
-            final Tuple<Long, Long> multiParts = numberOfMultiparts(blobSize, partSize);
-            final int nbParts = multiParts.v1().intValue();
-            final long lastPartSize = multiParts.v2();
-            assert blobSize == (((nbParts - 1) * partSize) + lastPartSize) : "blobSize does not match multipart sizes";
+        final long partSize = getUploadBlockSize();
+        final Tuple<Long, Long> multiParts = numberOfMultiparts(blobSize, partSize);
+        final int nbParts = multiParts.v1().intValue();
+        final long lastPartSize = multiParts.v2();
+        assert blobSize == (((nbParts - 1) * partSize) + lastPartSize) : "blobSize does not match multipart sizes";
 
-            final List<String> blockIds = new ArrayList<>(nbParts);
-            for (int i = 0; i < nbParts; i++) {
-                final long length = i < nbParts - 1 ? partSize : lastPartSize;
-                Flux<ByteBuffer> byteBufferFlux = convertStreamToByteBuffer(inputStream, length, DEFAULT_UPLOAD_BUFFERS_SIZE);
+        final List<String> blockIds = new ArrayList<>(nbParts);
+        for (int i = 0; i < nbParts; i++) {
+            final long length = i < nbParts - 1 ? partSize : lastPartSize;
+            Flux<ByteBuffer> byteBufferFlux = convertStreamToByteBuffer(inputStream, length, DEFAULT_UPLOAD_BUFFERS_SIZE);
 
-                final String blockId = makeMultipartBlockId();
-                blockBlobAsyncClient.stageBlock(blockId, byteBufferFlux, length).block();
-                blockIds.add(blockId);
-            }
+            final String blockId = makeMultipartBlockId();
+            blockBlobAsyncClient.stageBlock(blockId, byteBufferFlux, length).block();
+            blockIds.add(blockId);
+        }
 
-            blockBlobAsyncClient.commitBlockList(blockIds, failIfAlreadyExists == false).block();
-        });
+        blockBlobAsyncClient.commitBlockList(blockIds, failIfAlreadyExists == false).block();
     }
 
     private static final Base64.Encoder base64Encoder = Base64.getEncoder().withoutPadding();
@@ -678,7 +674,7 @@ public class AzureBlobStore implements BlobStore {
     }
 
     @Override
-    public Map<String, Long> stats() {
+    public Map<String, BlobStoreActionStats> stats() {
         return requestMetricsRecorder.statsMap(service.isStateless());
     }
 
@@ -689,7 +685,8 @@ public class AzureBlobStore implements BlobStore {
         GET_BLOB_PROPERTIES("GetBlobProperties"),
         PUT_BLOB("PutBlob"),
         PUT_BLOCK("PutBlock"),
-        PUT_BLOCK_LIST("PutBlockList");
+        PUT_BLOCK_LIST("PutBlockList"),
+        BLOB_BATCH("BlobBatch");
 
         private final String key;
 
@@ -720,26 +717,38 @@ public class AzureBlobStore implements BlobStore {
     }
 
     // visible for testing
+    record StatsCounter(LongAdder operations, LongAdder requests) {
+        StatsCounter() {
+            this(new LongAdder(), new LongAdder());
+        }
+
+        BlobStoreActionStats getEndpointStats() {
+            return new BlobStoreActionStats(operations.sum(), requests.sum());
+        }
+    }
+
+    // visible for testing
     class RequestMetricsRecorder {
         private final RepositoriesMetrics repositoriesMetrics;
-        final Map<StatsKey, LongAdder> opsCounters = new ConcurrentHashMap<>();
+        final Map<StatsKey, StatsCounter> statsCounters = new ConcurrentHashMap<>();
         final Map<StatsKey, Map<String, Object>> opsAttributes = new ConcurrentHashMap<>();
 
         RequestMetricsRecorder(RepositoriesMetrics repositoriesMetrics) {
             this.repositoriesMetrics = repositoriesMetrics;
         }
 
-        Map<String, Long> statsMap(boolean stateless) {
+        Map<String, BlobStoreActionStats> statsMap(boolean stateless) {
             if (stateless) {
-                return opsCounters.entrySet()
+                return statsCounters.entrySet()
                     .stream()
-                    .collect(Collectors.toUnmodifiableMap(e -> e.getKey().toString(), e -> e.getValue().sum()));
+                    .collect(Collectors.toUnmodifiableMap(e -> e.getKey().toString(), e -> e.getValue().getEndpointStats()));
             } else {
-                Map<String, Long> normalisedStats = Arrays.stream(Operation.values()).collect(Collectors.toMap(Operation::getKey, o -> 0L));
-                opsCounters.forEach(
+                Map<String, BlobStoreActionStats> normalisedStats = Arrays.stream(Operation.values())
+                    .collect(Collectors.toMap(Operation::getKey, o -> BlobStoreActionStats.ZERO));
+                statsCounters.forEach(
                     (key, value) -> normalisedStats.compute(
                         key.operation.getKey(),
-                        (k, current) -> Objects.requireNonNull(current) + value.sum()
+                        (k, current) -> value.getEndpointStats().add(Objects.requireNonNull(current))
                     )
                 );
                 return Map.copyOf(normalisedStats);
@@ -748,13 +757,14 @@ public class AzureBlobStore implements BlobStore {
 
         public void onRequestComplete(Operation operation, OperationPurpose purpose, AzureClientProvider.RequestMetrics requestMetrics) {
             final StatsKey statsKey = new StatsKey(operation, purpose);
-            final LongAdder counter = opsCounters.computeIfAbsent(statsKey, k -> new LongAdder());
+            final StatsCounter counter = statsCounters.computeIfAbsent(statsKey, k -> new StatsCounter());
             final Map<String, Object> attributes = opsAttributes.computeIfAbsent(
                 statsKey,
                 k -> RepositoriesMetrics.createAttributesMap(repositoryMetadata, purpose, operation.getKey())
             );
 
-            counter.add(1);
+            counter.operations.increment();
+            counter.requests.add(requestMetrics.getRequestCount());
 
             // range not satisfied is not retried, so we count them by checking the final response
             if (requestMetrics.getStatusCode() == RestStatus.REQUESTED_RANGE_NOT_SATISFIED.getStatus()) {
@@ -920,16 +930,16 @@ public class AzureBlobStore implements BlobStore {
 
     OptionalBytesReference getRegister(OperationPurpose purpose, String blobPath, String containerPath, String blobKey) {
         try {
-            return SocketAccess.doPrivilegedException(
-                () -> OptionalBytesReference.of(
-                    downloadRegisterBlob(
-                        containerPath,
-                        blobKey,
-                        getAzureBlobServiceClientClient(purpose).getSyncClient().getBlobContainerClient(container).getBlobClient(blobPath),
-                        null
-                    )
+            return OptionalBytesReference.of(
+                downloadRegisterBlob(
+                    containerPath,
+                    blobKey,
+                    getAzureBlobServiceClientClient(purpose).getSyncClient().getBlobContainerClient(container).getBlobClient(blobPath),
+                    null
                 )
             );
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         } catch (Exception e) {
             if (Throwables.getRootCause(e) instanceof BlobStorageException blobStorageException
                 && blobStorageException.getStatusCode() == RestStatus.NOT_FOUND.getStatus()) {
@@ -949,17 +959,17 @@ public class AzureBlobStore implements BlobStore {
     ) {
         BlobContainerUtils.ensureValidRegisterContent(updated);
         try {
-            return SocketAccess.doPrivilegedException(
-                () -> OptionalBytesReference.of(
-                    innerCompareAndExchangeRegister(
-                        containerPath,
-                        blobKey,
-                        getAzureBlobServiceClientClient(purpose).getSyncClient().getBlobContainerClient(container).getBlobClient(blobPath),
-                        expected,
-                        updated
-                    )
+            return OptionalBytesReference.of(
+                innerCompareAndExchangeRegister(
+                    containerPath,
+                    blobKey,
+                    getAzureBlobServiceClientClient(purpose).getSyncClient().getBlobContainerClient(container).getBlobClient(blobPath),
+                    expected,
+                    updated
                 )
             );
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         } catch (Exception e) {
             if (Throwables.getRootCause(e) instanceof BlobStorageException blobStorageException) {
                 if (blobStorageException.getStatusCode() == RestStatus.PRECONDITION_FAILED.getStatus()
@@ -993,13 +1003,36 @@ public class AzureBlobStore implements BlobStore {
                 }
                 return currentValue;
             } finally {
-                leaseClient.releaseLease();
+                bestEffortRelease(leaseClient);
             }
         } else {
             if (expected.length() == 0) {
                 uploadRegisterBlob(updated, blobClient, new BlobRequestConditions().setIfNoneMatch("*"));
             }
             return BytesArray.EMPTY;
+        }
+    }
+
+    /**
+     * Release the lease, ignoring conflicts due to expiry
+     *
+     * @see <a href="https://learn.microsoft.com/en-us/rest/api/storageservices/lease-blob?outcomes-of-lease-operations-on-blobs-by-lease-state">Outcomes of lease operations by lease state</a>
+     * @param leaseClient The client for the lease
+     */
+    private static void bestEffortRelease(BlobLeaseClient leaseClient) {
+        try {
+            leaseClient.releaseLease();
+        } catch (BlobStorageException blobStorageException) {
+            if (blobStorageException.getStatusCode() == RestStatus.CONFLICT.getStatus()) {
+                // This is OK, we tried to release a lease that was expired/re-acquired
+                logger.debug(
+                    "Ignored conflict on release: errorCode={}, message={}",
+                    blobStorageException.getErrorCode(),
+                    blobStorageException.getMessage()
+                );
+            } else {
+                throw blobStorageException;
+            }
         }
     }
 

@@ -39,7 +39,6 @@ import org.elasticsearch.core.Nullable;
 import org.elasticsearch.core.RefCounted;
 import org.elasticsearch.core.Strings;
 import org.elasticsearch.core.TimeValue;
-import org.elasticsearch.core.UpdateForV9;
 import org.elasticsearch.indices.breaker.NoneCircuitBreakerService;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.plugins.Plugin;
@@ -50,7 +49,6 @@ import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.test.tasks.MockTaskManager;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.transport.BytesTransportRequest;
 import org.elasticsearch.transport.ClusterConnectionManager;
 import org.elasticsearch.transport.ConnectTransportException;
 import org.elasticsearch.transport.ConnectionProfile;
@@ -59,6 +57,7 @@ import org.elasticsearch.transport.RequestHandlerRegistry;
 import org.elasticsearch.transport.TcpTransport;
 import org.elasticsearch.transport.Transport;
 import org.elasticsearch.transport.TransportInterceptor;
+import org.elasticsearch.transport.TransportMessageListener;
 import org.elasticsearch.transport.TransportRequest;
 import org.elasticsearch.transport.TransportRequestOptions;
 import org.elasticsearch.transport.TransportService;
@@ -107,6 +106,8 @@ public class MockTransportService extends TransportService {
 
     private final List<Runnable> onStopListeners = new CopyOnWriteArrayList<>();
     private final AtomicReference<Consumer<Transport.Connection>> onConnectionClosedCallback = new AtomicReference<>();
+
+    private final DelegatingTransportMessageListener messageListener = new DelegatingTransportMessageListener();
 
     public static class TestPlugin extends Plugin {
         @Override
@@ -312,7 +313,7 @@ public class MockTransportService extends TransportService {
         this.original = transport.getDelegate();
         this.testExecutor = EsExecutors.newScaling(
             "mock-transport",
-            0,
+            1,
             4,
             30,
             TimeUnit.SECONDS,
@@ -586,13 +587,8 @@ public class MockTransportService extends TransportService {
                 // poor mans request cloning...
                 BytesStreamOutput bStream = new BytesStreamOutput();
                 request.writeTo(bStream);
-                final TransportRequest clonedRequest;
-                if (request instanceof BytesTransportRequest) {
-                    clonedRequest = copyRawBytesForBwC(bStream);
-                } else {
-                    RequestHandlerRegistry<?> reg = MockTransportService.this.getRequestHandler(action);
-                    clonedRequest = reg.newRequest(bStream.bytes().streamInput());
-                }
+                RequestHandlerRegistry<?> reg = MockTransportService.this.getRequestHandler(action);
+                final TransportRequest clonedRequest = reg.newRequest(bStream.bytes().streamInput());
                 assert clonedRequest.getClass().equals(MasterNodeRequestHelper.unwrapTermOverride(request).getClass())
                     : clonedRequest + " vs " + request;
 
@@ -638,15 +634,6 @@ public class MockTransportService extends TransportService {
                         threadPool.schedule(runnable, delay, testExecutor);
                     }
                 }
-            }
-
-            // Some request handlers read back a BytesTransportRequest
-            // into a different class that cannot be re-serialized (i.e. JOIN_VALIDATE_ACTION_NAME),
-            // in those cases we just copy the raw bytes back to a BytesTransportRequest.
-            // This is only needed for the BwC for JOIN_VALIDATE_ACTION_NAME and can be removed in the next major
-            @UpdateForV9(owner = UpdateForV9.Owner.DISTRIBUTED_COORDINATION)
-            private static TransportRequest copyRawBytesForBwC(BytesStreamOutput bStream) throws IOException {
-                return new BytesTransportRequest(bStream.bytes().streamInput());
             }
 
             @Override
@@ -828,6 +815,98 @@ public class MockTransportService extends TransportService {
             throw new IllegalStateException(e);
         } finally {
             assertTrue(ThreadPool.terminate(testExecutor, 10, TimeUnit.SECONDS));
+        }
+    }
+
+    @Override
+    public void onRequestReceived(long requestId, String action) {
+        super.onRequestReceived(requestId, action);
+        messageListener.onRequestReceived(requestId, action);
+    }
+
+    @Override
+    public void onRequestSent(
+        DiscoveryNode node,
+        long requestId,
+        String action,
+        TransportRequest request,
+        TransportRequestOptions options
+    ) {
+        super.onRequestSent(node, requestId, action, request, options);
+        messageListener.onRequestSent(node, requestId, action, request, options);
+    }
+
+    @Override
+    @SuppressWarnings("rawtypes")
+    public void onResponseReceived(long requestId, Transport.ResponseContext holder) {
+        super.onResponseReceived(requestId, holder);
+        messageListener.onResponseReceived(requestId, holder);
+    }
+
+    @Override
+    public void onResponseSent(long requestId, String action) {
+        super.onResponseSent(requestId, action);
+        messageListener.onResponseSent(requestId, action);
+    }
+
+    @Override
+    public void onResponseSent(long requestId, String action, Exception e) {
+        super.onResponseSent(requestId, action, e);
+        messageListener.onResponseSent(requestId, action, e);
+    }
+
+    public void addMessageListener(TransportMessageListener listener) {
+        messageListener.listeners.add(listener);
+    }
+
+    public void removeMessageListener(TransportMessageListener listener) {
+        messageListener.listeners.remove(listener);
+    }
+
+    private static final class DelegatingTransportMessageListener implements TransportMessageListener {
+
+        private final List<TransportMessageListener> listeners = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void onRequestReceived(long requestId, String action) {
+            for (TransportMessageListener listener : listeners) {
+                listener.onRequestReceived(requestId, action);
+            }
+        }
+
+        @Override
+        public void onResponseSent(long requestId, String action) {
+            for (TransportMessageListener listener : listeners) {
+                listener.onResponseSent(requestId, action);
+            }
+        }
+
+        @Override
+        public void onResponseSent(long requestId, String action, Exception error) {
+            for (TransportMessageListener listener : listeners) {
+                listener.onResponseSent(requestId, action, error);
+            }
+        }
+
+        @Override
+        public void onRequestSent(
+            DiscoveryNode node,
+            long requestId,
+            String action,
+            TransportRequest request,
+            TransportRequestOptions finalOptions
+        ) {
+            for (TransportMessageListener listener : listeners) {
+                listener.onRequestSent(node, requestId, action, request, finalOptions);
+            }
+        }
+
+        @Override
+        @SuppressWarnings("rawtypes")
+        public void onResponseReceived(long requestId, Transport.ResponseContext holder) {
+            for (TransportMessageListener listener : listeners) {
+                listener.onResponseReceived(requestId, holder);
+            }
         }
     }
 }

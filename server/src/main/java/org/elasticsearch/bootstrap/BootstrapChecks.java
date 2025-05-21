@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.AllPermission;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -211,7 +210,6 @@ final class BootstrapChecks {
         checks.add(new OnErrorCheck());
         checks.add(new OnOutOfMemoryErrorCheck());
         checks.add(new EarlyAccessCheck());
-        checks.add(new AllPermissionCheck());
         checks.add(new DiscoveryConfiguredCheck());
         checks.add(new ByteOrderCheck());
         return Collections.unmodifiableList(checks);
@@ -701,7 +699,7 @@ final class BootstrapChecks {
         }
 
         String javaVersion() {
-            return Constants.JAVA_VERSION;
+            return Runtime.version().toString();
         }
 
         @Override
@@ -709,33 +707,6 @@ final class BootstrapChecks {
             return ReferenceDocs.BOOTSTRAP_CHECK_EARLY_ACCESS;
         }
 
-    }
-
-    static class AllPermissionCheck implements BootstrapCheck {
-
-        @Override
-        public final BootstrapCheckResult check(BootstrapContext context) {
-            if (isAllPermissionGranted()) {
-                return BootstrapCheck.BootstrapCheckResult.failure("granting the all permission effectively disables security");
-            }
-            return BootstrapCheckResult.success();
-        }
-
-        boolean isAllPermissionGranted() {
-            final SecurityManager sm = System.getSecurityManager();
-            assert sm != null;
-            try {
-                sm.checkPermission(new AllPermission());
-            } catch (final SecurityException e) {
-                return false;
-            }
-            return true;
-        }
-
-        @Override
-        public ReferenceDocs referenceDocs() {
-            return ReferenceDocs.BOOTSTRAP_CHECK_ALL_PERMISSION;
-        }
     }
 
     static class DiscoveryConfiguredCheck implements BootstrapCheck {

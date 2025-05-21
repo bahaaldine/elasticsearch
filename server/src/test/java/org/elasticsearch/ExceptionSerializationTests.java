@@ -21,6 +21,7 @@ import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.elasticsearch.action.search.ShardSearchFailure;
 import org.elasticsearch.action.support.replication.ReplicationOperation;
 import org.elasticsearch.client.internal.AbstractClientHeadersTestCase;
+import org.elasticsearch.cluster.RemoteException;
 import org.elasticsearch.cluster.action.shard.ShardStateAction;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.coordination.CoordinationStateRejectedException;
@@ -146,7 +147,8 @@ public class ExceptionSerializationTests extends ESTestCase {
         final Set<? extends Class<?>> ignore = Sets.newHashSet(
             CancellableThreadsTests.CustomException.class,
             RestResponseTests.WithHeadersException.class,
-            AbstractClientHeadersTestCase.InternalException.class
+            AbstractClientHeadersTestCase.InternalException.class,
+            ElasticsearchExceptionTests.ExceptionSubclass.class
         );
         FileVisitor<Path> visitor = new FileVisitor<Path>() {
             private Path pkgPrefix = PathUtils.get(path).getParent();
@@ -359,7 +361,7 @@ public class ExceptionSerializationTests extends ESTestCase {
     public void testCircuitBreakingException() throws IOException {
         CircuitBreakingException ex = serialize(
             new CircuitBreakingException("Too large", 0, 100, CircuitBreaker.Durability.TRANSIENT),
-            TransportVersions.V_7_0_0
+            TransportVersions.V_8_0_0
         );
         assertEquals("Too large", ex.getMessage());
         assertEquals(100, ex.getByteLimit());
@@ -409,6 +411,7 @@ public class ExceptionSerializationTests extends ESTestCase {
         ex = serialize(new ConnectTransportException(node, "msg", "action", new NullPointerException()));
         assertEquals("[][" + transportAddress + "][action] msg", ex.getMessage());
         assertThat(ex.getCause(), instanceOf(NullPointerException.class));
+        assertEquals(RestStatus.BAD_GATEWAY, ex.status());
     }
 
     public void testSearchPhaseExecutionException() throws IOException {
@@ -838,6 +841,7 @@ public class ExceptionSerializationTests extends ESTestCase {
         ids.put(181, ResourceAlreadyUploadedException.class);
         ids.put(182, IngestPipelineException.class);
         ids.put(183, IndexDocFailureStoreStatus.ExceptionWithFailureStoreStatus.class);
+        ids.put(184, RemoteException.class);
 
         Map<Class<? extends ElasticsearchException>, Integer> reverse = new HashMap<>();
         for (Map.Entry<Integer, Class<? extends ElasticsearchException>> entry : ids.entrySet()) {

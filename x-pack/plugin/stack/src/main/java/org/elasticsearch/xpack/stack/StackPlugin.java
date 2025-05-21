@@ -34,7 +34,7 @@ public class StackPlugin extends Plugin implements ActionPlugin {
             services.threadPool(),
             services.client(),
             services.xContentRegistry(),
-            services.featureService()
+            services.projectResolver()
         );
         legacyStackTemplateRegistry.initialize();
         StackTemplateRegistry stackTemplateRegistry = new StackTemplateRegistry(
@@ -43,7 +43,7 @@ public class StackPlugin extends Plugin implements ActionPlugin {
             services.threadPool(),
             services.client(),
             services.xContentRegistry(),
-            services.featureService()
+            services.projectResolver()
         );
         stackTemplateRegistry.initialize();
         return List.of(legacyStackTemplateRegistry, stackTemplateRegistry);

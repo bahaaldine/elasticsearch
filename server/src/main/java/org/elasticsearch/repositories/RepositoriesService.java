@@ -30,6 +30,7 @@ import org.elasticsearch.cluster.SnapshotDeletionsInProgress;
 import org.elasticsearch.cluster.SnapshotsInProgress;
 import org.elasticsearch.cluster.metadata.IndexMetadata;
 import org.elasticsearch.cluster.metadata.Metadata;
+import org.elasticsearch.cluster.metadata.ProjectMetadata;
 import org.elasticsearch.cluster.metadata.RepositoriesMetadata;
 import org.elasticsearch.cluster.metadata.RepositoryMetadata;
 import org.elasticsearch.cluster.node.DiscoveryNode;
@@ -49,6 +50,7 @@ import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.index.IndexVersion;
 import org.elasticsearch.repositories.VerifyNodeRepositoryAction.Request;
+import org.elasticsearch.repositories.blobstore.BlobStoreRepository;
 import org.elasticsearch.repositories.blobstore.MeteredBlobStoreRepository;
 import org.elasticsearch.snapshots.Snapshot;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -283,12 +285,23 @@ public class RepositoriesService extends AbstractLifecycleComponent implements C
 
         @Override
         public ClusterState execute(ClusterState currentState) {
-            RepositoryMetadata newRepositoryMetadata = new RepositoryMetadata(request.name(), request.type(), request.settings());
             Metadata.Builder mdBuilder = Metadata.builder(currentState.metadata());
             RepositoriesMetadata repositories = RepositoriesMetadata.get(currentState);
             List<RepositoryMetadata> repositoriesMetadata = new ArrayList<>(repositories.repositories().size() + 1);
             for (RepositoryMetadata repositoryMetadata : repositories.repositories()) {
-                if (repositoryMetadata.name().equals(newRepositoryMetadata.name())) {
+                if (repositoryMetadata.name().equals(request.name())) {
+                    rejectInvalidReadonlyFlagChange(repositoryMetadata, request.settings());
+                    final RepositoryMetadata newRepositoryMetadata = new RepositoryMetadata(
+                        request.name(),
+                        // Copy the UUID from the existing instance rather than resetting it back to MISSING_UUID which would force us to
+                        // re-read the RepositoryData to get it again. In principle the new RepositoryMetadata might point to a different
+                        // underlying repository at this point, but if so that'll cause things to fail in clear ways and eventually (before
+                        // writing anything) we'll read the RepositoryData again and update the UUID in the RepositoryMetadata to match. See
+                        // also #109936.
+                        repositoryMetadata.uuid(),
+                        request.type(),
+                        request.settings()
+                    );
                     Repository existing = repositoriesService.repositories.get(request.name());
                     if (existing == null) {
                         existing = repositoriesService.internalRepositories.get(request.name());
@@ -332,7 +345,7 @@ public class RepositoriesService extends AbstractLifecycleComponent implements C
                 repositoriesMetadata.add(new RepositoryMetadata(request.name(), request.type(), request.settings()));
             }
             repositories = new RepositoriesMetadata(repositoriesMetadata);
-            mdBuilder.putCustom(RepositoriesMetadata.TYPE, repositories);
+            mdBuilder.putDefaultProjectCustom(RepositoriesMetadata.TYPE, repositories);
             changed = true;
             return ClusterState.builder(currentState).metadata(mdBuilder).build();
         }
@@ -437,7 +450,7 @@ public class RepositoriesService extends AbstractLifecycleComponent implements C
                     } else {
                         final RepositoriesMetadata newReposMetadata = currentReposMetadata.withUuid(repositoryName, repositoryUuid);
                         final Metadata.Builder metadata = Metadata.builder(currentState.metadata())
-                            .putCustom(RepositoriesMetadata.TYPE, newReposMetadata);
+                            .putDefaultProjectCustom(RepositoriesMetadata.TYPE, newReposMetadata);
                         return ClusterState.builder(currentState).metadata(metadata).build();
                     }
                 }
@@ -520,7 +533,7 @@ public class RepositoriesService extends AbstractLifecycleComponent implements C
                 }
                 if (changed) {
                     repositories = new RepositoriesMetadata(repositoriesMetadata);
-                    mdBuilder.putCustom(RepositoriesMetadata.TYPE, repositories);
+                    mdBuilder.putDefaultProjectCustom(RepositoriesMetadata.TYPE, repositories);
                     return ClusterState.builder(currentState).metadata(mdBuilder).build();
                 }
             }
@@ -590,6 +603,7 @@ public class RepositoriesService extends AbstractLifecycleComponent implements C
     public void applyClusterState(ClusterChangedEvent event) {
         try {
             final ClusterState state = event.state();
+            assert assertReadonlyRepositoriesNotInUseForWrites(state);
             final RepositoriesMetadata oldMetadata = RepositoriesMetadata.get(event.previousState());
             final RepositoriesMetadata newMetadata = RepositoriesMetadata.get(state);
 
@@ -874,7 +888,7 @@ public class RepositoriesService extends AbstractLifecycleComponent implements C
         }
     }
 
-    private static void ensureRepositoryNotInUse(ClusterState clusterState, String repository) {
+    private static void ensureRepositoryNotInUseForWrites(ClusterState clusterState, String repository) {
         if (SnapshotsInProgress.get(clusterState).forRepo(repository).isEmpty() == false) {
             throw newRepositoryConflictException(repository, "snapshot is in progress");
         }
@@ -888,6 +902,10 @@ public class RepositoriesService extends AbstractLifecycleComponent implements C
                 throw newRepositoryConflictException(repository, "repository clean up is in progress");
             }
         }
+    }
+
+    private static void ensureRepositoryNotInUse(ClusterState clusterState, String repository) {
+        ensureRepositoryNotInUseForWrites(clusterState, repository);
         for (RestoreInProgress.Entry entry : RestoreInProgress.get(clusterState)) {
             if (repository.equals(entry.snapshot().getRepository())) {
                 throw newRepositoryConflictException(repository, "snapshot restore is in progress");
@@ -895,18 +913,60 @@ public class RepositoriesService extends AbstractLifecycleComponent implements C
         }
     }
 
+    public static boolean isReadOnly(Settings repositorySettings) {
+        return Boolean.TRUE.equals(repositorySettings.getAsBoolean(BlobStoreRepository.READONLY_SETTING_KEY, null));
+    }
+
+    /**
+     * Test-only check for the invariant that read-only repositories never have any write activities.
+     */
+    private static boolean assertReadonlyRepositoriesNotInUseForWrites(ClusterState clusterState) {
+        for (final var repositoryMetadata : RepositoriesMetadata.get(clusterState).repositories()) {
+            if (isReadOnly(repositoryMetadata.settings())) {
+                try {
+                    ensureRepositoryNotInUseForWrites(clusterState, repositoryMetadata.name());
+                } catch (Exception e) {
+                    throw new AssertionError("repository [" + repositoryMetadata + "] is readonly but still in use", e);
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Reject a change to the {@code readonly} setting if there is a pending generation change in progress, i.e. some node somewhere is
+     * updating the root {@link RepositoryData} blob.
+     */
+    private static void rejectInvalidReadonlyFlagChange(RepositoryMetadata existingRepositoryMetadata, Settings newSettings) {
+        if (isReadOnly(newSettings)
+            && isReadOnly(existingRepositoryMetadata.settings()) == false
+            && existingRepositoryMetadata.generation() >= RepositoryData.EMPTY_REPO_GEN
+            && existingRepositoryMetadata.generation() != existingRepositoryMetadata.pendingGeneration()) {
+            throw newRepositoryConflictException(
+                existingRepositoryMetadata.name(),
+                Strings.format(
+                    "currently updating root blob generation from [%d] to [%d], cannot update readonly flag",
+                    existingRepositoryMetadata.generation(),
+                    existingRepositoryMetadata.pendingGeneration()
+                )
+            );
+        }
+    }
+
     private static void ensureNoSearchableSnapshotsIndicesInUse(ClusterState clusterState, RepositoryMetadata repositoryMetadata) {
         long count = 0L;
         List<Index> indices = null;
-        for (IndexMetadata indexMetadata : clusterState.metadata()) {
-            if (indexSettingsMatchRepositoryMetadata(indexMetadata, repositoryMetadata)) {
-                if (indices == null) {
-                    indices = new ArrayList<>();
+        for (ProjectMetadata project : clusterState.metadata().projects().values()) {
+            for (IndexMetadata indexMetadata : project) {
+                if (indexSettingsMatchRepositoryMetadata(indexMetadata, repositoryMetadata)) {
+                    if (indices == null) {
+                        indices = new ArrayList<>();
+                    }
+                    if (indices.size() < 5) {
+                        indices.add(indexMetadata.getIndex());
+                    }
+                    count += 1L;
                 }
-                if (indices.size() < 5) {
-                    indices.add(indexMetadata.getIndex());
-                }
-                count += 1L;
             }
         }
         if (indices != null && indices.isEmpty() == false) {
@@ -945,7 +1005,7 @@ public class RepositoriesService extends AbstractLifecycleComponent implements C
         return preRestoreChecks;
     }
 
-    public static String COUNT_USAGE_STATS_NAME = "count";
+    public static final String COUNT_USAGE_STATS_NAME = "count";
 
     public RepositoryUsageStats getUsageStats() {
         if (repositories.isEmpty()) {

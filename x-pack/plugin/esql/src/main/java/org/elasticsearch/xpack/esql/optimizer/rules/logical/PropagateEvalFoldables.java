@@ -12,22 +12,23 @@ import org.elasticsearch.xpack.esql.core.expression.AttributeMap;
 import org.elasticsearch.xpack.esql.core.expression.Expression;
 import org.elasticsearch.xpack.esql.core.expression.Literal;
 import org.elasticsearch.xpack.esql.core.expression.ReferenceAttribute;
+import org.elasticsearch.xpack.esql.optimizer.LogicalOptimizerContext;
 import org.elasticsearch.xpack.esql.plan.logical.Eval;
 import org.elasticsearch.xpack.esql.plan.logical.Filter;
 import org.elasticsearch.xpack.esql.plan.logical.LogicalPlan;
-import org.elasticsearch.xpack.esql.rule.Rule;
+import org.elasticsearch.xpack.esql.rule.ParameterizedRule;
 
 /**
  * Replace any reference attribute with its source, if it does not affect the result.
  * This avoids ulterior look-ups between attributes and its source across nodes.
  */
-public final class PropagateEvalFoldables extends Rule<LogicalPlan, LogicalPlan> {
+public final class PropagateEvalFoldables extends ParameterizedRule<LogicalPlan, LogicalPlan, LogicalOptimizerContext> {
 
     @Override
-    public LogicalPlan apply(LogicalPlan plan) {
-        var collectRefs = new AttributeMap<Expression>();
+    public LogicalPlan apply(LogicalPlan plan, LogicalOptimizerContext ctx) {
+        AttributeMap.Builder<Expression> collectRefsBuilder = AttributeMap.builder();
 
-        java.util.function.Function<ReferenceAttribute, Expression> replaceReference = r -> collectRefs.resolve(r, r);
+        java.util.function.Function<ReferenceAttribute, Expression> replaceReference = r -> collectRefsBuilder.build().resolve(r, r);
 
         // collect aliases bottom-up
         plan.forEachExpressionUp(Alias.class, a -> {
@@ -39,10 +40,10 @@ public final class PropagateEvalFoldables extends Rule<LogicalPlan, LogicalPlan>
                 shouldCollect = c.foldable();
             }
             if (shouldCollect) {
-                collectRefs.put(a.toAttribute(), Literal.of(c));
+                collectRefsBuilder.put(a.toAttribute(), Literal.of(ctx.foldCtx(), c));
             }
         });
-        if (collectRefs.isEmpty()) {
+        if (collectRefsBuilder.isEmpty()) {
             return plan;
         }
 

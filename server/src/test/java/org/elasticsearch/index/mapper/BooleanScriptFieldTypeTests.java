@@ -14,6 +14,7 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.NoMergePolicy;
 import org.apache.lucene.index.SortedNumericDocValues;
+import org.apache.lucene.index.StoredFields;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.LeafCollector;
@@ -121,8 +122,15 @@ public class BooleanScriptFieldTypeTests extends AbstractNonTextScriptFieldTypeT
                 BooleanScriptFieldData ifd = simpleMappedFieldType().fielddataBuilder(mockFielddataContext()).build(null, null);
                 SortField sf = ifd.sortField(null, MultiValueMode.MIN, null, false);
                 TopFieldDocs docs = searcher.search(new MatchAllDocsQuery(), 3, new Sort(sf));
-                assertThat(reader.document(docs.scoreDocs[0].doc).getBinaryValue("_source").utf8ToString(), equalTo("{\"foo\": [false]}"));
-                assertThat(reader.document(docs.scoreDocs[1].doc).getBinaryValue("_source").utf8ToString(), equalTo("{\"foo\": [true]}"));
+                StoredFields storedFields = reader.storedFields();
+                assertThat(
+                    storedFields.document(docs.scoreDocs[0].doc).getBinaryValue("_source").utf8ToString(),
+                    equalTo("{\"foo\": [false]}")
+                );
+                assertThat(
+                    storedFields.document(docs.scoreDocs[1].doc).getBinaryValue("_source").utf8ToString(),
+                    equalTo("{\"foo\": [true]}")
+                );
             }
         }
     }
@@ -354,7 +362,7 @@ public class BooleanScriptFieldTypeTests extends AbstractNonTextScriptFieldTypeT
     }
 
     public void testDualingQueries() throws IOException {
-        BooleanFieldMapper ootb = new BooleanFieldMapper.Builder("foo", ScriptCompiler.NONE, false, IndexVersion.current()).build(
+        BooleanFieldMapper ootb = new BooleanFieldMapper.Builder("foo", ScriptCompiler.NONE, false, IndexVersion.current(), null).build(
             MapperBuilderContext.root(false, false)
         );
         try (Directory directory = newDirectory(); RandomIndexWriter iw = new RandomIndexWriter(random(), directory)) {

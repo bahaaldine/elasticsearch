@@ -38,7 +38,6 @@ import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.automaton.Automaton;
-import org.apache.lucene.util.automaton.MinimizationOperations;
 import org.apache.lucene.util.automaton.Operations;
 import org.apache.lucene.util.automaton.RegExp;
 import org.elasticsearch.ElasticsearchParseException;
@@ -95,7 +94,7 @@ import static org.elasticsearch.index.IndexSettings.IGNORE_ABOVE_SETTING;
 public class WildcardFieldMapper extends FieldMapper {
 
     public static final String CONTENT_TYPE = "wildcard";
-    public static short MAX_CLAUSES_IN_APPROXIMATION_QUERY = 10;
+    public static final short MAX_CLAUSES_IN_APPROXIMATION_QUERY = 10;
     public static final int NGRAM_SIZE = 3;
 
     static final NamedAnalyzer WILDCARD_ANALYZER_7_10 = new NamedAnalyzer("_wildcard_7_10", AnalyzerScope.GLOBAL, new Analyzer() {
@@ -253,7 +252,7 @@ public class WildcardFieldMapper extends FieldMapper {
         }
     }
 
-    public static TypeParser PARSER = new TypeParser(
+    public static final TypeParser PARSER = new TypeParser(
         (n, c) -> new Builder(n, IGNORE_ABOVE_SETTING.get(c.getSettings()), c.indexVersionCreated())
     );
 
@@ -349,7 +348,7 @@ public class WildcardFieldMapper extends FieldMapper {
             }
             Automaton automaton = caseInsensitive
                 ? AutomatonQueries.toCaseInsensitiveWildcardAutomaton(new Term(name(), wildcardPattern))
-                : WildcardQuery.toAutomaton(new Term(name(), wildcardPattern));
+                : WildcardQuery.toAutomaton(new Term(name(), wildcardPattern), Operations.DEFAULT_DETERMINIZE_WORK_LIMIT);
             if (clauseCount > 0) {
                 // We can accelerate execution with the ngram query
                 BooleanQuery approxQuery = rewritten.build();
@@ -379,7 +378,6 @@ public class WildcardFieldMapper extends FieldMapper {
             RegExp regExp = new RegExp(value, syntaxFlags, matchFlags);
             Automaton a = regExp.toAutomaton();
             a = Operations.determinize(a, maxDeterminizedStates);
-            a = MinimizationOperations.minimize(a, maxDeterminizedStates);
             if (Operations.isTotal(a)) { // Will match all
                 return existsQuery(context);
             }
@@ -390,7 +388,7 @@ public class WildcardFieldMapper extends FieldMapper {
             Query approxNgramQuery = rewriteBoolToNgramQuery(approxBooleanQuery);
 
             RegExp regex = new RegExp(value, syntaxFlags, matchFlags);
-            Automaton automaton = regex.toAutomaton(maxDeterminizedStates);
+            Automaton automaton = Operations.determinize(regex.toAutomaton(), maxDeterminizedStates);
 
             // We can accelerate execution with the ngram query
             return new BinaryDvConfirmedAutomatonQuery(approxNgramQuery, name(), value, automaton);
@@ -409,6 +407,9 @@ public class WildcardFieldMapper extends FieldMapper {
         public static Query toApproximationQuery(RegExp r) throws IllegalArgumentException {
             Query result = null;
             switch (r.kind) {
+                case REGEXP_CHAR_CLASS:
+                    result = createCharacterClassQuery(r);
+                    break;
                 case REGEXP_UNION:
                     result = createUnionQuery(r);
                     break;
@@ -428,7 +429,6 @@ public class WildcardFieldMapper extends FieldMapper {
                     // Repeat is zero or more times so zero matches = match all
                     result = new MatchAllDocsQuery();
                     break;
-
                 case REGEXP_REPEAT_MIN:
                 case REGEXP_REPEAT_MINMAX:
                     if (r.min > 0) {
@@ -460,7 +460,7 @@ public class WildcardFieldMapper extends FieldMapper {
                 case REGEXP_INTERVAL:
                 case REGEXP_EMPTY:
                 case REGEXP_AUTOMATON:
-                case REGEXP_PRE_CLASS:
+                    // case REGEXP_PRE_CLASS:
                     result = new MatchAllDocsQuery();
                     break;
             }
@@ -498,11 +498,35 @@ public class WildcardFieldMapper extends FieldMapper {
 
         }
 
+        private static Query createCharacterClassQuery(RegExp r) {
+            // TODO: consider expanding this to allow for character ranges as well (need additional tests and performance eval)
+            List<Query> queries = new ArrayList<>();
+            if (r.from.length > MAX_CLAUSES_IN_APPROXIMATION_QUERY) {
+                return new MatchAllDocsQuery();
+            }
+            for (int i = 0; i < r.from.length; i++) {
+                // only handle character classes for now not ranges
+                if (r.from[i] == r.to[i]) {
+                    String cs = Character.toString(r.from[i]);
+                    String normalizedChar = toLowerCase(cs);
+                    queries.add(new TermQuery(new Term("", normalizedChar)));
+                } else {
+                    // immediately exit because we can't currently optimize a combination of range and classes
+                    return new MatchAllDocsQuery();
+                }
+            }
+            return formQuery(queries);
+        }
+
         private static Query createUnionQuery(RegExp r) {
             // Create an OR of clauses
-            ArrayList<Query> queries = new ArrayList<>();
+            List<Query> queries = new ArrayList<>();
             findLeaves(r.exp1, org.apache.lucene.util.automaton.RegExp.Kind.REGEXP_UNION, queries);
             findLeaves(r.exp2, org.apache.lucene.util.automaton.RegExp.Kind.REGEXP_UNION, queries);
+            return formQuery(queries);
+        }
+
+        private static Query formQuery(List<Query> queries) {
             BooleanQuery.Builder bOr = new BooleanQuery.Builder();
             HashSet<Query> uniqueClauses = new HashSet<>();
             for (Query query : queries) {
@@ -550,9 +574,9 @@ public class WildcardFieldMapper extends FieldMapper {
                 BooleanQuery.Builder rewritten = new BooleanQuery.Builder();
                 int clauseCount = 0;
                 for (BooleanClause clause : bq) {
-                    Query q = rewriteBoolToNgramQuery(clause.getQuery());
+                    Query q = rewriteBoolToNgramQuery(clause.query());
                     if (q != null) {
-                        if (clause.getOccur().equals(Occur.FILTER)) {
+                        if (clause.occur().equals(Occur.FILTER)) {
                             // Can't drop "should" clauses because it can elevate a sibling optional item
                             // to mandatory (shoulds with 1 clause) causing false negatives
                             // Dropping MUSTs increase false positives which are OK because are verified anyway.
@@ -561,7 +585,7 @@ public class WildcardFieldMapper extends FieldMapper {
                                 break;
                             }
                         }
-                        rewritten.add(q, clause.getOccur());
+                        rewritten.add(q, clause.occur());
                     }
                 }
                 return rewritten.build();
@@ -898,6 +922,7 @@ public class WildcardFieldMapper extends FieldMapper {
     private final int ignoreAbove;
     private final int ignoreAboveDefault;
     private final boolean storeIgnored;
+    private final String originalName;
 
     private WildcardFieldMapper(
         String simpleName,
@@ -913,6 +938,7 @@ public class WildcardFieldMapper extends FieldMapper {
         this.indexVersionCreated = indexVersionCreated;
         this.ignoreAbove = builder.ignoreAbove.getValue();
         this.ignoreAboveDefault = builder.ignoreAboveDefault;
+        this.originalName = storeIgnored ? fullPath() + "._original" : null;
     }
 
     @Override
@@ -958,7 +984,7 @@ public class WildcardFieldMapper extends FieldMapper {
     }
 
     private String originalName() {
-        return fullPath() + "._original";
+        return originalName;
     }
 
     void createFields(String value, LuceneDocument parseDoc, List<IndexableField> fields) {
@@ -992,20 +1018,20 @@ public class WildcardFieldMapper extends FieldMapper {
 
     @Override
     protected SyntheticSourceSupport syntheticSourceSupport() {
-        var layers = new ArrayList<CompositeSyntheticFieldLoader.Layer>();
-        layers.add(new WildcardSyntheticFieldLoader());
-        if (ignoreAbove != Integer.MAX_VALUE) {
-            layers.add(new CompositeSyntheticFieldLoader.StoredFieldLayer(originalName()) {
-                @Override
-                protected void writeValue(Object value, XContentBuilder b) throws IOException {
-                    BytesRef r = (BytesRef) value;
-                    b.utf8Value(r.bytes, r.offset, r.length);
-                }
-            });
-        }
-
-        var loader = new CompositeSyntheticFieldLoader(leafName(), fullPath(), layers);
-        return new SyntheticSourceSupport.Native(loader);
+        return new SyntheticSourceSupport.Native(() -> {
+            var layers = new ArrayList<CompositeSyntheticFieldLoader.Layer>();
+            layers.add(new WildcardSyntheticFieldLoader());
+            if (ignoreAbove != Integer.MAX_VALUE) {
+                layers.add(new CompositeSyntheticFieldLoader.StoredFieldLayer(originalName()) {
+                    @Override
+                    protected void writeValue(Object value, XContentBuilder b) throws IOException {
+                        BytesRef r = (BytesRef) value;
+                        b.utf8Value(r.bytes, r.offset, r.length);
+                    }
+                });
+            }
+            return new CompositeSyntheticFieldLoader(leafName(), fullPath(), layers);
+        });
     }
 
     private class WildcardSyntheticFieldLoader implements CompositeSyntheticFieldLoader.DocValuesLayer {

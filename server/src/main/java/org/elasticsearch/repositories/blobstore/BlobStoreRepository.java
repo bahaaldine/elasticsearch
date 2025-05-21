@@ -78,7 +78,6 @@ import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
-import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.common.util.concurrent.ListenableFuture;
 import org.elasticsearch.common.util.concurrent.ThrottledIterator;
 import org.elasticsearch.common.util.concurrent.ThrottledTaskRunner;
@@ -191,6 +190,11 @@ import static org.elasticsearch.indices.recovery.RecoverySettings.INDICES_RECOVE
 public abstract class BlobStoreRepository extends AbstractLifecycleComponent implements Repository {
     private static final Logger logger = LogManager.getLogger(BlobStoreRepository.class);
 
+    private class ShutdownLogger {
+        // Creating a separate logger so that the log-level can be manipulated separately from the parent class.
+        private static final Logger shutdownLogger = LogManager.getLogger(ShutdownLogger.class);
+    }
+
     protected volatile RepositoryMetadata metadata;
 
     protected final ThreadPool threadPool;
@@ -200,6 +204,9 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     public static final String STATELESS_SHARD_WRITE_THREAD_NAME = "stateless_shard_write";
     public static final String STATELESS_CLUSTER_STATE_READ_WRITE_THREAD_NAME = "stateless_cluster_state";
     public static final String STATELESS_SHARD_PREWARMING_THREAD_NAME = "stateless_prewarm";
+    public static final String STATELESS_SHARD_UPLOAD_PREWARMING_THREAD_NAME = "stateless_upload_prewarm";
+    public static final String SEARCHABLE_SNAPSHOTS_CACHE_FETCH_ASYNC_THREAD_NAME = "searchable_snapshots_cache_fetch_async";
+    public static final String SEARCHABLE_SNAPSHOTS_CACHE_PREWARMING_THREAD_NAME = "searchable_snapshots_cache_prewarming";
 
     /**
      * Prefix for the name of the root {@link RepositoryData} blob.
@@ -435,7 +442,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     /**
      * Flag that is set to {@code true} if this instance is started with {@link #metadata} that has a higher value for
      * {@link RepositoryMetadata#pendingGeneration()} than for {@link RepositoryMetadata#generation()} indicating a full cluster restart
-     * potentially accounting for the the last {@code index-N} write in the cluster state.
+     * potentially accounting for the last {@code index-N} write in the cluster state.
      * Note: While it is true that this value could also be set to {@code true} for an instance on a node that is just joining the cluster
      * during a new {@code index-N} write, this does not present a problem. The node will still load the correct {@link RepositoryData} in
      * all cases and simply do a redundant listing of the repository contents if it tries to load {@link RepositoryData} and falls back
@@ -1127,14 +1134,20 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                     );
                 })
 
-                .<RepositoryData>andThen((l, newRepositoryData) -> {
-                    l.onResponse(newRepositoryData);
-                    // Once we have updated the repository, run the unreferenced blobs cleanup in parallel to shard-level snapshot deletion
-                    try (var refs = new RefCountingRunnable(onCompletion)) {
-                        cleanupUnlinkedRootAndIndicesBlobs(newRepositoryData, refs.acquireListener());
-                        cleanupUnlinkedShardLevelBlobs(refs.acquireListener());
+                .<RepositoryData>andThen(
+                    // writeIndexGen finishes on master-service thread so must fork here.
+                    snapshotExecutor,
+                    threadPool.getThreadContext(),
+                    (l, newRepositoryData) -> {
+                        l.onResponse(newRepositoryData);
+                        // Once we have updated the repository, run the unreferenced blobs cleanup in parallel to shard-level snapshot
+                        // deletion
+                        try (var refs = new RefCountingRunnable(onCompletion)) {
+                            cleanupUnlinkedRootAndIndicesBlobs(newRepositoryData, refs.acquireListener());
+                            cleanupUnlinkedShardLevelBlobs(refs.acquireListener());
+                        }
                     }
-                })
+                )
 
                 .addListener(repositoryDataUpdateListener);
         }
@@ -1725,6 +1738,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
 
     @Override
     public void finalizeSnapshot(final FinalizeSnapshotContext finalizeSnapshotContext) {
+        assert ThreadPool.assertCurrentThreadPool(ThreadPool.Names.SNAPSHOT);
         final long repositoryStateId = finalizeSnapshotContext.repositoryStateId();
         final ShardGenerations shardGenerations = finalizeSnapshotContext.updatedShardGenerations();
         final SnapshotInfo snapshotInfo = finalizeSnapshotContext.snapshotInfo();
@@ -1754,14 +1768,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         SubscribableListener
 
             // Get the current RepositoryData
-            .<RepositoryData>newForked(
-                listener -> getRepositoryData(
-                    // TODO we might already be on a SNAPSHOT thread, make it so that we're always on a SNAPSHOT thread here and then we
-                    // can avoid a little more forking below
-                    EsExecutors.DIRECT_EXECUTOR_SERVICE,
-                    listener
-                )
-            )
+            .<RepositoryData>newForked(listener -> getRepositoryData(executor, listener))
 
             // Identify and write the missing metadata
             .<MetadataWriteResult>andThen((l, existingRepositoryData) -> {
@@ -1807,7 +1814,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                     // Write the index metadata for each index in the snapshot
                     for (IndexId index : indices) {
                         executor.execute(ActionRunnable.run(allMetaListeners.acquire(), () -> {
-                            final IndexMetadata indexMetaData = clusterMetadata.index(index.getName());
+                            final IndexMetadata indexMetaData = clusterMetadata.getProject().index(index.getName());
                             if (writeIndexGens) {
                                 final String identifiers = IndexMetaDataGenerations.buildUniqueIdentifier(indexMetaData);
                                 String metaUUID = existingRepositoryData.indexMetaDataGenerations().getIndexMetaBlobId(identifiers);
@@ -1820,7 +1827,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                                 metadataWriteResult.indexMetas().put(index, identifiers);
                             } else {
                                 INDEX_METADATA_FORMAT.write(
-                                    clusterMetadata.index(index.getName()),
+                                    clusterMetadata.getProject().index(index.getName()),
                                     indexContainer(index),
                                     snapshotId.getUUID(),
                                     compress
@@ -1829,13 +1836,12 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                         }));
                     }
 
-                    // Write the SnapshotInfo blob
-                    executor.execute(
-                        ActionRunnable.run(
-                            allMetaListeners.acquire(),
-                            () -> SNAPSHOT_FORMAT.write(snapshotInfo, blobContainer(), snapshotId.getUUID(), compress)
-                        )
-                    );
+                    // Write the SnapshotInfo blob to the repo (we're already on a SNAPSHOT thread so no need to fork this)
+                    assert ThreadPool.assertCurrentThreadPool(ThreadPool.Names.SNAPSHOT);
+                    ActionListener.completeWith(allMetaListeners.acquire(), () -> {
+                        SNAPSHOT_FORMAT.write(snapshotInfo, blobContainer(), snapshotId.getUUID(), compress);
+                        return null;
+                    });
 
                     // TODO fail fast if any metadata write fails
                     // TODO clean up successful metadata writes on failure (needs care, we must not clobber another node concurrently
@@ -1845,7 +1851,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
 
             // Update the root blob
             .<RootBlobUpdateResult>andThen((l, metadataWriteResult) -> {
-                // unlikely, but in theory we could still be on the thread which called finalizeSnapshot - TODO must fork to SNAPSHOT here
+                assert ThreadPool.assertCurrentThreadPool(ThreadPool.Names.SNAPSHOT);
                 final var snapshotDetails = SnapshotDetails.fromSnapshotInfo(snapshotInfo);
                 final var existingRepositoryData = metadataWriteResult.existingRepositoryData();
                 writeIndexGen(
@@ -1881,7 +1887,6 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                     rootBlobUpdateResult.oldRepositoryData(),
                     rootBlobUpdateResult.newRepositoryData(),
                     finalizeSnapshotContext,
-                    snapshotInfo,
                     writeShardGens
                 );
             })
@@ -1900,7 +1905,6 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         RepositoryData existingRepositoryData,
         RepositoryData updatedRepositoryData,
         FinalizeSnapshotContext finalizeSnapshotContext,
-        SnapshotInfo snapshotInfo,
         boolean writeShardGenerations
     ) {
         final Set<String> toDelete = new HashSet<>();
@@ -1949,11 +1953,11 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
 
                 @Override
                 public void onAfter() {
-                    finalizeSnapshotContext.onDone(snapshotInfo);
+                    finalizeSnapshotContext.onDone();
                 }
             });
         } else {
-            finalizeSnapshotContext.onDone(snapshotInfo);
+            finalizeSnapshotContext.onDone();
         }
     }
 
@@ -2183,7 +2187,10 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             STATELESS_TRANSLOG_THREAD_NAME,
             STATELESS_SHARD_WRITE_THREAD_NAME,
             STATELESS_CLUSTER_STATE_READ_WRITE_THREAD_NAME,
-            STATELESS_SHARD_PREWARMING_THREAD_NAME
+            STATELESS_SHARD_PREWARMING_THREAD_NAME,
+            STATELESS_SHARD_UPLOAD_PREWARMING_THREAD_NAME,
+            SEARCHABLE_SNAPSHOTS_CACHE_FETCH_ASYNC_THREAD_NAME,
+            SEARCHABLE_SNAPSHOTS_CACHE_PREWARMING_THREAD_NAME
         );
     }
 
@@ -2394,7 +2401,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         return ClusterState.builder(currentState)
             .metadata(
                 Metadata.builder(currentState.getMetadata())
-                    .putCustom(
+                    .putDefaultProjectCustom(
                         RepositoriesMetadata.TYPE,
                         RepositoriesMetadata.get(currentState)
                             .withUpdatedGeneration(repoMetadata.name(), repoData.getGenId(), repoData.getGenId())
@@ -2732,6 +2739,14 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             public ClusterState execute(ClusterState currentState) {
                 final RepositoryMetadata meta = getRepoMetadata(currentState);
                 final String repoName = metadata.name();
+
+                if (RepositoriesService.isReadOnly(meta.settings())) {
+                    // Last resort check: we shouldn't have been able to mark the repository as readonly while the operation that led to
+                    // this writeIndexGen() call was in progress, and conversely shouldn't have started any such operation if the repo
+                    // was already readonly, but these invariants are not obviously true and it is disastrous to proceed here.
+                    throw new RepositoryException(meta.name(), "repository is readonly, cannot update root blob");
+                }
+
                 final long genInState = meta.generation();
                 final boolean uninitializedMeta = meta.generation() == RepositoryData.UNKNOWN_REPO_GEN || bestEffortConsistency;
                 if (uninitializedMeta == false && meta.pendingGeneration() != genInState) {
@@ -2909,7 +2924,9 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                         : withGenerations.withUuid(metadata.name(), newRepositoryData.getUuid());
                     final ClusterState newClusterState = stateFilter.apply(
                         ClusterState.builder(currentState)
-                            .metadata(Metadata.builder(currentState.getMetadata()).putCustom(RepositoriesMetadata.TYPE, withUuid))
+                            .metadata(
+                                Metadata.builder(currentState.getMetadata()).putDefaultProjectCustom(RepositoriesMetadata.TYPE, withUuid)
+                            )
                             .build()
                     );
                     return updateRepositoryGenerationsIfNecessary(newClusterState, expectedGen, newGen);
@@ -3069,7 +3086,9 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                 snapshotEntries.add(entry);
             }
         }
-        updatedSnapshotsInProgress = changedSnapshots ? snapshotsInProgress.withUpdatedEntriesForRepo(repoName, snapshotEntries) : null;
+        updatedSnapshotsInProgress = changedSnapshots
+            ? snapshotsInProgress.createCopyWithUpdatedEntriesForRepo(repoName, snapshotEntries)
+            : null;
         final SnapshotDeletionsInProgress updatedDeletionsInProgress;
         boolean changedDeletions = false;
         final List<SnapshotDeletionsInProgress.Entry> deletionEntries = new ArrayList<>();
@@ -3177,6 +3196,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
 
     @Override
     public void snapshotShard(SnapshotShardContext context) {
+        context.status().updateStatusDescription("queued in snapshot task runner");
         shardSnapshotTaskRunner.enqueueShardSnapshot(context);
     }
 
@@ -3189,6 +3209,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         final ShardId shardId = store.shardId();
         final SnapshotId snapshotId = context.snapshotId();
         final IndexShardSnapshotStatus snapshotStatus = context.status();
+        snapshotStatus.updateStatusDescription("snapshot task runner: setting up shard snapshot");
         final long startTime = threadPool.absoluteTimeInMillis();
         try {
             final ShardGeneration generation = snapshotStatus.generation();
@@ -3197,6 +3218,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             final Set<String> blobs;
             if (generation == null) {
                 snapshotStatus.ensureNotAborted();
+                snapshotStatus.updateStatusDescription("snapshot task runner: listing blob prefixes");
                 try {
                     blobs = shardContainer.listBlobsByPrefix(OperationPurpose.SNAPSHOT_METADATA, SNAPSHOT_INDEX_PREFIX).keySet();
                 } catch (IOException e) {
@@ -3207,6 +3229,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             }
 
             snapshotStatus.ensureNotAborted();
+            snapshotStatus.updateStatusDescription("snapshot task runner: loading snapshot blobs");
             Tuple<BlobStoreIndexShardSnapshots, ShardGeneration> tuple = buildBlobStoreIndexShardSnapshots(
                 context.indexId(),
                 shardId.id(),
@@ -3307,6 +3330,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                 indexCommitPointFiles = filesFromSegmentInfos;
             }
 
+            snapshotStatus.updateStatusDescription("snapshot task runner: starting shard snapshot");
             snapshotStatus.moveToStarted(
                 startTime,
                 indexIncrementalFileCount,
@@ -3333,6 +3357,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                         BlobStoreIndexShardSnapshot.FileInfo.SERIALIZE_WRITER_UUID,
                         Boolean.toString(writeFileInfoWriterUUID)
                     );
+                    snapshotStatus.updateStatusDescription("snapshot task runner: updating blob store with new shard generation");
                     INDEX_SHARD_SNAPSHOTS_FORMAT.write(
                         updatedBlobStoreIndexShardSnapshots,
                         shardContainer,
@@ -3378,6 +3403,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                             BlobStoreIndexShardSnapshot.FileInfo.SERIALIZE_WRITER_UUID,
                             Boolean.toString(writeFileInfoWriterUUID)
                         );
+                        snapshotStatus.updateStatusDescription("no shard generations: writing new index-${N} file");
                         writeShardIndexBlobAtomic(shardContainer, newGen, updatedBlobStoreIndexShardSnapshots, serializationParams);
                     } catch (IOException e) {
                         throw new IndexShardSnapshotFailedException(
@@ -3392,6 +3418,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                     }
                     snapshotStatus.addProcessedFiles(finalFilesInShardMetadataCount, finalFilesInShardMetadataSize);
                     try {
+                        snapshotStatus.updateStatusDescription("no shard generations: deleting blobs");
                         deleteFromContainer(OperationPurpose.SNAPSHOT_METADATA, shardContainer, blobsToDelete.iterator());
                     } catch (IOException e) {
                         logger.warn(
@@ -3405,6 +3432,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             // filesToSnapshot will be emptied while snapshotting the file. We make a copy here for cleanup purpose in case of failure.
             final AtomicReference<List<FileInfo>> fileToCleanUp = new AtomicReference<>(List.copyOf(filesToSnapshot));
             final ActionListener<Collection<Void>> allFilesUploadedListener = ActionListener.assertOnce(ActionListener.wrap(ignore -> {
+                snapshotStatus.updateStatusDescription("all files uploaded: finalizing");
                 final IndexShardSnapshotStatus.Copy lastSnapshotStatus = snapshotStatus.moveToFinalize();
 
                 // now create and write the commit point
@@ -3426,6 +3454,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                         BlobStoreIndexShardSnapshot.FileInfo.SERIALIZE_WRITER_UUID,
                         Boolean.toString(writeFileInfoWriterUUID)
                     );
+                    snapshotStatus.updateStatusDescription("all files uploaded: writing to index shard file");
                     INDEX_SHARD_SNAPSHOT_FORMAT.write(
                         blobStoreIndexShardSnapshot,
                         shardContainer,
@@ -3442,10 +3471,12 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                     ByteSizeValue.ofBytes(blobStoreIndexShardSnapshot.totalSize()),
                     getSegmentInfoFileCount(blobStoreIndexShardSnapshot.indexFiles())
                 );
+                snapshotStatus.updateStatusDescription("all files uploaded: done");
                 snapshotStatus.moveToDone(threadPool.absoluteTimeInMillis(), shardSnapshotResult);
                 context.onResponse(shardSnapshotResult);
             }, e -> {
                 try {
+                    snapshotStatus.updateStatusDescription("all files uploaded: cleaning up data files, exception while finalizing: " + e);
                     shardContainer.deleteBlobsIgnoringIfNotExists(
                         OperationPurpose.SNAPSHOT_DATA,
                         Iterators.flatMap(fileToCleanUp.get().iterator(), f -> Iterators.forRange(0, f.numberOfParts(), f::partName))
@@ -3467,10 +3498,35 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     }
 
     private static void ensureNotAborted(ShardId shardId, SnapshotId snapshotId, IndexShardSnapshotStatus snapshotStatus, String fileName) {
+        var shardSnapshotStage = snapshotStatus.getStage();
         try {
-            snapshotStatus.ensureNotAborted();
+            IndexShardSnapshotStatus.ensureNotAborted(shardSnapshotStage);
+
+            if (shardSnapshotStage != IndexShardSnapshotStatus.Stage.INIT && shardSnapshotStage != IndexShardSnapshotStatus.Stage.STARTED) {
+                // A normally running shard snapshot should be in stage INIT or STARTED. And we know it's not in PAUSING or ABORTED because
+                // the ensureNotAborted() call above did not throw. The remaining options don't make sense, if they ever happen.
+                logger.error(
+                    "Shard snapshot found an unexpected state. ShardId [{}], SnapshotID [{}], Stage [{}]",
+                    shardId,
+                    snapshotId,
+                    shardSnapshotStage
+                );
+                assert false;
+            }
         } catch (Exception e) {
-            logger.debug("[{}] [{}] {} on the file [{}], exiting", shardId, snapshotId, e.getMessage(), fileName);
+            // We want to see when a shard snapshot operation checks for and finds an interrupt signal during shutdown. A
+            // PausedSnapshotException indicates we're in shutdown because that's the only case when shard snapshots are signaled to pause.
+            // An AbortedSnapshotException may also occur during shutdown if an uncommon error occurs.
+            ShutdownLogger.shutdownLogger.debug(
+                () -> Strings.format(
+                    "Shard snapshot operation is aborting. ShardId [%s], SnapshotID [%s], File [%s], Stage [%s]",
+                    shardId,
+                    snapshotId,
+                    fileName,
+                    shardSnapshotStage
+                ),
+                e
+            );
             assert e instanceof AbortedSnapshotException || e instanceof PausedSnapshotException : e;
             throw e;
         }
@@ -3483,6 +3539,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     ) {
         final int noOfFilesToSnapshot = filesToSnapshot.size();
         final ActionListener<Void> filesListener = fileQueueListener(filesToSnapshot, noOfFilesToSnapshot, allFilesUploadedListener);
+        context.status().updateStatusDescription("enqueued file snapshot tasks: threads running concurrent file uploads");
         for (int i = 0; i < noOfFilesToSnapshot; i++) {
             shardSnapshotTaskRunner.enqueueFileSnapshot(context, filesToSnapshot::poll, filesListener);
         }
@@ -4029,7 +4086,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         final String file = fileInfo.physicalName();
         try (
             Releasable ignored = context.withCommitRef();
-            IndexInput indexInput = store.openVerifyingInput(file, IOContext.READ, fileInfo.metadata())
+            IndexInput indexInput = store.openVerifyingInput(file, IOContext.DEFAULT, fileInfo.metadata())
         ) {
             for (int i = 0; i < fileInfo.numberOfParts(); i++) {
                 final long partBytes = fileInfo.partBytes(i);

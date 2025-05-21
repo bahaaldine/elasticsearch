@@ -9,6 +9,7 @@ package org.elasticsearch.compute.data;
 
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.Randomness;
+import org.elasticsearch.compute.data.AggregateMetricDoubleBlockBuilder.AggregateMetricDoubleLiteral;
 import org.elasticsearch.core.Releasable;
 import org.elasticsearch.core.Releasables;
 
@@ -233,6 +234,7 @@ public final class BlockUtils {
             case BYTES_REF -> blockFactory.newConstantBytesRefBlockWith(toBytesRef(val), size);
             case DOUBLE -> blockFactory.newConstantDoubleBlockWith((double) val, size);
             case BOOLEAN -> blockFactory.newConstantBooleanBlockWith((boolean) val, size);
+            case AGGREGATE_METRIC_DOUBLE -> blockFactory.newConstantAggregateMetricDoubleBlock((AggregateMetricDoubleLiteral) val, size);
             default -> throw new UnsupportedOperationException("unsupported element type [" + type + "]");
         };
     }
@@ -277,6 +279,15 @@ public final class BlockUtils {
                 yield new Doc(v.shards().getInt(offset), v.segments().getInt(offset), v.docs().getInt(offset));
             }
             case COMPOSITE -> throw new IllegalArgumentException("can't read values from composite blocks");
+            case AGGREGATE_METRIC_DOUBLE -> {
+                AggregateMetricDoubleBlock aggBlock = (AggregateMetricDoubleBlock) block;
+                yield new AggregateMetricDoubleLiteral(
+                    aggBlock.minBlock().getDouble(offset),
+                    aggBlock.maxBlock().getDouble(offset),
+                    aggBlock.sumBlock().getDouble(offset),
+                    aggBlock.countBlock().getInt(offset)
+                );
+            }
             case UNKNOWN -> throw new IllegalArgumentException("can't read values from [" + block + "]");
         };
     }

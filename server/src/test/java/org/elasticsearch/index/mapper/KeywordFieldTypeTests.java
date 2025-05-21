@@ -110,7 +110,7 @@ public class KeywordFieldTypeTests extends FieldTypeTestCase {
 
     public void testTermsQuery() {
         MappedFieldType ft = new KeywordFieldType("field");
-        BytesRef[] terms = new BytesRef[] { new BytesRef("foo"), new BytesRef("bar") };
+        List<BytesRef> terms = List.of(new BytesRef("foo"), new BytesRef("bar"));
         assertEquals(new TermInSetQuery("field", terms), ft.termsQuery(Arrays.asList("foo", "bar"), MOCK_CONTEXT));
 
         MappedFieldType ft2 = new KeywordFieldType("field", false, true, Map.of());
@@ -244,7 +244,8 @@ public class KeywordFieldTypeTests extends FieldTypeTestCase {
             createIndexAnalyzers(),
             ScriptCompiler.NONE,
             Integer.MAX_VALUE,
-            IndexVersion.current()
+            IndexVersion.current(),
+            randomFrom(Mapper.SourceKeepMode.values())
         ).normalizer("lowercase").build(MapperBuilderContext.root(false, false)).fieldType();
         assertEquals(List.of("value"), fetchSourceValue(normalizerMapper, "VALUE"));
         assertEquals(List.of("42"), fetchSourceValue(normalizerMapper, 42L));

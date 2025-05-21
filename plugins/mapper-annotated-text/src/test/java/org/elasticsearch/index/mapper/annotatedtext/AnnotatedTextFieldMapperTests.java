@@ -61,7 +61,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
@@ -242,7 +241,7 @@ public class AnnotatedTextFieldMapperTests extends MapperTestCase {
 
         withLuceneIndex(mapperService, iw -> iw.addDocument(doc.rootDoc()), reader -> {
             LeafReader leaf = reader.leaves().get(0).reader();
-            Terms terms = leaf.getTermVector(0, "field");
+            Terms terms = leaf.termVectors().get(0, "field");
             TermsEnum iterator = terms.iterator();
             BytesRef term;
             Set<String> foundTerms = new HashSet<>();
@@ -664,16 +663,6 @@ public class AnnotatedTextFieldMapperTests extends MapperTestCase {
     protected SyntheticSourceSupport syntheticSourceSupport(boolean ignoreMalformed) {
         assumeFalse("ignore_malformed not supported", ignoreMalformed);
         return TextFieldFamilySyntheticSourceTestSetup.syntheticSourceSupport("annotated_text", false);
-    }
-
-    @Override
-    protected BlockReaderSupport getSupportedReaders(MapperService mapper, String loaderFieldName) {
-        return TextFieldFamilySyntheticSourceTestSetup.getSupportedReaders(mapper, loaderFieldName);
-    }
-
-    @Override
-    protected Function<Object, Object> loadBlockExpected(BlockReaderSupport blockReaderSupport, boolean columnReader) {
-        return TextFieldFamilySyntheticSourceTestSetup.loadBlockExpected(blockReaderSupport, columnReader);
     }
 
     @Override

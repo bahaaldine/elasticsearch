@@ -8,9 +8,9 @@
 package org.elasticsearch.xpack.oteldata;
 
 import org.elasticsearch.client.internal.Client;
+import org.elasticsearch.cluster.project.ProjectResolver;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.features.FeatureService;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xcontent.NamedXContentRegistry;
 import org.elasticsearch.xpack.core.ClientHelper;
@@ -28,9 +28,9 @@ public class OTelIndexTemplateRegistry extends YamlTemplateRegistry {
         ThreadPool threadPool,
         Client client,
         NamedXContentRegistry xContentRegistry,
-        FeatureService featureService
+        ProjectResolver projectResolver
     ) {
-        super(nodeSettings, clusterService, threadPool, client, xContentRegistry, featureService);
+        super(nodeSettings, clusterService, threadPool, client, xContentRegistry, projectResolver);
     }
 
     @Override

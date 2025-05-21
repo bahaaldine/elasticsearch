@@ -290,7 +290,7 @@ public class IndexServiceTests extends ESSingleNodeTestCase {
             // we are running on updateMetadata if the interval changes
             try (Engine.Searcher searcher = shard.acquireSearcher("test")) {
                 TopDocs search = searcher.search(new MatchAllDocsQuery(), 10);
-                assertEquals(1, search.totalHits.value);
+                assertEquals(1, search.totalHits.value());
             }
         });
         assertFalse(refreshTask.isClosed());
@@ -304,7 +304,7 @@ public class IndexServiceTests extends ESSingleNodeTestCase {
             // this one becomes visible due to the force refresh we are running on updateMetadata if the interval changes
             try (Engine.Searcher searcher = shard.acquireSearcher("test")) {
                 TopDocs search = searcher.search(new MatchAllDocsQuery(), 10);
-                assertEquals(2, search.totalHits.value);
+                assertEquals(2, search.totalHits.value());
             }
         });
         prepareIndex("test").setId("2").setSource("{\"foo\": \"bar\"}", XContentType.JSON).get();
@@ -312,7 +312,7 @@ public class IndexServiceTests extends ESSingleNodeTestCase {
             // this one becomes visible due to the scheduled refresh
             try (Engine.Searcher searcher = shard.acquireSearcher("test")) {
                 TopDocs search = searcher.search(new MatchAllDocsQuery(), 10);
-                assertEquals(3, search.totalHits.value);
+                assertEquals(3, search.totalHits.value());
             }
         });
     }
@@ -450,14 +450,19 @@ public class IndexServiceTests extends ESSingleNodeTestCase {
         assertNotNull(indexService.getFsyncTask());
         assertTrue(indexService.getFsyncTask().mustReschedule());
 
-        IndexMetadata indexMetadata = clusterAdmin().prepareState(TEST_REQUEST_TIMEOUT).get().getState().metadata().index("test");
+        IndexMetadata indexMetadata = clusterAdmin().prepareState(TEST_REQUEST_TIMEOUT)
+            .get()
+            .getState()
+            .metadata()
+            .getProject()
+            .index("test");
         assertEquals("5s", indexMetadata.getSettings().get(IndexSettings.INDEX_TRANSLOG_SYNC_INTERVAL_SETTING.getKey()));
 
         indicesAdmin().prepareClose("test").get();
         indicesAdmin().prepareUpdateSettings("test")
             .setSettings(Settings.builder().put(IndexSettings.INDEX_TRANSLOG_SYNC_INTERVAL_SETTING.getKey(), "20s"))
             .get();
-        indexMetadata = clusterAdmin().prepareState(TEST_REQUEST_TIMEOUT).get().getState().metadata().index("test");
+        indexMetadata = clusterAdmin().prepareState(TEST_REQUEST_TIMEOUT).get().getState().metadata().getProject().index("test");
         assertEquals("20s", indexMetadata.getSettings().get(IndexSettings.INDEX_TRANSLOG_SYNC_INTERVAL_SETTING.getKey()));
     }
 

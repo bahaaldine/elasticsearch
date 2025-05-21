@@ -23,10 +23,30 @@ import static org.hamcrest.Matchers.sameInstance;
 
 public class ReservedStateUpdateTaskTests extends ESTestCase {
     public void testBlockedClusterState() {
-        var task = new ReservedStateUpdateTask("dummy", null, Map.of(), List.of(), e -> {}, ActionListener.noop());
+        ReservedStateUpdateTask<?> task = new ReservedClusterStateUpdateTask(
+            "dummy",
+            null,
+            ReservedStateVersionCheck.HIGHER_VERSION_ONLY,
+            Map.of(),
+            List.of(),
+            e -> {},
+            ActionListener.noop()
+        );
         ClusterState notRecoveredClusterState = ClusterState.builder(ClusterName.DEFAULT)
             .blocks(ClusterBlocks.builder().addGlobalBlock(GatewayService.STATE_NOT_RECOVERED_BLOCK))
             .build();
+        assertThat(task.execute(notRecoveredClusterState), sameInstance(notRecoveredClusterState));
+
+        task = new ReservedProjectStateUpdateTask(
+            randomProjectIdOrDefault(),
+            "dummy",
+            null,
+            ReservedStateVersionCheck.HIGHER_VERSION_ONLY,
+            Map.of(),
+            List.of(),
+            e -> {},
+            ActionListener.noop()
+        );
         assertThat(task.execute(notRecoveredClusterState), sameInstance(notRecoveredClusterState));
     }
 }

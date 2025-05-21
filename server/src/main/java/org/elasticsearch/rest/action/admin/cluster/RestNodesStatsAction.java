@@ -16,7 +16,6 @@ import org.elasticsearch.action.admin.indices.stats.CommonStatsFlags;
 import org.elasticsearch.action.admin.indices.stats.CommonStatsFlags.Flag;
 import org.elasticsearch.client.internal.node.NodeClient;
 import org.elasticsearch.common.Strings;
-import org.elasticsearch.common.logging.DeprecationLogger;
 import org.elasticsearch.rest.BaseRestHandler;
 import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.Scope;
@@ -39,8 +38,8 @@ import static org.elasticsearch.rest.RestUtils.getTimeout;
 
 @ServerlessScope(Scope.INTERNAL)
 public class RestNodesStatsAction extends BaseRestHandler {
-    private final DeprecationLogger deprecationLogger = DeprecationLogger.getLogger(RestNodesStatsAction.class);
-    private static final String TYPES_DEPRECATION_MESSAGE = "[types removal] Specifying types in nodes stats requests is deprecated.";
+
+    private static final Set<String> SUPPORTED_CAPABILITIES = Set.of("dense_vector_off_heap_stats");
 
     @Override
     public List<Route> routes() {
@@ -67,6 +66,11 @@ public class RestNodesStatsAction extends BaseRestHandler {
     @Override
     public String getName() {
         return "nodes_stats_action";
+    }
+
+    @Override
+    public Set<String> supportedCapabilities() {
+        return SUPPORTED_CAPABILITIES;
     }
 
     @Override
